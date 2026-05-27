@@ -3,15 +3,48 @@ import { dbService } from './dbService';
 import { authService } from './authService';
 import { SyncQueue, CheckIn, Contact, ToBagItem } from '@types/index';
 
+export type SyncPriority = 'critical' | 'high' | 'normal' | 'low';
+
+export interface SyncStatus {
+  isOnline: boolean;
+  isSyncing: boolean;
+  lastSyncTime: Date | null;
+  pendingSyncCount: number;
+  syncErrors: SyncError[];
+}
+
+export interface SyncError {
+  itemId: string;
+  entityType: string;
+  error: string;
+  timestamp: Date;
+  retryCount: number;
+}
+
+export interface SyncConflict {
+  itemId: string;
+  entityType: string;
+  localData: any;
+  serverData: any;
+  resolution: 'local' | 'server' | 'merge';
+}
+
 class SyncService {
   private isSyncing = false;
   private syncInterval: NodeJS.Timeout | null = null;
-  private onSyncStatusChange: ((isOnline: boolean) => void) | null = null;
+  private onSyncStatusChange: ((status: SyncStatus) => void) | null = null;
+  private lastSyncTime: Date | null = null;
+  private syncErrors: Map<string, SyncError> = new Map();
+  private syncConflicts: Map<string, SyncConflict> = new Map();
+  private isOnline = false;
+  private maxRetries = 3;
+  private retryDelayMs = 1000;
 
   async initialize(): Promise<void> {
     // Check initial network status
     const state = await NetInfo.fetch();
-    this.handleNetworkChange(state.isConnected || false);
+    this.isOnline = state.isConnected || false;
+    this.handleNetworkChange(this.isOnline);
 
     // Listen for network changes
     NetInfo.addEventListener(state => {
@@ -20,15 +53,15 @@ class SyncService {
   }
 
   private handleNetworkChange(isOnline: boolean): void {
+    this.isOnline = isOnline;
+
     if (isOnline && !this.isSyncing) {
       this.startSyncInterval();
     } else if (!isOnline && this.syncInterval) {
       this.stopSyncInterval();
     }
 
-    if (this.onSyncStatusChange) {
-      this.onSyncStatusChange(isOnline);
-    }
+    this.notifySyncStatusChange();
   }
 
   private startSyncInterval(): void {
@@ -50,8 +83,12 @@ class SyncService {
     }
   }
 
-  async sync(): Promise<void> {
-    if (this.isSyncing || !authService.isAuthenticated()) {
+  /**
+   * Sync with priority levels
+   * Critical items sync first, then high, normal, low
+   */
+  async syncWithPriority(priority: SyncPriority = 'normal'): Promise<void> {
+    if (this.isSyncing || !authService.isAuthenticated() || !this.isOnline) {
       return;
     }
 
@@ -59,20 +96,80 @@ class SyncService {
 
     try {
       const pendingItems = await dbService.getPendingSyncItems();
+      
+      // Filter by priority
+      const priorityMap: Record<SyncPriority, number> = {
+        critical: 4,
+        high: 3,
+        normal: 2,
+        low: 1,
+      };
 
-      for (const item of pendingItems) {
-        try {
-          await this.syncItem(item);
-          await dbService.markSyncItemAsSynced(item.id);
-        } catch (error) {
-          console.error(`Error syncing ${item.entityType} ${item.entityId}:`, error);
-          // Continue with next item
-        }
+      const filteredItems = pendingItems.filter(item => {
+        const itemPriority = this.getItemPriority(item.entityType);
+        return priorityMap[itemPriority] >= priorityMap[priority];
+      });
+
+      // Sort by priority (critical first)
+      filteredItems.sort((a, b) => {
+        const priorityA = priorityMap[this.getItemPriority(a.entityType)];
+        const priorityB = priorityMap[this.getItemPriority(b.entityType)];
+        return priorityB - priorityA;
+      });
+
+      // Sync items with retry logic
+      for (const item of filteredItems) {
+        await this.syncItemWithRetry(item);
       }
+
+      this.lastSyncTime = new Date();
     } catch (error) {
       console.error('Sync error:', error);
     } finally {
       this.isSyncing = false;
+      this.notifySyncStatusChange();
+    }
+  }
+
+  /**
+   * Standard sync (all priorities)
+   */
+  async sync(): Promise<void> {
+    await this.syncWithPriority('low');
+  }
+
+  /**
+   * Sync item with retry logic and exponential backoff
+   */
+  private async syncItemWithRetry(item: SyncQueue, retryCount: number = 0): Promise<void> {
+    try {
+      await this.syncItem(item);
+      await dbService.markSyncItemAsSynced(item.id);
+      
+      // Clear error if previously failed
+      this.syncErrors.delete(item.id);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      
+      if (retryCount < this.maxRetries) {
+        // Exponential backoff
+        const delay = this.retryDelayMs * Math.pow(2, retryCount);
+        console.warn(`Retrying sync for ${item.entityType} ${item.entityId} in ${delay}ms`);
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
+        await this.syncItemWithRetry(item, retryCount + 1);
+      } else {
+        // Max retries exceeded
+        console.error(`Failed to sync ${item.entityType} ${item.entityId} after ${this.maxRetries} retries:`, error);
+        
+        this.syncErrors.set(item.id, {
+          itemId: item.id,
+          entityType: item.entityType,
+          error: errorMsg,
+          timestamp: new Date(),
+          retryCount,
+        });
+      }
     }
   }
 
@@ -81,7 +178,7 @@ class SyncService {
 
     switch (item.entityType) {
       case 'check_in':
-        await api.post('/check-ins', item.data);
+        await api.post('/checkins', item.data);
         break;
 
       case 'contact':
@@ -105,7 +202,23 @@ class SyncService {
         break;
 
       case 'sos':
-        await api.post('/sos', item.data);
+        await api.post('/sos/escalate', item.data);
+        break;
+
+      case 'alert':
+        if (item.action === 'create') {
+          await api.post('/alerts', item.data);
+        } else if (item.action === 'update') {
+          await api.put(`/alerts/${item.entityId}`, item.data);
+        }
+        break;
+
+      case 'incident':
+        if (item.action === 'create') {
+          await api.post('/incidents', item.data);
+        } else if (item.action === 'update') {
+          await api.put(`/incidents/${item.entityId}`, item.data);
+        }
         break;
 
       default:
@@ -113,8 +226,26 @@ class SyncService {
     }
   }
 
+  /**
+   * Get priority for entity type
+   */
+  private getItemPriority(entityType: string): SyncPriority {
+    const priorityMap: Record<string, SyncPriority> = {
+      sos: 'critical',
+      alert: 'critical',
+      incident: 'high',
+      check_in: 'high',
+      contact: 'normal',
+      tobag_item: 'low',
+    };
+    return priorityMap[entityType] || 'normal';
+  }
+
+  /**
+   * Pull updates from server
+   */
   async pullUpdates(): Promise<void> {
-    if (!authService.isAuthenticated()) {
+    if (!authService.isAuthenticated() || !this.isOnline) {
       return;
     }
 
@@ -125,7 +256,7 @@ class SyncService {
       if (!user) return;
 
       // Pull KB guides
-      const guidesResponse = await api.get(`/kb/guides?orgId=${user.orgId}`);
+      const guidesResponse = await api.get(`/kb?orgId=${user.orgId}`);
       for (const guide of guidesResponse.data) {
         await dbService.saveKBGuide(guide);
       }
@@ -136,15 +267,89 @@ class SyncService {
 
       // Pull check-in history for team
       if (user.teamId) {
-        const checkInsResponse = await api.get(`/check-ins/team/${user.teamId}`);
+        const checkInsResponse = await api.get(`/checkins?teamId=${user.teamId}`);
         // Store in Redux for dashboard
       }
+
+      // Update data freshness
+      await dbService.updateDataFreshness('kb_guides', new Date());
+      await dbService.updateDataFreshness('alerts', new Date());
+      await dbService.updateDataFreshness('check_ins', new Date());
     } catch (error) {
       console.error('Error pulling updates:', error);
     }
   }
 
-  onSyncStatusChanged(callback: (isOnline: boolean) => void): void {
+  /**
+   * Get conflicted items
+   */
+  async getConflictedItems(): Promise<SyncConflict[]> {
+    return Array.from(this.syncConflicts.values());
+  }
+
+  /**
+   * Resolve conflict
+   */
+  async resolveConflict(itemId: string, resolution: 'local' | 'server' | 'merge'): Promise<void> {
+    const conflict = this.syncConflicts.get(itemId);
+    if (!conflict) return;
+
+    if (resolution === 'local') {
+      // Keep local data, retry sync
+      const item = await dbService.getSyncItem(itemId);
+      if (item) {
+        await this.syncItemWithRetry(item);
+      }
+    } else if (resolution === 'server') {
+      // Use server data, update local
+      await dbService.updateFromServer(conflict.entityType, conflict.serverData);
+    } else if (resolution === 'merge') {
+      // Merge local and server data
+      const merged = { ...conflict.serverData, ...conflict.localData };
+      await dbService.updateFromServer(conflict.entityType, merged);
+    }
+
+    this.syncConflicts.delete(itemId);
+  }
+
+  /**
+   * Get sync status
+   */
+  getSyncStatus(): SyncStatus {
+    return {
+      isOnline: this.isOnline,
+      isSyncing: this.isSyncing,
+      lastSyncTime: this.lastSyncTime,
+      pendingSyncCount: this.syncErrors.size,
+      syncErrors: Array.from(this.syncErrors.values()),
+    };
+  }
+
+  /**
+   * Get last sync time
+   */
+  getLastSyncTime(): Date | null {
+    return this.lastSyncTime;
+  }
+
+  /**
+   * Get pending sync count
+   */
+  async getPendingSyncCount(): Promise<number> {
+    const items = await dbService.getPendingSyncItems();
+    return items.length;
+  }
+
+  /**
+   * Notify sync status change
+   */
+  private notifySyncStatusChange(): void {
+    if (this.onSyncStatusChange) {
+      this.onSyncStatusChange(this.getSyncStatus());
+    }
+  }
+
+  onSyncStatusChanged(callback: (status: SyncStatus) => void): void {
     this.onSyncStatusChange = callback;
   }
 
@@ -153,7 +358,7 @@ class SyncService {
   }
 
   async forceSync(): Promise<void> {
-    await this.sync();
+    await this.syncWithPriority('critical');
   }
 
   destroy(): void {
