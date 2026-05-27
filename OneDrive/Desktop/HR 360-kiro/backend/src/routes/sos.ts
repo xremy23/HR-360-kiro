@@ -1,8 +1,9 @@
 import { Router, Response } from 'express';
 import { sendSuccess, sendError } from '../utils/response';
 import { AuthRequest, authMiddleware, adminMiddleware } from '../middleware/auth';
-import { SOSEscalationEntity, UserEntity } from '../entities';
+import { SOSEscalationEntity, UserEntity, OrganizationEntity } from '../entities';
 import { getWebSocketServer } from '../websocket/server';
+import { pushNotificationService } from '../services/pushNotificationService';
 
 const router = Router();
 
@@ -24,10 +25,41 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       status: 'pending',
     });
 
+    // Get user details for notification
+    const user = await UserEntity.findById(req.user.id);
+    const userName = user ? `${user.firstName} ${user.lastName}` : 'Unknown User';
+
+    // Get organization members for notification
+    const org = await OrganizationEntity.findById(req.user.orgId);
+    const members = org ? await UserEntity.findByOrgId(req.user.orgId) : [];
+    const memberIds = members
+      .filter((m) => m.id !== req.user.id) // Don't notify the SOS initiator
+      .map((m) => m.id);
+
+    // Send push notifications
+    try {
+      await pushNotificationService.sendSOSNotification(
+        memberIds,
+        req.user.id,
+        userName
+      );
+      console.log(`SOS push notifications sent to ${memberIds.length} members`);
+    } catch (pushError) {
+      console.warn('Push notification failed:', pushError);
+      // Don't fail the request if push notifications fail
+    }
+
     // Broadcast via WebSocket
     try {
       const wsServer = getWebSocketServer();
       wsServer.broadcastSOSCreated(sos);
+      wsServer.broadcastNotificationToOrganization(req.user.orgId, {
+        type: 'sos',
+        sosId: sos.id,
+        userId: req.user.id,
+        userName,
+        notes,
+      });
     } catch (wsError) {
       console.warn('WebSocket broadcast failed:', wsError);
       // Don't fail the request if WebSocket fails

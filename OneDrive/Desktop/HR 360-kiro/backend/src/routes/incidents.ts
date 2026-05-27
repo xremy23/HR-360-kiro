@@ -2,8 +2,9 @@ import { Router, Response } from 'express';
 import { sendSuccess, sendError, sendPaginated } from '../utils/response';
 import { AuthRequest, authMiddleware, adminMiddleware } from '../middleware/auth';
 import { validateAlertSeverity } from '../utils/validators';
-import { IncidentEntity, CheckInEntity } from '../entities';
+import { IncidentEntity, CheckInEntity, UserEntity, OrganizationEntity } from '../entities';
 import { getWebSocketServer } from '../websocket/server';
+import { pushNotificationService } from '../services/pushNotificationService';
 
 const router = Router();
 
@@ -65,10 +66,34 @@ router.post('/', authMiddleware, adminMiddleware, async (req: AuthRequest, res: 
       createdBy: req.user.id,
     });
 
+    // Get organization members for notification
+    const org = await OrganizationEntity.findById(req.user.orgId);
+    const members = org ? await UserEntity.findByOrgId(req.user.orgId) : [];
+    const memberIds = members.map((m) => m.id);
+
+    // Send push notifications
+    try {
+      await pushNotificationService.sendIncidentNotification(
+        memberIds,
+        type,
+        `Incident: ${type} (Severity: ${severity})`
+      );
+      console.log(`Incident push notifications sent to ${memberIds.length} members`);
+    } catch (pushError) {
+      console.warn('Push notification failed:', pushError);
+      // Don't fail the request if push notifications fail
+    }
+
     // Broadcast via WebSocket
     try {
       const wsServer = getWebSocketServer();
       wsServer.broadcastIncidentCreated(incident);
+      wsServer.broadcastNotificationToOrganization(req.user.orgId, {
+        type: 'incident',
+        incidentId: incident.id,
+        incidentType: type,
+        severity,
+      });
     } catch (wsError) {
       console.warn('WebSocket broadcast failed:', wsError);
       // Don't fail the request if WebSocket fails
