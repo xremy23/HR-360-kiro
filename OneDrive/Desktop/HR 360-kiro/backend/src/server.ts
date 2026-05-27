@@ -3,7 +3,9 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import 'express-async-errors';
+import { createServer } from 'http';
 import { initializeDatabase } from './config/database';
+import { initializeWebSocket } from './websocket/server';
 
 // Import routes
 import authRoutes from './routes/auth';
@@ -18,7 +20,11 @@ import organizationRoutes from './routes/organization';
 import tobagRoutes from './routes/tobag';
 
 const app = express();
+const httpServer = createServer(app);
 const PORT = process.env.API_PORT || 3000;
+
+// Initialize WebSocket server
+const wsServer = initializeWebSocket(httpServer);
 
 // Security middleware
 app.use(helmet());
@@ -99,8 +105,9 @@ async function start() {
     await initializeDatabase();
     console.log('Database initialized successfully');
 
-    app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
       console.log(`✅ Server running on http://localhost:${PORT}`);
+      console.log(`🔌 WebSocket server ready on ws://localhost:${PORT}`);
       console.log(`📚 API Documentation: http://localhost:${PORT}/api`);
       console.log(`🏥 Health check: http://localhost:${PORT}/health`);
     });

@@ -1,37 +1,234 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+/**
+ * Main App Component
+ * Sets up navigation and Redux store
+ */
 
-export default function App() {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Emergency Management App</Text>
-      <Text style={styles.subtitle}>Foundation Ready</Text>
-      <Text style={styles.message}>Backend is running on http://localhost:3000</Text>
-    </View>
-  );
+import React from 'react';
+import { Text } from 'react-native';
+import { Provider } from 'react-redux';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { colors } from './styles/designSystem';
+import store from './store';
+
+// Screens
+import HomeScreen from './screens/HomeScreen';
+import CheckInScreen from './screens/CheckInScreen';
+import KnowledgeBaseScreen from './screens/KnowledgeBaseScreen';
+import ContactsScreen from './screens/ContactsScreen';
+import ToBagScreen from './screens/ToBagScreen';
+import AlertsScreen from './screens/AlertsScreen';
+import SettingsScreen from './screens/SettingsScreen';
+
+const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
+
+/**
+ * Home Stack Navigator
+ */
+const HomeStackNavigator = () => (
+  <Stack.Navigator
+    screenOptions={{
+      headerShown: false,
+      cardStyle: { backgroundColor: colors.primary.white },
+    }}
+  >
+    <Stack.Screen name="HomeMain" component={HomeScreen} />
+    <Stack.Screen
+      name="CheckIn"
+      component={CheckInScreen}
+      options={{
+        headerShown: true,
+        headerTitle: 'Check-In',
+        headerBackTitle: 'Back',
+        headerTintColor: colors.primary.teal,
+      }}
+    />
+  </Stack.Navigator>
+);
+
+/**
+ * Knowledge Base Stack Navigator
+ */
+const KBStackNavigator = () => (
+  <Stack.Navigator
+    screenOptions={{
+      headerShown: false,
+      cardStyle: { backgroundColor: colors.primary.white },
+    }}
+  >
+    <Stack.Screen name="KBMain" component={KnowledgeBaseScreen} />
+  </Stack.Navigator>
+);
+
+/**
+ * Contacts Stack Navigator
+ */
+const ContactsStackNavigator = () => (
+  <Stack.Navigator
+    screenOptions={{
+      headerShown: false,
+      cardStyle: { backgroundColor: colors.primary.white },
+    }}
+  >
+    <Stack.Screen name="ContactsMain" component={ContactsScreen} />
+  </Stack.Navigator>
+);
+
+/**
+ * To-Go Bag Stack Navigator
+ */
+const ToBagStackNavigator = () => (
+  <Stack.Navigator
+    screenOptions={{
+      headerShown: false,
+      cardStyle: { backgroundColor: colors.primary.white },
+    }}
+  >
+    <Stack.Screen name="ToBagMain" component={ToBagScreen} />
+  </Stack.Navigator>
+);
+
+/**
+ * Alerts Stack Navigator
+ */
+const AlertsStackNavigator = () => (
+  <Stack.Navigator
+    screenOptions={{
+      headerShown: false,
+      cardStyle: { backgroundColor: colors.primary.white },
+    }}
+  >
+    <Stack.Screen name="AlertsMain" component={AlertsScreen} />
+  </Stack.Navigator>
+);
+
+/**
+ * Settings Stack Navigator
+ */
+const SettingsStackNavigator = () => (
+  <Stack.Navigator
+    screenOptions={{
+      headerShown: false,
+      cardStyle: { backgroundColor: colors.primary.white },
+    }}
+  >
+    <Stack.Screen name="SettingsMain" component={SettingsScreen} />
+  </Stack.Navigator>
+);
+
+/**
+ * Bottom Tab Navigator
+ */
+const TabNavigator = () => (
+  <Tab.Navigator
+    screenOptions={{
+      headerShown: false,
+      tabBarActiveTintColor: colors.primary.teal,
+      tabBarInactiveTintColor: colors.neutral[400],
+      tabBarStyle: {
+        backgroundColor: colors.primary.white,
+        borderTopColor: colors.neutral[200],
+        borderTopWidth: 1,
+        paddingBottom: 8,
+        paddingTop: 8,
+      },
+      tabBarLabelStyle: {
+        fontSize: 12,
+        fontWeight: '600',
+        marginTop: 4,
+      },
+    }}
+  >
+    <Tab.Screen
+      name="Home"
+      component={HomeStackNavigator}
+      options={{
+        tabBarLabel: 'Home',
+        tabBarIcon: ({ color }) => <TabIcon icon="🏠" color={color} />,
+      }}
+    />
+    <Tab.Screen
+      name="KnowledgeBase"
+      component={KBStackNavigator}
+      options={{
+        tabBarLabel: 'Guides',
+        tabBarIcon: ({ color }) => <TabIcon icon="📚" color={color} />,
+      }}
+    />
+    <Tab.Screen
+      name="Contacts"
+      component={ContactsStackNavigator}
+      options={{
+        tabBarLabel: 'Contacts',
+        tabBarIcon: ({ color }) => <TabIcon icon="📞" color={color} />,
+      }}
+    />
+    <Tab.Screen
+      name="ToBag"
+      component={ToBagStackNavigator}
+      options={{
+        tabBarLabel: 'To-Go Bag',
+        tabBarIcon: ({ color }) => <TabIcon icon="🎒" color={color} />,
+      }}
+    />
+    <Tab.Screen
+      name="Alerts"
+      component={AlertsStackNavigator}
+      options={{
+        tabBarLabel: 'Alerts',
+        tabBarIcon: ({ color }) => <TabIcon icon="🔔" color={color} />,
+      }}
+    />
+    <Tab.Screen
+      name="Settings"
+      component={SettingsStackNavigator}
+      options={{
+        tabBarLabel: 'Settings',
+        tabBarIcon: ({ color }) => <TabIcon icon="⚙️" color={color} />,
+      }}
+    />
+  </Tab.Navigator>
+);
+
+/**
+ * Tab Icon Component
+ */
+interface TabIconProps {
+  icon: string;
+  color: string;
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 18,
-    color: '#666',
-    marginBottom: 20,
-  },
-  message: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
-  },
-});
+const TabIcon: React.FC<TabIconProps> = ({ icon, color }) => (
+  <Text style={{ fontSize: 24, color }}>
+    {icon}
+  </Text>
+);
+
+/**
+ * Root Navigator
+ */
+const RootNavigator = () => (
+  <NavigationContainer>
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        cardStyle: { backgroundColor: colors.primary.white },
+      }}
+    >
+      <Stack.Screen name="MainApp" component={TabNavigator} />
+    </Stack.Navigator>
+  </NavigationContainer>
+);
+
+/**
+ * Main App Component
+ */
+export default function App() {
+  return (
+    <Provider store={store}>
+      <RootNavigator />
+    </Provider>
+  );
+}

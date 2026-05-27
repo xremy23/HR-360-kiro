@@ -1,19 +1,17 @@
 import { Router, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import { sendSuccess, sendError, sendPaginated } from '../utils/response';
 import { AuthRequest, authMiddleware, managerMiddleware } from '../middleware/auth';
 import { validateCheckInStatus, validateCoordinates } from '../utils/validators';
+import { CheckInEntity, UserEntity } from '../entities';
+import { getWebSocketServer } from '../websocket/server';
 
 const router = Router();
-
-// Mock database
-const checkIns: any[] = [];
 
 /**
  * POST /check-ins
  * Submit check-in
  */
-router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
@@ -29,23 +27,25 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
       return sendError(res, 'INVALID_COORDINATES', 'Invalid coordinates', 400);
     }
 
-    const checkIn = {
-      id: uuidv4(),
+    const checkIn = await CheckInEntity.create({
       userId: req.user.id,
       teamId: req.user.teamId || '',
       status,
       notes,
-      location,
-      timestamp: new Date(),
+      latitude: location?.latitude,
+      longitude: location?.longitude,
       incidentId,
       isDrill: isDrill || false,
-      syncedToServer: true,
-    };
+    });
 
-    checkIns.push(checkIn);
-
-    // TODO: Save to database
-    // TODO: Broadcast via WebSocket
+    // Broadcast via WebSocket
+    try {
+      const wsServer = getWebSocketServer();
+      wsServer.broadcastCheckInCreated(checkIn);
+    } catch (wsError) {
+      console.warn('WebSocket broadcast failed:', wsError);
+      // Don't fail the request if WebSocket fails
+    }
 
     return sendSuccess(res, checkIn, 'Check-in submitted successfully', 201);
   } catch (error) {
@@ -58,26 +58,25 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
  * GET /check-ins/team/:teamId
  * Get team check-ins
  */
-router.get('/team/:teamId', authMiddleware, managerMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/team/:teamId', authMiddleware, managerMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { teamId } = req.params;
     const { incidentId, isDrill } = req.query;
 
-    // TODO: Fetch from database with filters
-    const teamCheckIns = checkIns.filter((c) => {
-      let match = c.teamId === teamId;
-      if (incidentId) match = match && c.incidentId === incidentId;
-      if (isDrill !== undefined) match = match && c.isDrill === (isDrill === 'true');
-      return match;
-    });
+    const checkIns = await CheckInEntity.findByTeamId(teamId, incidentId as string, isDrill === 'true');
 
-    const formattedCheckIns = teamCheckIns.map((c) => ({
-      userId: c.userId,
-      userName: 'User Name', // TODO: Get from database
-      status: c.status,
-      timestamp: c.timestamp,
-      notes: c.notes,
-    }));
+    const formattedCheckIns = await Promise.all(
+      checkIns.map(async (c) => {
+        const user = await UserEntity.findById(c.userId);
+        return {
+          userId: c.userId,
+          userName: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
+          status: c.status,
+          timestamp: c.timestamp,
+          notes: c.notes,
+        };
+      })
+    );
 
     return sendSuccess(res, formattedCheckIns, 'Team check-ins retrieved', 200);
   } catch (error) {
@@ -90,7 +89,7 @@ router.get('/team/:teamId', authMiddleware, managerMiddleware, (req: AuthRequest
  * GET /check-ins/history
  * Get user check-in history
  */
-router.get('/history', authMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/history', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
@@ -99,11 +98,11 @@ router.get('/history', authMiddleware, (req: AuthRequest, res: Response) => {
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
     const offset = parseInt(req.query.offset as string) || 0;
 
-    // TODO: Fetch from database
-    const userCheckIns = checkIns.filter((c) => c.userId === req.user!.id);
+    const userCheckIns = await CheckInEntity.findByUserId(req.user.id);
+    const total = userCheckIns.length;
     const paginatedCheckIns = userCheckIns.slice(offset, offset + limit);
 
-    return sendPaginated(res, paginatedCheckIns, userCheckIns.length, limit, offset, 200);
+    return sendPaginated(res, paginatedCheckIns, total, limit, offset, 200);
   } catch (error) {
     console.error('Get check-in history error:', error);
     return sendError(res, 'SERVER_ERROR', 'Failed to retrieve check-in history', 500);
@@ -114,23 +113,27 @@ router.get('/history', authMiddleware, (req: AuthRequest, res: Response) => {
  * GET /check-ins/incident/:incidentId
  * Get incident check-ins
  */
-router.get('/incident/:incidentId', authMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/incident/:incidentId', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { incidentId } = req.params;
 
-    // TODO: Fetch from database
-    const incidentCheckIns = checkIns
-      .filter((c) => c.incidentId === incidentId)
-      .map((c) => ({
-        userId: c.userId,
-        userName: 'User Name', // TODO: Get from database
-        teamId: c.teamId,
-        status: c.status,
-        timestamp: c.timestamp,
-        notes: c.notes,
-      }));
+    const incidentCheckIns = await CheckInEntity.findByIncidentId(incidentId);
 
-    return sendSuccess(res, incidentCheckIns, 'Incident check-ins retrieved', 200);
+    const formattedCheckIns = await Promise.all(
+      incidentCheckIns.map(async (c) => {
+        const user = await UserEntity.findById(c.userId);
+        return {
+          userId: c.userId,
+          userName: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
+          teamId: c.teamId,
+          status: c.status,
+          timestamp: c.timestamp,
+          notes: c.notes,
+        };
+      })
+    );
+
+    return sendSuccess(res, formattedCheckIns, 'Incident check-ins retrieved', 200);
   } catch (error) {
     console.error('Get incident check-ins error:', error);
     return sendError(res, 'SERVER_ERROR', 'Failed to retrieve incident check-ins', 500);

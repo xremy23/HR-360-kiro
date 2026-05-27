@@ -1,40 +1,25 @@
 import { Router, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import { sendSuccess, sendError } from '../utils/response';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
-import { validatePhoneNumber, validateCoordinates } from '../utils/validators';
+import { validateCoordinates } from '../utils/validators';
+import { UserEntity } from '../entities/User';
 
 const router = Router();
-
-// Mock database
-const users: any = {};
 
 /**
  * GET /users/profile
  * Get user profile
  */
-router.get('/profile', authMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/profile', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
     }
 
-    // TODO: Fetch from database
-    const user = {
-      id: req.user.id,
-      email: req.user.email,
-      firstName: 'John',
-      lastName: 'Doe',
-      role: req.user.role,
-      orgId: req.user.orgId,
-      teamId: req.user.teamId,
-      departmentId: '',
-      address: '123 Main St',
-      latitude: 14.5995,
-      longitude: 120.9842,
-      biometricEnabled: false,
-      emergencyContacts: [],
-    };
+    const user = await UserEntity.findById(req.user.id);
+    if (!user) {
+      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
+    }
 
     return sendSuccess(res, user, 'Profile retrieved successfully', 200);
   } catch (error) {
@@ -47,13 +32,13 @@ router.get('/profile', authMiddleware, (req: AuthRequest, res: Response) => {
  * PUT /users/profile
  * Update user profile
  */
-router.put('/profile', authMiddleware, (req: AuthRequest, res: Response) => {
+router.put('/profile', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
     }
 
-    const { firstName, lastName, address, latitude, longitude, emergencyContacts } = req.body;
+    const { firstName, lastName, address, latitude, longitude } = req.body;
 
     // Validate coordinates if provided
     if (latitude !== undefined || longitude !== undefined) {
@@ -62,21 +47,17 @@ router.put('/profile', authMiddleware, (req: AuthRequest, res: Response) => {
       }
     }
 
-    // TODO: Update in database
-    const updatedUser = {
-      id: req.user.id,
-      email: req.user.email,
-      firstName: firstName || 'John',
-      lastName: lastName || 'Doe',
-      role: req.user.role,
-      orgId: req.user.orgId,
-      teamId: req.user.teamId,
-      address: address || '123 Main St',
-      latitude: latitude || 14.5995,
-      longitude: longitude || 120.9842,
-      biometricEnabled: false,
-      emergencyContacts: emergencyContacts || [],
-    };
+    const updatedUser = await UserEntity.update(req.user.id, {
+      firstName,
+      lastName,
+      address,
+      latitude,
+      longitude,
+    });
+
+    if (!updatedUser) {
+      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
+    }
 
     return sendSuccess(res, updatedUser, 'Profile updated successfully', 200);
   } catch (error) {
@@ -89,7 +70,7 @@ router.put('/profile', authMiddleware, (req: AuthRequest, res: Response) => {
  * POST /users/biometric/enable
  * Enable biometric authentication
  */
-router.post('/biometric/enable', authMiddleware, (req: AuthRequest, res: Response) => {
+router.post('/biometric/enable', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
@@ -101,7 +82,14 @@ router.post('/biometric/enable', authMiddleware, (req: AuthRequest, res: Respons
       return sendError(res, 'INVALID_TYPE', 'Invalid biometric type', 400);
     }
 
-    // TODO: Enable biometric in database
+    const updatedUser = await UserEntity.update(req.user.id, {
+      biometricEnabled: true,
+    });
+
+    if (!updatedUser) {
+      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
+    }
+
     return sendSuccess(res, { biometricType: type }, 'Biometric authentication enabled', 200);
   } catch (error) {
     console.error('Enable biometric error:', error);
@@ -113,13 +101,20 @@ router.post('/biometric/enable', authMiddleware, (req: AuthRequest, res: Respons
  * POST /users/biometric/disable
  * Disable biometric authentication
  */
-router.post('/biometric/disable', authMiddleware, (req: AuthRequest, res: Response) => {
+router.post('/biometric/disable', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
     }
 
-    // TODO: Disable biometric in database
+    const updatedUser = await UserEntity.update(req.user.id, {
+      biometricEnabled: false,
+    });
+
+    if (!updatedUser) {
+      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
+    }
+
     return sendSuccess(res, {}, 'Biometric authentication disabled', 200);
   } catch (error) {
     console.error('Disable biometric error:', error);

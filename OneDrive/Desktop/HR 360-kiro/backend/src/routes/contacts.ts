@@ -1,26 +1,22 @@
 import { Router, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import { sendSuccess, sendError } from '../utils/response';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 import { validatePhoneNumber, validateCoordinates } from '../utils/validators';
+import { ContactEntity } from '../entities';
 
 const router = Router();
-
-// Mock database
-const contacts: any[] = [];
 
 /**
  * GET /contacts
  * Get user contacts
  */
-router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
     }
 
-    // TODO: Fetch from database
-    const userContacts = contacts.filter((c) => c.userId === req.user!.id);
+    const userContacts = await ContactEntity.findByUserId(req.user.id);
 
     return sendSuccess(res, userContacts, 'Contacts retrieved successfully', 200);
   } catch (error) {
@@ -33,7 +29,7 @@ router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
  * POST /contacts
  * Create contact
  */
-router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
@@ -55,8 +51,7 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
       }
     }
 
-    const contact = {
-      id: uuidv4(),
+    const contact = await ContactEntity.create({
       userId: req.user.id,
       name,
       type,
@@ -67,12 +62,7 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
       latitude,
       longitude,
       isPinned: isPinned || false,
-      createdAt: new Date(),
-    };
-
-    contacts.push(contact);
-
-    // TODO: Save to database
+    });
 
     return sendSuccess(res, contact, 'Contact created successfully', 201);
   } catch (error) {
@@ -85,7 +75,7 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
  * PUT /contacts/:id
  * Update contact
  */
-router.put('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
+router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
@@ -94,10 +84,9 @@ router.put('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const { name, phone, isPinned } = req.body;
 
-    // TODO: Fetch from database
-    const contact = contacts.find((c) => c.id === id && c.userId === req.user!.id);
+    const contact = await ContactEntity.findById(id);
 
-    if (!contact) {
+    if (!contact || contact.userId !== req.user.id) {
       return sendError(res, 'CONTACT_NOT_FOUND', 'Contact not found', 404);
     }
 
@@ -105,14 +94,13 @@ router.put('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
       return sendError(res, 'INVALID_PHONE', 'Invalid phone number', 400);
     }
 
-    contact.name = name || contact.name;
-    contact.phone = phone || contact.phone;
-    contact.isPinned = isPinned !== undefined ? isPinned : contact.isPinned;
-    contact.updatedAt = new Date();
+    const updated = await ContactEntity.update(id, req.user.id, {
+      name: name || contact.name,
+      phone: phone || contact.phone,
+      isPinned: isPinned !== undefined ? isPinned : contact.isPinned,
+    });
 
-    // TODO: Save to database
-
-    return sendSuccess(res, contact, 'Contact updated successfully', 200);
+    return sendSuccess(res, updated, 'Contact updated successfully', 200);
   } catch (error) {
     console.error('Update contact error:', error);
     return sendError(res, 'SERVER_ERROR', 'Failed to update contact', 500);
@@ -123,7 +111,7 @@ router.put('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
  * DELETE /contacts/:id
  * Delete contact
  */
-router.delete('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
@@ -131,14 +119,13 @@ router.delete('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
 
     const { id } = req.params;
 
-    // TODO: Delete from database
-    const index = contacts.findIndex((c) => c.id === id && c.userId === req.user!.id);
+    const contact = await ContactEntity.findById(id);
 
-    if (index === -1) {
+    if (!contact || contact.userId !== req.user.id) {
       return sendError(res, 'CONTACT_NOT_FOUND', 'Contact not found', 404);
     }
 
-    contacts.splice(index, 1);
+    await ContactEntity.delete(id, req.user.id);
 
     return sendSuccess(res, {}, 'Contact deleted successfully', 200);
   } catch (error) {
@@ -151,7 +138,7 @@ router.delete('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
  * GET /contacts/nearby
  * Get nearby services
  */
-router.get('/nearby', authMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/nearby', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { latitude, longitude, radius, type } = req.query;
 
@@ -167,20 +154,7 @@ router.get('/nearby', authMiddleware, (req: AuthRequest, res: Response) => {
       return sendError(res, 'INVALID_COORDINATES', 'Invalid coordinates', 400);
     }
 
-    // TODO: Query nearby services from database
-    // This would typically use PostGIS or similar for geospatial queries
-    const nearbyServices = [
-      {
-        id: uuidv4(),
-        name: 'City Hospital',
-        type: 'hospital',
-        phone: '+63912345678',
-        address: '456 Hospital Ave',
-        latitude: 14.6,
-        longitude: 120.985,
-        distance: 0.8,
-      },
-    ];
+    const nearbyServices = await ContactEntity.findNearby(lat, lon, searchRadius);
 
     return sendSuccess(res, nearbyServices, 'Nearby services retrieved successfully', 200);
   } catch (error) {

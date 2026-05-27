@@ -1,25 +1,21 @@
 import { Router, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import { sendSuccess, sendError } from '../utils/response';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { ToBagItemEntity } from '../entities';
 
 const router = Router();
-
-// Mock database
-const tobagItems: any[] = [];
 
 /**
  * GET /tobag
  * Get to-go bag items
  */
-router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
     }
 
-    // TODO: Fetch from database
-    const userItems = tobagItems.filter((item) => item.userId === req.user!.id);
+    const userItems = await ToBagItemEntity.findByUserId(req.user.id);
 
     return sendSuccess(res, userItems, 'To-go bag items retrieved successfully', 200);
   } catch (error) {
@@ -32,7 +28,7 @@ router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
  * POST /tobag
  * Create to-go bag item
  */
-router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
@@ -49,20 +45,14 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
       return sendError(res, 'INVALID_CATEGORY', 'Invalid category', 400);
     }
 
-    const item = {
-      id: uuidv4(),
+    const item = await ToBagItemEntity.create({
       userId: req.user.id,
       name,
       category,
       quantity: quantity || 1,
       isPacked: isPacked || false,
       notes,
-      createdAt: new Date(),
-    };
-
-    tobagItems.push(item);
-
-    // TODO: Save to database
+    });
 
     return sendSuccess(res, item, 'To-go bag item created successfully', 201);
   } catch (error) {
@@ -75,7 +65,7 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
  * PUT /tobag/:id
  * Update to-go bag item
  */
-router.put('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
+router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
@@ -84,21 +74,19 @@ router.put('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const { name, quantity, isPacked } = req.body;
 
-    // TODO: Fetch from database
-    const item = tobagItems.find((i) => i.id === id && i.userId === req.user!.id);
+    const item = await ToBagItemEntity.findById(id);
 
-    if (!item) {
+    if (!item || item.userId !== req.user.id) {
       return sendError(res, 'ITEM_NOT_FOUND', 'Item not found', 404);
     }
 
-    item.name = name || item.name;
-    item.quantity = quantity !== undefined ? quantity : item.quantity;
-    item.isPacked = isPacked !== undefined ? isPacked : item.isPacked;
-    item.updatedAt = new Date();
+    const updated = await ToBagItemEntity.update(id, req.user.id, {
+      name: name || item.name,
+      quantity: quantity !== undefined ? quantity : item.quantity,
+      isPacked: isPacked !== undefined ? isPacked : item.isPacked,
+    });
 
-    // TODO: Save to database
-
-    return sendSuccess(res, item, 'To-go bag item updated successfully', 200);
+    return sendSuccess(res, updated, 'To-go bag item updated successfully', 200);
   } catch (error) {
     console.error('Update tobag item error:', error);
     return sendError(res, 'SERVER_ERROR', 'Failed to update to-go bag item', 500);
@@ -109,7 +97,7 @@ router.put('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
  * DELETE /tobag/:id
  * Delete to-go bag item
  */
-router.delete('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
@@ -117,14 +105,13 @@ router.delete('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
 
     const { id } = req.params;
 
-    // TODO: Delete from database
-    const index = tobagItems.findIndex((i) => i.id === id && i.userId === req.user!.id);
+    const item = await ToBagItemEntity.findById(id);
 
-    if (index === -1) {
+    if (!item || item.userId !== req.user.id) {
       return sendError(res, 'ITEM_NOT_FOUND', 'Item not found', 404);
     }
 
-    tobagItems.splice(index, 1);
+    await ToBagItemEntity.delete(id, req.user.id);
 
     return sendSuccess(res, {}, 'To-go bag item deleted successfully', 200);
   } catch (error) {

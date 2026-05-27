@@ -1,19 +1,17 @@
 import { Router, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import { sendSuccess, sendError, sendPaginated } from '../utils/response';
 import { AuthRequest, authMiddleware, adminMiddleware } from '../middleware/auth';
 import { validateAlertSeverity } from '../utils/validators';
+import { IncidentEntity, CheckInEntity } from '../entities';
+import { getWebSocketServer } from '../websocket/server';
 
 const router = Router();
-
-// Mock database
-const incidents: any[] = [];
 
 /**
  * GET /incidents
  * Get incidents
  */
-router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
@@ -27,13 +25,11 @@ router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
       return sendError(res, 'INVALID_ORG', 'Organization ID required', 400);
     }
 
-    // TODO: Fetch from database
-    let filtered = incidents.filter((i) => i.orgId === orgId);
-    if (isDrill !== undefined) filtered = filtered.filter((i) => i.isDrill === (isDrill === 'true'));
+    const incidents = await IncidentEntity.findByOrgId(orgId as string, isDrill === 'true');
+    const total = incidents.length;
+    const paginated = incidents.slice(offset, offset + limit);
 
-    const paginated = filtered.slice(offset, offset + limit);
-
-    return sendPaginated(res, paginated, filtered.length, limit, offset, 200);
+    return sendPaginated(res, paginated, total, limit, offset, 200);
   } catch (error) {
     console.error('Get incidents error:', error);
     return sendError(res, 'SERVER_ERROR', 'Failed to retrieve incidents', 500);
@@ -44,7 +40,7 @@ router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
  * POST /incidents
  * Create incident (Admin)
  */
-router.post('/', authMiddleware, adminMiddleware, (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
@@ -60,23 +56,23 @@ router.post('/', authMiddleware, adminMiddleware, (req: AuthRequest, res: Respon
       return sendError(res, 'INVALID_SEVERITY', 'Invalid severity level', 400);
     }
 
-    const incident = {
-      id: uuidv4(),
+    const incident = await IncidentEntity.create({
       orgId: req.user.orgId,
       type,
       severity,
       startTime: new Date(),
-      endTime: null,
       isDrill: isDrill || false,
       createdBy: req.user.id,
-      checkIns: [],
-      alertsBroadcast: [],
-    };
+    });
 
-    incidents.push(incident);
-
-    // TODO: Save to database
-    // TODO: Broadcast via WebSocket
+    // Broadcast via WebSocket
+    try {
+      const wsServer = getWebSocketServer();
+      wsServer.broadcastIncidentCreated(incident);
+    } catch (wsError) {
+      console.warn('WebSocket broadcast failed:', wsError);
+      // Don't fail the request if WebSocket fails
+    }
 
     return sendSuccess(res, incident, 'Incident created successfully', 201);
   } catch (error) {
@@ -89,12 +85,11 @@ router.post('/', authMiddleware, adminMiddleware, (req: AuthRequest, res: Respon
  * GET /incidents/:id
  * Get incident details
  */
-router.get('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
-    // TODO: Fetch from database
-    const incident = incidents.find((i) => i.id === id);
+    const incident = await IncidentEntity.findById(id);
 
     if (!incident) {
       return sendError(res, 'INCIDENT_NOT_FOUND', 'Incident not found', 404);
@@ -111,25 +106,27 @@ router.get('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
  * GET /incidents/:id/summary
  * Get incident check-in summary
  */
-router.get('/:id/summary', authMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/:id/summary', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
-    // TODO: Fetch from database and calculate summary
-    const incident = incidents.find((i) => i.id === id);
+    const incident = await IncidentEntity.findById(id);
 
     if (!incident) {
       return sendError(res, 'INCIDENT_NOT_FOUND', 'Incident not found', 404);
     }
 
+    const checkIns = await CheckInEntity.findByIncidentId(id);
+    
+    // Calculate summary from check-ins
     const summary = {
-      totalMembers: 100,
-      checkedIn: 85,
-      notCheckedIn: 15,
-      safe: 80,
-      needHelp: 4,
-      sos: 1,
-      responseRate: 85,
+      totalMembers: 100, // TODO: Get actual total from organization
+      checkedIn: checkIns.length,
+      notCheckedIn: 100 - checkIns.length,
+      safe: checkIns.filter((c) => c.status === 'safe').length,
+      needHelp: checkIns.filter((c) => c.status === 'need_help').length,
+      sos: checkIns.filter((c) => c.status === 'sos').length,
+      responseRate: Math.round((checkIns.length / 100) * 100),
     };
 
     return sendSuccess(res, summary, 'Incident summary retrieved successfully', 200);

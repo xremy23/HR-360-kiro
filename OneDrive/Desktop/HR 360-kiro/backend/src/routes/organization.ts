@@ -1,33 +1,25 @@
 import { Router, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import { sendSuccess, sendError, sendPaginated } from '../utils/response';
 import { AuthRequest, authMiddleware, adminMiddleware } from '../middleware/auth';
+import { OrganizationEntity, UserEntity } from '../entities';
 
 const router = Router();
-
-// Mock database
-const organizations: any = {};
-const teams: any[] = [];
-const orgUsers: any[] = [];
 
 /**
  * GET /org
  * Get organization
  */
-router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
     }
 
-    // TODO: Fetch from database
-    const org = {
-      id: req.user.orgId,
-      name: 'Sample Organization',
-      emailDomain: 'example.com',
-      inviteCode: 'ABC123',
-      logo: 'https://example.com/logo.png',
-    };
+    const org = await OrganizationEntity.findById(req.user.orgId);
+
+    if (!org) {
+      return sendError(res, 'ORG_NOT_FOUND', 'Organization not found', 404);
+    }
 
     return sendSuccess(res, org, 'Organization retrieved successfully', 200);
   } catch (error) {
@@ -40,23 +32,31 @@ router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
  * GET /org/teams
  * Get organization teams
  */
-router.get('/teams', authMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/teams', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
     }
 
-    // TODO: Fetch from database
-    const orgTeams = teams
-      .filter((t) => t.orgId === req.user!.orgId)
-      .map((t) => ({
-        id: t.id,
-        name: t.name,
-        managerId: t.managerId,
-        memberCount: t.members?.length || 0,
-      }));
+    const orgTeams = await UserEntity.findByOrgId(req.user.orgId);
+    
+    // Group users by team
+    const teamMap = new Map<string, any[]>();
+    orgTeams.forEach((user) => {
+      if (user.teamId) {
+        if (!teamMap.has(user.teamId)) {
+          teamMap.set(user.teamId, []);
+        }
+        teamMap.get(user.teamId)!.push(user);
+      }
+    });
 
-    return sendSuccess(res, orgTeams, 'Teams retrieved successfully', 200);
+    const teams = Array.from(teamMap.entries()).map(([teamId, members]) => ({
+      id: teamId,
+      memberCount: members.length,
+    }));
+
+    return sendSuccess(res, teams, 'Teams retrieved successfully', 200);
   } catch (error) {
     console.error('Get teams error:', error);
     return sendError(res, 'SERVER_ERROR', 'Failed to retrieve teams', 500);
@@ -67,7 +67,7 @@ router.get('/teams', authMiddleware, (req: AuthRequest, res: Response) => {
  * GET /org/users
  * Get organization users (Admin)
  */
-router.get('/users', authMiddleware, adminMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/users', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
@@ -77,14 +77,19 @@ router.get('/users', authMiddleware, adminMiddleware, (req: AuthRequest, res: Re
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
     const offset = parseInt(req.query.offset as string) || 0;
 
-    // TODO: Fetch from database
-    let filtered = orgUsers.filter((u) => u.orgId === req.user!.orgId);
-    if (teamId) filtered = filtered.filter((u) => u.teamId === teamId);
-    if (role) filtered = filtered.filter((u) => u.role === role);
+    let users = await UserEntity.findByOrgId(req.user.orgId);
+    
+    if (teamId) {
+      users = users.filter((u) => u.teamId === teamId);
+    }
+    if (role) {
+      users = users.filter((u) => u.role === role);
+    }
 
-    const paginated = filtered.slice(offset, offset + limit);
+    const total = users.length;
+    const paginated = users.slice(offset, offset + limit);
 
-    return sendPaginated(res, paginated, filtered.length, limit, offset, 200);
+    return sendPaginated(res, paginated, total, limit, offset, 200);
   } catch (error) {
     console.error('Get organization users error:', error);
     return sendError(res, 'SERVER_ERROR', 'Failed to retrieve organization users', 500);

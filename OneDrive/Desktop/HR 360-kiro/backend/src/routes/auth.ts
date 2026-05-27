@@ -4,13 +4,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { validateEmail } from '../utils/validators';
 import { sendSuccess, sendError } from '../utils/response';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { UserEntity } from '../entities/User';
+import { OrganizationEntity } from '../entities/Organization';
 
 const router = Router();
 
-// Mock database for demo (replace with actual database calls)
-const users: any = {};
+// In-memory verification codes (TODO: use Redis for production)
 const verificationCodes: any = {};
-const organizations: any = {};
 
 /**
  * POST /auth/send-verification
@@ -45,7 +45,7 @@ router.post('/send-verification', (req: AuthRequest, res: Response) => {
  * POST /auth/verify-email
  * Verify email and create session
  */
-router.post('/verify-email', (req: AuthRequest, res: Response) => {
+router.post('/verify-email', async (req: AuthRequest, res: Response) => {
   try {
     const { email, code } = req.body;
 
@@ -63,21 +63,23 @@ router.post('/verify-email', (req: AuthRequest, res: Response) => {
     }
 
     // Get or create user
-    let user = users[email];
+    let user = await UserEntity.findByEmail(email);
     if (!user) {
-      user = {
-        id: uuidv4(),
+      // Create new user with default organization
+      const org = await OrganizationEntity.create({
+        name: 'Personal Organization',
+        emailDomain: email.split('@')[1],
+        inviteCode: uuidv4().slice(0, 8).toUpperCase(),
+      });
+
+      user = await UserEntity.create({
         email,
         firstName: '',
         lastName: '',
         role: 'employee',
-        orgId: '',
+        orgId: org.id,
         biometricEnabled: false,
-        emergencyContacts: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      users[email] = user;
+      });
     }
 
     // Generate JWT token
@@ -109,7 +111,6 @@ router.post('/verify-email', (req: AuthRequest, res: Response) => {
           orgId: user.orgId,
           teamId: user.teamId,
           biometricEnabled: user.biometricEnabled,
-          emergencyContacts: user.emergencyContacts,
         },
       },
       'Email verified successfully',
@@ -125,9 +126,9 @@ router.post('/verify-email', (req: AuthRequest, res: Response) => {
  * POST /auth/join-org
  * Join organization with invite code
  */
-router.post('/join-org', (req: AuthRequest, res: Response) => {
+router.post('/join-org', async (req: AuthRequest, res: Response) => {
   try {
-    const { email, inviteCode, emailDomain } = req.body;
+    const { email, inviteCode } = req.body;
 
     if (!email || !validateEmail(email)) {
       return sendError(res, 'INVALID_EMAIL', 'Invalid email format', 400);
@@ -137,27 +138,30 @@ router.post('/join-org', (req: AuthRequest, res: Response) => {
       return sendError(res, 'INVALID_CODE', 'Invite code required', 400);
     }
 
-    // TODO: Validate invite code and get organization
-    // For now, create a mock organization
-    const orgId = uuidv4();
-    organizations[orgId] = {
-      id: orgId,
-      name: 'Sample Organization',
-      emailDomain: emailDomain || 'example.com',
-      inviteCode,
-      createdAt: new Date(),
-    };
+    // Find organization by invite code
+    const org = await OrganizationEntity.findByInviteCode(inviteCode);
+    if (!org) {
+      return sendError(res, 'ORG_NOT_FOUND', 'Organization not found', 404);
+    }
 
-    // Update user with organization
-    if (users[email]) {
-      users[email].orgId = orgId;
+    // Get or create user
+    let user = await UserEntity.findByEmail(email);
+    if (!user) {
+      user = await UserEntity.create({
+        email,
+        firstName: '',
+        lastName: '',
+        role: 'employee',
+        orgId: org.id,
+        biometricEnabled: false,
+      });
     }
 
     return sendSuccess(
       res,
       {
-        orgId,
-        orgName: organizations[orgId].name,
+        orgId: org.id,
+        orgName: org.name,
       },
       'Successfully joined organization',
       200
