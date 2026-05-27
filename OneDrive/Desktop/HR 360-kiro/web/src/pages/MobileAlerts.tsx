@@ -1,45 +1,71 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
-import { RootState } from '../store/store';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch } from '../store/store';
+import { setLoading, setError, setItems } from '../store/slices/alertSlice';
 
 const MobileAlerts: React.FC = () => {
   const navigate = useNavigate();
-  const { activeAlerts } = useSelector((state: RootState) => state.alert);
+  const dispatch = useDispatch<AppDispatch>();
+  const { items: reduxAlerts, loading, error } = useSelector((state: RootState) => state.alert);
   const [filter, setFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
 
-  // Mock alerts for demo
-  const mockAlerts = [
-    {
-      id: 1,
-      title: 'Severe Weather Warning',
-      description: 'Tornado warning in effect until 6:00 PM',
-      severity: 'critical' as const,
-      type: 'weather' as const,
-      startTime: new Date(Date.now() - 30 * 60000).toISOString(),
-      isActive: true,
-    },
-    {
-      id: 2,
-      title: 'Building Evacuation Drill',
-      description: 'Scheduled evacuation drill at 2:00 PM',
-      severity: 'high' as const,
-      type: 'drill' as const,
-      startTime: new Date(Date.now() - 2 * 60000).toISOString(),
-      isActive: true,
-    },
-    {
-      id: 3,
-      title: 'System Maintenance',
-      description: 'Scheduled maintenance window tonight',
-      severity: 'medium' as const,
-      type: 'system' as const,
-      startTime: new Date(Date.now() - 5 * 60000).toISOString(),
-      isActive: true,
-    },
-  ];
+  // Fetch alerts on mount
+  useEffect(() => {
+    const fetchAlerts = async () => {
+      dispatch(setLoading(true));
+      try {
+        // TODO: Replace with actual API call
+        // const response = await apiService.getAlerts();
+        // if (response.success) {
+        //   dispatch(setItems(response.data));
+        // } else {
+        //   dispatch(setError('Failed to load alerts'));
+        // }
+        
+        // Mock alerts for demo
+        const mockAlerts = [
+          {
+            id: '1',
+            title: 'Severe Weather Warning',
+            description: 'Tornado warning in effect until 6:00 PM',
+            severity: 'critical' as const,
+            type: 'weather' as const,
+            startTime: new Date(Date.now() - 30 * 60000).toISOString(),
+            isActive: true,
+            createdAt: new Date(Date.now() - 30 * 60000).toISOString(),
+          },
+          {
+            id: '2',
+            title: 'Building Evacuation Drill',
+            description: 'Scheduled evacuation drill at 2:00 PM',
+            severity: 'high' as const,
+            type: 'drill' as const,
+            startTime: new Date(Date.now() - 2 * 60000).toISOString(),
+            isActive: true,
+            createdAt: new Date(Date.now() - 2 * 60000).toISOString(),
+          },
+          {
+            id: '3',
+            title: 'System Maintenance',
+            description: 'Scheduled maintenance window tonight',
+            severity: 'medium' as const,
+            type: 'system' as const,
+            startTime: new Date(Date.now() - 5 * 60000).toISOString(),
+            isActive: true,
+            createdAt: new Date(Date.now() - 5 * 60000).toISOString(),
+          },
+        ];
+        dispatch(setItems(mockAlerts));
+      } catch (err) {
+        dispatch(setError((err as any).message || 'Failed to load alerts'));
+      }
+    };
 
-  const alerts = activeAlerts.length > 0 ? activeAlerts : mockAlerts;
+    fetchAlerts();
+  }, [dispatch]);
+
+  const alerts = reduxAlerts.length > 0 ? reduxAlerts : [];
 
   const filteredAlerts = filter === 'all' ? alerts : alerts.filter((a) => a.severity === filter);
 
@@ -123,8 +149,20 @@ const MobileAlerts: React.FC = () => {
           ))}
         </div>
 
-        {/* Alerts List */}
-        {filteredAlerts.length > 0 ? (
+      {/* Alerts List */}
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="text-2xl mb-4">⏳</div>
+            <h3 className="font-sans text-h4 text-primary-black mb-2">Loading Alerts</h3>
+            <p className="font-sans text-body2 text-neutral-600">Please wait...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-12">
+            <div className="text-2xl mb-4">❌</div>
+            <h3 className="font-sans text-h4 text-primary-black mb-2">Error</h3>
+            <p className="font-sans text-body2 text-neutral-600">{error}</p>
+          </div>
+        ) : filteredAlerts.length > 0 ? (
           <div className="space-y-4">
             {filteredAlerts.map((alert) => (
               <div

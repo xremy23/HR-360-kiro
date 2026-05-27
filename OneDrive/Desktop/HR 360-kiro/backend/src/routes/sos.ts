@@ -33,7 +33,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     const org = await OrganizationEntity.findById(req.user.orgId);
     const members = org ? await UserEntity.findByOrgId(req.user.orgId) : [];
     const memberIds = members
-      .filter((m) => m.id !== req.user.id) // Don't notify the SOS initiator
+      .filter((m) => m.id !== req.user?.id) // Don't notify the SOS initiator
       .map((m) => m.id);
 
     // Send push notifications

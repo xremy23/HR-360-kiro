@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { getSecurityConfig } from '../config/security';
+import { sessionService } from '../services/sessionService';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -11,7 +13,7 @@ export interface AuthRequest extends Request {
   };
 }
 
-export const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const authMiddleware = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
 
@@ -26,15 +28,52 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
       });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key') as any;
+    // Get security configuration
+    const securityConfig = getSecurityConfig();
+
+    // Decode token to get token ID for blacklist check
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, securityConfig.jwtSecret);
+    } catch (error) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Invalid token',
+        },
+        statusCode: 401,
+      });
+    }
+
+    // Check if token is blacklisted
+    const tokenId = decoded.jti || `${decoded.id}_${decoded.iat}`;
+    const isBlacklisted = await sessionService.isTokenBlacklisted(tokenId);
+    
+    if (isBlacklisted) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Token has been revoked',
+        },
+        statusCode: 401,
+      });
+    }
+
+    // Update session activity if session exists
+    const sessionId = `session_${decoded.id}`;
+    await sessionService.updateSessionActivity(sessionId);
+
     req.user = decoded;
     next();
   } catch (error) {
+    console.error('Auth middleware error:', error);
     return res.status(401).json({
       success: false,
       error: {
         code: 'UNAUTHORIZED',
-        message: 'Invalid token',
+        message: 'Authentication failed',
       },
       statusCode: 401,
     });

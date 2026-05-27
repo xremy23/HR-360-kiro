@@ -2,19 +2,21 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { Alert, AlertNotification } from '@types/index';
 
 interface AlertsState {
+  items: Alert[];
   alerts: Alert[];
   notifications: AlertNotification[];
   unreadCount: number;
-  isLoading: boolean;
+  loading: boolean;
   error: string | null;
   selectedAlert: Alert | null;
 }
 
 const initialState: AlertsState = {
+  items: [],
   alerts: [],
   notifications: [],
   unreadCount: 0,
-  isLoading: false,
+  loading: false,
   error: null,
   selectedAlert: null
 };
@@ -24,16 +26,24 @@ const alertsSlice = createSlice({
   initialState,
   reducers: {
     setLoading: (state, action: PayloadAction<boolean>) => {
-      state.isLoading = action.payload;
+      state.loading = action.payload;
     },
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
     },
+    setItems: (state, action: PayloadAction<Alert[]>) => {
+      state.items = action.payload;
+      state.alerts = action.payload;
+      state.error = null;
+      state.loading = false;
+    },
     setAlerts: (state, action: PayloadAction<Alert[]>) => {
       state.alerts = action.payload;
+      state.items = action.payload;
     },
     addAlert: (state, action: PayloadAction<Alert>) => {
       state.alerts.unshift(action.payload);
+      state.items.unshift(action.payload);
     },
     setNotifications: (state, action: PayloadAction<AlertNotification[]>) => {
       state.notifications = action.payload;
@@ -66,6 +76,7 @@ const alertsSlice = createSlice({
       state.selectedAlert = action.payload;
     },
     clearAlerts: (state) => {
+      state.items = [];
       state.alerts = [];
       state.notifications = [];
       state.unreadCount = 0;
@@ -77,6 +88,7 @@ const alertsSlice = createSlice({
 export const {
   setLoading,
   setError,
+  setItems,
   setAlerts,
   addAlert,
   setNotifications,

@@ -1,13 +1,14 @@
 /**
  * Contacts Screen - Manage emergency contacts
  * Add, edit, and view emergency contacts with quick call/message options
+ * UPDATED: Redux integration with real-time updates
  */
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, FlatList, Alert, ActivityIndicator } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { colors, typography, spacing, borderRadius, shadows } from '../styles/designSystem';
-import { RootState } from '../store';
+import { RootState, AppDispatch } from '../store/store';
 import apiService, { ApiError } from '../services/apiService';
 
 interface ContactsScreenProps {
@@ -15,7 +16,7 @@ interface ContactsScreenProps {
 }
 
 const ContactsScreen: React.FC<ContactsScreenProps> = ({ navigation }) => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const [contacts, setContacts] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredContacts, setFilteredContacts] = useState<any[]>([]);
@@ -41,7 +42,7 @@ const ContactsScreen: React.FC<ContactsScreenProps> = ({ navigation }) => {
     if (searchQuery) {
       setFilteredContacts(
         contacts.filter(
-          (contact) =>
+          (contact: any) =>
             contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             contact.phone.includes(searchQuery)
         )
@@ -59,10 +60,10 @@ const ContactsScreen: React.FC<ContactsScreenProps> = ({ navigation }) => {
 
       const response = await apiService.getContacts({ pageSize: 100 });
 
-      if (response.success) {
+      if (response.success && response.data) {
         setContacts(response.data);
       } else {
-        setError(response.error?.message || 'Failed to load contacts');
+        setError('Failed to load contacts');
       }
     } catch (err) {
       const apiError = err as ApiError;

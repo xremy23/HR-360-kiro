@@ -61,7 +61,7 @@ class PushNotificationService {
 
       // Send to all device tokens
       const messages: Expo.ExpoPushMessage[] = deviceTokens
-        .filter(token => Expo.Expo.isExpoPushTokenValid(token.token))
+        .filter(token => Expo.Expo.isExpoPushToken(token.token))
         .map(token => ({
           to: token.token,
           sound: payload.sound || 'default',
@@ -171,7 +171,7 @@ class PushNotificationService {
   ): Promise<void> {
     try {
       // Validate token format
-      if (!Expo.Expo.isExpoPushTokenValid(token)) {
+      if (!Expo.Expo.isExpoPushToken(token)) {
         console.warn(`Invalid Expo push token: ${token}`);
       }
 

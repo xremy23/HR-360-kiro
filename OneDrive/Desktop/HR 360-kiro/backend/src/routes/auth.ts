@@ -6,12 +6,11 @@ import { sendSuccess, sendError } from '../utils/response';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 import { UserEntity } from '../entities/User';
 import { OrganizationEntity } from '../entities/Organization';
+import { getSecurityConfig } from '../config/security';
+import { sessionService } from '../services/sessionService';
 import emailService from '../services/emailService';
 
 const router = Router();
-
-// In-memory verification codes (TODO: use Redis for production)
-const verificationCodes: any = {};
 
 /**
  * POST /auth/send-verification
@@ -27,10 +26,9 @@ router.post('/send-verification', async (req: AuthRequest, res: Response) => {
 
     // Generate verification code
     const code = Math.random().toString().slice(2, 8);
-    verificationCodes[email] = {
-      code,
-      expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
-    };
+    
+    // Store verification code in Redis with 10-minute expiration
+    await sessionService.storeVerificationCode(email, code, 10);
 
     // Send email with verification code
     const emailSent = await emailService.sendVerificationCode(email, code);
@@ -63,8 +61,9 @@ router.post('/verify-email', async (req: AuthRequest, res: Response) => {
       return sendError(res, 'INVALID_CODE', 'Verification code required', 400);
     }
 
-    const verification = verificationCodes[email];
-    if (!verification || verification.code !== code || verification.expiresAt < Date.now()) {
+    // Verify code using Redis-based session service
+    const isValidCode = await sessionService.verifyCode(email, code);
+    if (!isValidCode) {
       return sendError(res, 'INVALID_CODE', 'Invalid or expired verification code', 400);
     }
 
@@ -88,21 +87,42 @@ router.post('/verify-email', async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Generate JWT token
+    // Get security configuration
+    const securityConfig = getSecurityConfig();
+
+    // Generate unique token ID for blacklist support
+    const tokenId = uuidv4();
+    const issuedAt = Math.floor(Date.now() / 1000);
+
+    // Generate JWT token with secure configuration
+    const tokenPayload = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      orgId: user.orgId,
+      teamId: user.teamId,
+      jti: tokenId, // JWT ID for blacklist support
+      iat: issuedAt,
+    };
+    
+    // Generate JWT token with secure configuration
     const token = jwt.sign(
-      {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        orgId: user.orgId,
-        teamId: user.teamId,
-      },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '24h' }
+      tokenPayload,
+      securityConfig.jwtSecret,
+      { expiresIn: securityConfig.jwtExpiresIn } as jwt.SignOptions
     );
 
-    // Clean up verification code
-    delete verificationCodes[email];
+    // Store session data in Redis
+    const sessionId = `session_${user.id}`;
+    await sessionService.storeSession(sessionId, {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      orgId: user.orgId,
+      teamId: user.teamId,
+      createdAt: Date.now(),
+      lastActivity: Date.now(),
+    });
 
     return sendSuccess(
       res,
@@ -182,23 +202,38 @@ router.post('/join-org', async (req: AuthRequest, res: Response) => {
  * POST /auth/refresh-token
  * Refresh JWT token
  */
-router.post('/refresh-token', authMiddleware, (req: AuthRequest, res: Response) => {
+router.post('/refresh-token', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'UNAUTHORIZED', 'User not found', 401);
     }
 
+    // Get security configuration
+    const securityConfig = getSecurityConfig();
+
+    // Generate new token ID for blacklist support
+    const tokenId = uuidv4();
+    const issuedAt = Math.floor(Date.now() / 1000);
+
+    const tokenPayload = {
+      id: req.user.id,
+      email: req.user.email,
+      role: req.user.role,
+      orgId: req.user.orgId,
+      teamId: req.user.teamId,
+      jti: tokenId,
+      iat: issuedAt,
+    };
+
     const newToken = jwt.sign(
-      {
-        id: req.user.id,
-        email: req.user.email,
-        role: req.user.role,
-        orgId: req.user.orgId,
-        teamId: req.user.teamId,
-      },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '24h' }
+      tokenPayload,
+      securityConfig.jwtSecret,
+      { expiresIn: securityConfig.jwtExpiresIn } as jwt.SignOptions
     );
+
+    // Update session activity
+    const sessionId = `session_${req.user.id}`;
+    await sessionService.updateSessionActivity(sessionId);
 
     return sendSuccess(res, { token: newToken }, 'Token refreshed successfully', 200);
   } catch (error) {
@@ -209,11 +244,38 @@ router.post('/refresh-token', authMiddleware, (req: AuthRequest, res: Response) 
 
 /**
  * POST /auth/logout
- * Logout user
+ * Logout user and blacklist token
  */
-router.post('/logout', authMiddleware, (req: AuthRequest, res: Response) => {
+router.post('/logout', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    // TODO: Invalidate token in blacklist
+    if (!req.user) {
+      return sendError(res, 'UNAUTHORIZED', 'User not found', 401);
+    }
+
+    // Extract token from request
+    const token = req.headers.authorization?.split(' ')[1];
+    if (token) {
+      try {
+        const decoded = jwt.decode(token) as any;
+        if (decoded && decoded.jti) {
+          // Calculate remaining token lifetime for blacklist expiration
+          const now = Math.floor(Date.now() / 1000);
+          const expiresIn = decoded.exp - now;
+          
+          if (expiresIn > 0) {
+            // Add token to blacklist for remaining lifetime
+            await sessionService.blacklistToken(decoded.jti, expiresIn);
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to blacklist token on logout:', error);
+      }
+    }
+
+    // Delete session
+    const sessionId = `session_${req.user.id}`;
+    await sessionService.deleteSession(sessionId);
+
     return sendSuccess(res, {}, 'Logged out successfully', 200);
   } catch (error) {
     console.error('Logout error:', error);

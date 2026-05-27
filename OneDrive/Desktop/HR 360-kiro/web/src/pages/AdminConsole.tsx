@@ -1,10 +1,34 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Routes, Route, Link } from 'react-router-dom';
-import { useSelector } from 'react-redux';
-import { RootState } from '../store/store';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch } from '../store/store';
+import { setLoading as setKBLoading, setError as setKBError, setItems as setKBItems } from '../store/slices/kbSlice';
 
 const AdminConsole: React.FC = () => {
+  const dispatch = useDispatch<AppDispatch>();
   const { user } = useSelector((state: RootState) => state.auth);
+  const { items: kbGuides, loading: kbLoading } = useSelector((state: RootState) => state.kb);
+
+  // Fetch KB guides on mount
+  useEffect(() => {
+    const fetchKBGuides = async () => {
+      dispatch(setKBLoading(true));
+      try {
+        // TODO: Replace with actual API call
+        // const response = await apiService.getKBGuides();
+        // if (response.success) {
+        //   dispatch(setKBItems(response.data));
+        // } else {
+        //   dispatch(setKBError('Failed to load KB guides'));
+        // }
+        dispatch(setKBItems([]));
+      } catch (err) {
+        dispatch(setKBError((err as any).message || 'Failed to load KB guides'));
+      }
+    };
+
+    fetchKBGuides();
+  }, [dispatch]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -61,26 +85,33 @@ const AdminConsole: React.FC = () => {
   );
 };
 
-const AdminDashboard: React.FC = () => (
-  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-    <div className="bg-white rounded-lg shadow p-6">
-      <h3 className="text-gray-500 text-sm font-medium">Total Users</h3>
-      <p className="text-3xl font-bold text-gray-900 mt-2">0</p>
+const AdminDashboard: React.FC = () => {
+  const { items: alerts } = useSelector((state: RootState) => state.alert);
+  const { items: kbGuides } = useSelector((state: RootState) => state.kb);
+  const { items: incidents } = useSelector((state: RootState) => state.incident);
+  const { items: checkIns } = useSelector((state: RootState) => state.checkin);
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-gray-500 text-sm font-medium">Total Users</h3>
+        <p className="text-3xl font-bold text-gray-900 mt-2">0</p>
+      </div>
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-gray-500 text-sm font-medium">Active Alerts</h3>
+        <p className="text-3xl font-bold text-gray-900 mt-2">{alerts.filter(a => a.isActive).length}</p>
+      </div>
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-gray-500 text-sm font-medium">KB Guides</h3>
+        <p className="text-3xl font-bold text-gray-900 mt-2">{kbGuides.length}</p>
+      </div>
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-gray-500 text-sm font-medium">Recent Incidents</h3>
+        <p className="text-3xl font-bold text-gray-900 mt-2">{incidents.filter(i => i.status === 'active').length}</p>
+      </div>
     </div>
-    <div className="bg-white rounded-lg shadow p-6">
-      <h3 className="text-gray-500 text-sm font-medium">Active Alerts</h3>
-      <p className="text-3xl font-bold text-gray-900 mt-2">0</p>
-    </div>
-    <div className="bg-white rounded-lg shadow p-6">
-      <h3 className="text-gray-500 text-sm font-medium">KB Guides</h3>
-      <p className="text-3xl font-bold text-gray-900 mt-2">0</p>
-    </div>
-    <div className="bg-white rounded-lg shadow p-6">
-      <h3 className="text-gray-500 text-sm font-medium">Recent Incidents</h3>
-      <p className="text-3xl font-bold text-gray-900 mt-2">0</p>
-    </div>
-  </div>
-);
+  );
+};
 
 const KBManagement: React.FC = () => (
   <div className="bg-white rounded-lg shadow p-6">

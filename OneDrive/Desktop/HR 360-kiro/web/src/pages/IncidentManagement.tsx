@@ -3,28 +3,50 @@
  * Create, view, and manage incidents
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch } from '../store/store';
+import { setLoading, setError, setItems, addIncident, updateIncident } from '../store/slices/incidentSlice';
 import { colors, typography, spacing, borderRadius, shadows } from '../styles/designSystem';
 import websocketService from '../services/websocketService';
 
-interface Incident {
-  id: string;
+interface IncidentFormData {
   type: string;
   severity: 'advisory' | 'watch' | 'emergency';
-  startTime: string;
-  endTime?: string;
   isDrill: boolean;
-  status: 'active' | 'resolved';
 }
 
 const IncidentManagement: React.FC = () => {
-  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const dispatch = useDispatch<AppDispatch>();
+  const { items: incidents, loading, error } = useSelector((state: RootState) => state.incident);
+  
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<IncidentFormData>({
     type: '',
-    severity: 'watch' as const,
+    severity: 'watch',
     isDrill: false,
   });
+
+  // Fetch incidents on mount
+  useEffect(() => {
+    const fetchIncidents = async () => {
+      dispatch(setLoading(true));
+      try {
+        // TODO: Replace with actual API call
+        // const response = await apiService.getIncidents();
+        // if (response.success) {
+        //   dispatch(setItems(response.data));
+        // } else {
+        //   dispatch(setError('Failed to load incidents'));
+        // }
+        dispatch(setItems([]));
+      } catch (err) {
+        dispatch(setError((err as any).message || 'Failed to load incidents'));
+      }
+    };
+
+    fetchIncidents();
+  }, [dispatch]);
 
   const handleCreateIncident = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,19 +56,49 @@ const IncidentManagement: React.FC = () => {
       return;
     }
 
-    // Send via WebSocket
-    websocketService.send({
-      type: 'incident',
-      action: 'created',
-      data: {
-        ...formData,
-        startTime: new Date().toISOString(),
-      },
-      timestamp: new Date().toISOString(),
-    });
+    try {
+      dispatch(setLoading(true));
 
-    setFormData({ type: '', severity: 'watch', isDrill: false });
-    setShowForm(false);
+      const severityMap = {
+        advisory: 'low',
+        watch: 'medium',
+        emergency: 'high',
+      };
+
+      const newIncident = {
+        id: `${Date.now()}`,
+        type: formData.type,
+        severity: severityMap[formData.severity] as 'low' | 'medium' | 'high' | 'critical',
+        startTime: new Date().toISOString(),
+        isDrill: formData.isDrill,
+        status: 'active' as const,
+        createdAt: new Date().toISOString(),
+      };
+
+      // TODO: Replace with actual API call
+      // const response = await apiService.createIncident(newIncident);
+      // if (response.success) {
+      //   dispatch(addIncident(response.data));
+      // } else {
+      //   dispatch(setError('Failed to create incident'));
+      // }
+
+      dispatch(addIncident(newIncident));
+
+      // Send via WebSocket
+      websocketService.send({
+        type: 'incident',
+        action: 'created',
+        data: newIncident,
+        timestamp: new Date().toISOString(),
+      });
+
+      setFormData({ type: '', severity: 'watch', isDrill: false });
+      setShowForm(false);
+      dispatch(setLoading(false));
+    } catch (err) {
+      dispatch(setError((err as any).message || 'Failed to create incident'));
+    }
   };
 
   const getSeverityColor = (severity: string) => {
@@ -253,7 +305,31 @@ const IncidentManagement: React.FC = () => {
           Active Incidents
         </h2>
 
-        {incidents.length > 0 ? (
+        {loading ? (
+          <div
+            style={{
+              padding: spacing.xl,
+              backgroundColor: colors.neutral[50],
+              borderRadius: borderRadius.md,
+              textAlign: 'center',
+              color: colors.neutral[500],
+            }}
+          >
+            Loading incidents...
+          </div>
+        ) : error ? (
+          <div
+            style={{
+              padding: spacing.xl,
+              backgroundColor: colors.error,
+              borderRadius: borderRadius.md,
+              textAlign: 'center',
+              color: colors.primary.white,
+            }}
+          >
+            {error}
+          </div>
+        ) : incidents.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}>
             {incidents.map((incident) => (
               <div

@@ -1,13 +1,15 @@
 /**
  * Alerts Screen - View emergency alerts
  * Display broadcast alerts from organization
+ * UPDATED: Redux integration with real-time updates
  */
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { colors, typography, spacing, borderRadius, shadows } from '../styles/designSystem';
-import { RootState } from '../store';
+import { RootState, AppDispatch } from '../store/store';
+import { setLoading, setError, setItems } from '../store/slices/alertsSlice';
 import apiService, { ApiError } from '../services/apiService';
 
 interface AlertsScreenProps {
@@ -15,12 +17,15 @@ interface AlertsScreenProps {
 }
 
 const AlertsScreen: React.FC<AlertsScreenProps> = ({ navigation }) => {
-  const [alerts, setAlerts] = useState<any[]>([]);
+  const dispatch = useDispatch<AppDispatch>();
   const [selectedAlert, setSelectedAlert] = useState<any>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'unread' | 'read'>('all');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Redux selectors
+  const alerts = useSelector((state: RootState) => state.alerts.items);
+  const loading = useSelector((state: RootState) => state.alerts.loading);
+  const error = useSelector((state: RootState) => state.alerts.error);
 
   // Fetch alerts on mount
   useEffect(() => {
@@ -30,22 +35,20 @@ const AlertsScreen: React.FC<AlertsScreenProps> = ({ navigation }) => {
   // Fetch alerts from backend
   const fetchAlerts = async () => {
     try {
-      setLoading(true);
-      setError(null);
+      dispatch(setLoading(true));
 
       const response = await apiService.getAlerts({ pageSize: 100 });
 
-      if (response.success) {
-        setAlerts(response.data);
+      if (response.success && response.data) {
+        dispatch(setItems(response.data));
       } else {
-        setError(response.error?.message || 'Failed to load alerts');
+        dispatch(setError('Failed to load alerts'));
       }
     } catch (err) {
       const apiError = err as ApiError;
-      setError(apiError.message || 'Failed to load alerts');
+      dispatch(setError(apiError.message || 'Failed to load alerts'));
       console.error('Error fetching alerts:', err);
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
   };
@@ -56,7 +59,7 @@ const AlertsScreen: React.FC<AlertsScreenProps> = ({ navigation }) => {
     fetchAlerts();
   };
 
-  const filteredAlerts = alerts.filter((alert) => {
+  const filteredAlerts = alerts.filter((alert: any) => {
     if (filterStatus === 'unread') return !alert.read;
     if (filterStatus === 'read') return alert.read;
     return true;

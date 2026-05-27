@@ -97,6 +97,26 @@ export class WebSocketServer {
       socket.on('heartbeat', () => {
         socket.emit('heartbeat:ack', { timestamp: new Date().toISOString() });
       });
+
+      // Handle notification acknowledgment
+      socket.on('notification:delivered', (data) => {
+        console.log(`[${new Date().toISOString()}] Notification delivered: ${data.notificationId}`);
+        this.io.emit('notification:delivered', {
+          notificationId: data.notificationId,
+          userId: socket.data.userId,
+          timestamp: new Date().toISOString(),
+        });
+      });
+
+      // Handle notification read
+      socket.on('notification:read', (data) => {
+        console.log(`[${new Date().toISOString()}] Notification read: ${data.notificationId}`);
+        this.io.emit('notification:read', {
+          notificationId: data.notificationId,
+          userId: socket.data.userId,
+          timestamp: new Date().toISOString(),
+        });
+      });
     });
   }
 
@@ -166,6 +186,90 @@ export class WebSocketServer {
   }
 
   /**
+   * Broadcast notification to user
+   */
+  public broadcastNotificationToUser(userId: string, notification: any): void {
+    const socketId = this.connectedUsers.get(userId);
+    if (socketId) {
+      this.io.to(socketId).emit('notification:received', {
+        type: 'notification',
+        action: 'received',
+        data: notification,
+        timestamp: new Date().toISOString(),
+      });
+      console.log(`[${new Date().toISOString()}] Notification sent to user ${userId}`);
+    } else {
+      console.log(`[${new Date().toISOString()}] User ${userId} not connected, notification queued`);
+    }
+  }
+
+  /**
+   * Broadcast notification to multiple users
+   */
+  public broadcastNotificationToUsers(userIds: string[], notification: any): void {
+    userIds.forEach((userId) => {
+      this.broadcastNotificationToUser(userId, notification);
+    });
+  }
+
+  /**
+   * Broadcast notification to organization
+   */
+  public broadcastNotificationToOrganization(orgId: string, notification: any): void {
+    const userIds = Array.from(this.userOrganizations.entries())
+      .filter(([, org]) => org === orgId)
+      .map(([userId]) => userId);
+
+    this.broadcastNotificationToUsers(userIds, notification);
+    console.log(`[${new Date().toISOString()}] Notification sent to org ${orgId}`);
+  }
+
+  /**
+   * Broadcast location update
+   */
+  public broadcastLocationUpdate(userId: string, location: any): void {
+    this.io.emit('location:updated', {
+      type: 'location',
+      action: 'updated',
+      userId,
+      data: location,
+      timestamp: new Date().toISOString(),
+    });
+    console.log(`[${new Date().toISOString()}] Location update: ${userId}`);
+  }
+
+  /**
+   * Broadcast geofence triggered
+   */
+  public broadcastGeofenceTriggered(userId: string, geofence: any, triggerType: 'entry' | 'exit'): void {
+    this.io.emit('geofence:triggered', {
+      type: 'geofence',
+      action: 'triggered',
+      userId,
+      triggerType,
+      data: geofence,
+      timestamp: new Date().toISOString(),
+    });
+    console.log(`[${new Date().toISOString()}] Geofence ${triggerType}: ${userId}`);
+  }
+
+  /**
+   * Broadcast sync completion
+   */
+  public broadcastSyncCompleted(userId: string, syncData: any): void {
+    const socketId = this.connectedUsers.get(userId);
+    if (socketId) {
+      this.io.to(socketId).emit('sync:completed', {
+        type: 'sync',
+        action: 'completed',
+        data: syncData,
+        timestamp: new Date().toISOString(),
+      });
+      console.log(`[${new Date().toISOString()}] Sync completed for user ${userId}`);
+    }
+  }
+
+  /**
    * Broadcast to specific organization
    */
   public broadcastToOrganization(orgId: string, event: string, data: any): void {
@@ -196,6 +300,13 @@ export class WebSocketServer {
   }
 
   /**
+   * Get user connection status
+   */
+  public isUserConnected(userId: string): boolean {
+    return this.connectedUsers.has(userId);
+  }
+
+  /**
    * Get Socket.io instance
    */
   public getIO(): SocketIOServer {
@@ -223,5 +334,3 @@ export function getWebSocketServer(): WebSocketServer {
   }
   return wsServer;
 }
-
-export default wsServer;

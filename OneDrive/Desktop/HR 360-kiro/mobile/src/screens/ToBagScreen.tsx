@@ -1,13 +1,14 @@
 /**
  * To-Go Bag Screen - Emergency essentials checklist
  * Track items needed for emergency evacuation
+ * UPDATED: Redux integration with real-time updates
  */
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, FlatList, Alert, ActivityIndicator } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { colors, typography, spacing, borderRadius, shadows } from '../styles/designSystem';
-import { RootState } from '../store';
+import { RootState, AppDispatch } from '../store/store';
 import apiService, { ApiError } from '../services/apiService';
 
 interface ToBagScreenProps {
@@ -15,7 +16,7 @@ interface ToBagScreenProps {
 }
 
 const ToBagScreen: React.FC<ToBagScreenProps> = ({ navigation }) => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const [items, setItems] = useState<any[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newItem, setNewItem] = useState({
@@ -45,10 +46,10 @@ const ToBagScreen: React.FC<ToBagScreenProps> = ({ navigation }) => {
 
       const response = await apiService.getToBagItems();
 
-      if (response.success) {
+      if (response.success && response.data) {
         setItems(response.data);
       } else {
-        setError(response.error?.message || 'Failed to load items');
+        setError('Failed to load items');
       }
     } catch (err) {
       const apiError = err as ApiError;

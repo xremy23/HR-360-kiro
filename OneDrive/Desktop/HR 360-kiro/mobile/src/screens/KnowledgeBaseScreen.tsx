@@ -1,13 +1,15 @@
 /**
  * Knowledge Base Screen - Browse emergency guides
  * Displays guides with search and filtering capabilities
+ * UPDATED: Redux integration with real-time updates
  */
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { colors, typography, spacing, borderRadius, shadows } from '../styles/designSystem';
-import { RootState } from '../store';
+import { RootState, AppDispatch } from '../store/store';
+import { setLoading, setError, setItems } from '../store/slices/kbSlice';
 import apiService, { ApiError } from '../services/apiService';
 
 interface KnowledgeBaseScreenProps {
@@ -15,14 +17,17 @@ interface KnowledgeBaseScreenProps {
 }
 
 const KnowledgeBaseScreen: React.FC<KnowledgeBaseScreenProps> = ({ navigation }) => {
-  const [guides, setGuides] = useState<any[]>([]);
+  const dispatch = useDispatch<AppDispatch>();
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredGuides, setFilteredGuides] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Redux selectors
+  const guides = useSelector((state: RootState) => state.kb.items);
+  const loading = useSelector((state: RootState) => state.kb.loading);
+  const error = useSelector((state: RootState) => state.kb.error);
 
   // Fetch guides on mount
   useEffect(() => {
@@ -35,14 +40,14 @@ const KnowledgeBaseScreen: React.FC<KnowledgeBaseScreenProps> = ({ navigation })
 
     if (searchQuery) {
       filtered = filtered.filter(
-        (guide) =>
+        (guide: any) =>
           guide.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
           guide.description.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
     if (selectedCategory) {
-      filtered = filtered.filter((guide) => guide.category === selectedCategory);
+      filtered = filtered.filter((guide: any) => guide.category === selectedCategory);
     }
 
     setFilteredGuides(filtered);
@@ -50,29 +55,27 @@ const KnowledgeBaseScreen: React.FC<KnowledgeBaseScreenProps> = ({ navigation })
 
   // Extract unique categories from guides
   useEffect(() => {
-    const uniqueCategories = Array.from(new Set(guides.map((g) => g.category)));
+    const uniqueCategories = Array.from(new Set(guides.map((g: any) => g.category)));
     setCategories(uniqueCategories as string[]);
   }, [guides]);
 
   // Fetch guides from backend
   const fetchGuides = async () => {
     try {
-      setLoading(true);
-      setError(null);
+      dispatch(setLoading(true));
 
       const response = await apiService.getGuides({ pageSize: 100 });
 
-      if (response.success) {
-        setGuides(response.data);
+      if (response.success && response.data) {
+        dispatch(setItems(response.data));
       } else {
-        setError(response.error?.message || 'Failed to load guides');
+        dispatch(setError('Failed to load guides'));
       }
     } catch (err) {
       const apiError = err as ApiError;
-      setError(apiError.message || 'Failed to load guides');
+      dispatch(setError(apiError.message || 'Failed to load guides'));
       console.error('Error fetching guides:', err);
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
   };

@@ -14,16 +14,18 @@ export interface Alert {
 }
 
 interface AlertState {
+  items: Alert[];
   alerts: Alert[];
   activeAlerts: Alert[];
-  isLoading: boolean;
+  loading: boolean;
   error: string | null;
 }
 
 const initialState: AlertState = {
+  items: [],
   alerts: [],
   activeAlerts: [],
-  isLoading: false,
+  loading: false,
   error: null,
 };
 
@@ -32,17 +34,26 @@ const alertSlice = createSlice({
   initialState,
   reducers: {
     setLoading: (state, action: PayloadAction<boolean>) => {
-      state.isLoading = action.payload;
+      state.loading = action.payload;
     },
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
     },
+    setItems: (state, action: PayloadAction<Alert[]>) => {
+      state.items = action.payload;
+      state.alerts = action.payload;
+      state.activeAlerts = action.payload.filter((a) => a.isActive);
+      state.loading = false;
+      state.error = null;
+    },
     setAlerts: (state, action: PayloadAction<Alert[]>) => {
       state.alerts = action.payload;
+      state.items = action.payload;
       state.activeAlerts = action.payload.filter((a) => a.isActive);
     },
     addAlert: (state, action: PayloadAction<Alert>) => {
       state.alerts.push(action.payload);
+      state.items.push(action.payload);
       if (action.payload.isActive) {
         state.activeAlerts.push(action.payload);
       }
@@ -51,12 +62,14 @@ const alertSlice = createSlice({
       const index = state.alerts.findIndex((a) => a.id === action.payload.id);
       if (index !== -1) {
         state.alerts[index] = action.payload;
+        state.items[index] = action.payload;
         // Update active alerts
         state.activeAlerts = state.alerts.filter((a) => a.isActive);
       }
     },
     deleteAlert: (state, action: PayloadAction<string>) => {
       state.alerts = state.alerts.filter((a) => a.id !== action.payload);
+      state.items = state.items.filter((a) => a.id !== action.payload);
       state.activeAlerts = state.activeAlerts.filter((a) => a.id !== action.payload);
     },
   },
@@ -65,6 +78,7 @@ const alertSlice = createSlice({
 export const {
   setLoading,
   setError,
+  setItems,
   setAlerts,
   addAlert,
   updateAlert,

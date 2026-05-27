@@ -2,19 +2,21 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { CheckIn, CheckInHistory } from '@types/index';
 
 interface CheckInState {
+  items: CheckIn[];
   currentCheckIn: CheckIn | null;
   history: CheckInHistory[];
   teamCheckIns: { [userId: string]: CheckIn };
-  isLoading: boolean;
+  loading: boolean;
   error: string | null;
   lastCheckInTime: string | null;
 }
 
 const initialState: CheckInState = {
+  items: [],
   currentCheckIn: null,
   history: [],
   teamCheckIns: {},
-  isLoading: false,
+  loading: false,
   error: null,
   lastCheckInTime: null
 };
@@ -24,10 +26,15 @@ const checkinSlice = createSlice({
   initialState,
   reducers: {
     setLoading: (state, action: PayloadAction<boolean>) => {
-      state.isLoading = action.payload;
+      state.loading = action.payload;
     },
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
+    },
+    setItems: (state, action: PayloadAction<CheckIn[]>) => {
+      state.items = action.payload;
+      state.error = null;
+      state.loading = false;
     },
     setCurrentCheckIn: (state, action: PayloadAction<CheckIn>) => {
       state.currentCheckIn = action.payload;
@@ -47,6 +54,7 @@ const checkinSlice = createSlice({
       state.teamCheckIns[action.payload.userId] = action.payload.checkIn;
     },
     clearCheckInData: (state) => {
+      state.items = [];
       state.currentCheckIn = null;
       state.history = [];
       state.teamCheckIns = {};
@@ -58,6 +66,7 @@ const checkinSlice = createSlice({
 export const {
   setLoading,
   setError,
+  setItems,
   setCurrentCheckIn,
   setHistory,
   addToHistory,

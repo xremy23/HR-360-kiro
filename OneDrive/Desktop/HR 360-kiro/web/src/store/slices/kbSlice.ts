@@ -13,17 +13,19 @@ export interface KBGuide {
 }
 
 interface KBState {
+  items: KBGuide[];
   guides: KBGuide[];
   selectedGuide: KBGuide | null;
-  isLoading: boolean;
+  loading: boolean;
   error: string | null;
   searchQuery: string;
 }
 
 const initialState: KBState = {
+  items: [],
   guides: [],
   selectedGuide: null,
-  isLoading: false,
+  loading: false,
   error: null,
   searchQuery: '',
 };
@@ -33,25 +35,35 @@ const kbSlice = createSlice({
   initialState,
   reducers: {
     setLoading: (state, action: PayloadAction<boolean>) => {
-      state.isLoading = action.payload;
+      state.loading = action.payload;
     },
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
     },
+    setItems: (state, action: PayloadAction<KBGuide[]>) => {
+      state.items = action.payload;
+      state.guides = action.payload;
+      state.loading = false;
+      state.error = null;
+    },
     setGuides: (state, action: PayloadAction<KBGuide[]>) => {
       state.guides = action.payload;
+      state.items = action.payload;
     },
     addGuide: (state, action: PayloadAction<KBGuide>) => {
       state.guides.push(action.payload);
+      state.items.push(action.payload);
     },
     updateGuide: (state, action: PayloadAction<KBGuide>) => {
       const index = state.guides.findIndex((g) => g.id === action.payload.id);
       if (index !== -1) {
         state.guides[index] = action.payload;
+        state.items[index] = action.payload;
       }
     },
     deleteGuide: (state, action: PayloadAction<string | number>) => {
       state.guides = state.guides.filter((g) => g.id !== action.payload);
+      state.items = state.items.filter((g) => g.id !== action.payload);
     },
     selectGuide: (state, action: PayloadAction<KBGuide | null>) => {
       state.selectedGuide = action.payload;
@@ -65,6 +77,7 @@ const kbSlice = createSlice({
 export const {
   setLoading,
   setError,
+  setItems,
   setGuides,
   addGuide,
   updateGuide,

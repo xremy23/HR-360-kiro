@@ -14,16 +14,18 @@ export interface CheckIn {
 }
 
 interface CheckInState {
+  items: CheckIn[];
   checkIns: CheckIn[];
   lastCheckIn: CheckIn | null;
-  isLoading: boolean;
+  loading: boolean;
   error: string | null;
 }
 
 const initialState: CheckInState = {
+  items: [],
   checkIns: [],
   lastCheckIn: null,
-  isLoading: false,
+  loading: false,
   error: null,
 };
 
@@ -32,16 +34,24 @@ const checkinSlice = createSlice({
   initialState,
   reducers: {
     setLoading: (state, action: PayloadAction<boolean>) => {
-      state.isLoading = action.payload;
+      state.loading = action.payload;
     },
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
     },
+    setItems: (state, action: PayloadAction<CheckIn[]>) => {
+      state.items = action.payload;
+      state.checkIns = action.payload;
+      state.loading = false;
+      state.error = null;
+    },
     setCheckIns: (state, action: PayloadAction<CheckIn[]>) => {
       state.checkIns = action.payload;
+      state.items = action.payload;
     },
     addCheckIn: (state, action: PayloadAction<CheckIn>) => {
       state.checkIns.push(action.payload);
+      state.items.push(action.payload);
       state.lastCheckIn = action.payload;
     },
     updateCheckInSyncStatus: (
@@ -52,6 +62,10 @@ const checkinSlice = createSlice({
       if (checkIn) {
         checkIn.syncStatus = action.payload.syncStatus;
       }
+      const itemCheckIn = state.items.find((c) => c.id === action.payload.id);
+      if (itemCheckIn) {
+        itemCheckIn.syncStatus = action.payload.syncStatus;
+      }
     },
   },
 });
@@ -59,6 +73,7 @@ const checkinSlice = createSlice({
 export const {
   setLoading,
   setError,
+  setItems,
   setCheckIns,
   addCheckIn,
   updateCheckInSyncStatus,

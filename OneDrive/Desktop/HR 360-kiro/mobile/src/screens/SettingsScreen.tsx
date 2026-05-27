@@ -1,13 +1,14 @@
 /**
  * Settings Screen - App preferences and configuration
  * Manage notifications, language, and account settings
+ * UPDATED: Redux integration with real-time updates
  */
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Switch, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { colors, typography, spacing, borderRadius, shadows } from '../styles/designSystem';
-import { RootState } from '../store';
+import { RootState, AppDispatch } from '../store/store';
 import apiService, { ApiError } from '../services/apiService';
 
 interface SettingsScreenProps {
@@ -15,8 +16,7 @@ interface SettingsScreenProps {
 }
 
 const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
-  const dispatch = useDispatch();
-  const [user, setUser] = useState<any>(null);
+  const dispatch = useDispatch<AppDispatch>();
   const [notifications, setNotifications] = useState(true);
   const [locationTracking, setLocationTracking] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
@@ -24,6 +24,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // Redux selectors
+  const user = useSelector((state: RootState) => state.auth.user);
 
   // Fetch user profile on mount
   useEffect(() => {
@@ -38,16 +41,17 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
 
       const response = await apiService.getUserProfile();
 
-      if (response.success) {
-        setUser(response.data);
+      if (response.success && response.data) {
+        // User data is already in Redux from auth slice
+        setLoading(false);
       } else {
-        setError(response.error?.message || 'Failed to load profile');
+        setError('Failed to load profile');
+        setLoading(false);
       }
     } catch (err) {
       const apiError = err as ApiError;
       setError(apiError.message || 'Failed to load profile');
       console.error('Error fetching profile:', err);
-    } finally {
       setLoading(false);
     }
   };
@@ -72,7 +76,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
               // navigation.replace('Login');
               Alert.alert('Success', 'Logged out successfully');
             } else {
-              Alert.alert('Error', response.error?.message || 'Failed to logout');
+              Alert.alert('Error', 'Failed to logout');
             }
           } catch (err) {
             const apiError = err as ApiError;

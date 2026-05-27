@@ -5,6 +5,9 @@ import rateLimit from 'express-rate-limit';
 import 'express-async-errors';
 import { createServer } from 'http';
 import { initializeDatabase } from './config/database';
+import { validateSecurityConfiguration } from './config/security';
+import { sessionService } from './services/sessionService';
+import { monitoringService, logger } from './services/monitoringService';
 import { initializeWebSocket } from './websocket/server';
 
 // Import routes
@@ -18,6 +21,7 @@ import incidentsRoutes from './routes/incidents';
 import sosRoutes from './routes/sos';
 import organizationRoutes from './routes/organization';
 import tobagRoutes from './routes/tobag';
+import monitoringRoutes from './routes/monitoring';
 
 const app = express();
 const httpServer = createServer(app);
@@ -26,37 +30,143 @@ const PORT = process.env.API_PORT || 3000;
 // Initialize WebSocket server
 const wsServer = initializeWebSocket(httpServer);
 
-// Security middleware
-app.use(helmet());
+// Validate security configuration on startup
+let securityConfig: any;
+try {
+  securityConfig = validateSecurityConfiguration();
+} catch (error) {
+  logger.error('Security validation failed. Exiting...', { error });
+  process.exit(1);
+}
 
-// CORS configuration
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || ['http://localhost:5173', 'http://localhost:3001'],
-  credentials: true,
+// Add request monitoring middleware early
+app.use(monitoringService.requestMonitoring());
+
+// Enhanced security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true,
+  },
 }));
 
-// Body parser middleware
+// CORS configuration with secure origins
+app.use(cors({
+  origin: securityConfig.corsOrigins,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// Body parser middleware with size limits
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.',
+// Enhanced rate limiting with different tiers
+const generalLimiter = rateLimit({
+  windowMs: securityConfig.rateLimitWindow,
+  max: securityConfig.rateLimitMax,
+  message: {
+    success: false,
+    error: {
+      code: 'RATE_LIMIT_EXCEEDED',
+      message: 'Too many requests from this IP, please try again later.',
+    },
+    statusCode: 429,
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    monitoringService.logSecurityEvent('rate_limit_exceeded', {
+      ip: req.ip,
+      path: req.path,
+      method: req.method,
+    }, req);
+    
+    res.status(429).json({
+      success: false,
+      error: {
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: 'Too many requests from this IP, please try again later.',
+      },
+      statusCode: 429,
+    });
+  },
 });
 
-app.use('/api/', limiter);
+// Stricter rate limiting for authentication endpoints
+const authLimiter = rateLimit({
+  windowMs: securityConfig.rateLimitWindow,
+  max: securityConfig.authRateLimitMax,
+  message: {
+    success: false,
+    error: {
+      code: 'AUTH_RATE_LIMIT_EXCEEDED',
+      message: 'Too many authentication attempts, please try again later.',
+    },
+    statusCode: 429,
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    monitoringService.logSecurityEvent('auth_rate_limit_exceeded', {
+      ip: req.ip,
+      path: req.path,
+      method: req.method,
+    }, req);
+    
+    res.status(429).json({
+      success: false,
+      error: {
+        code: 'AUTH_RATE_LIMIT_EXCEEDED',
+        message: 'Too many authentication attempts, please try again later.',
+      },
+      statusCode: 429,
+    });
+  },
+});
 
-// Health check
+// Apply rate limiting
+app.use('/api/', generalLimiter);
+app.use('/api/auth/', authLimiter);
+
+// Security headers middleware
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
+// Health check with security info
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Backend is running' });
+  res.json({ 
+    status: 'ok', 
+    message: 'Backend is running',
+    security: {
+      redisConnected: sessionService.isRedisConnected(),
+      environment: process.env.NODE_ENV || 'development',
+    },
+  });
 });
 
 // API Routes
 const apiRouter = express.Router();
 
-// Auth routes (no auth required)
+// Monitoring routes (admin access required for most)
+apiRouter.use('/monitoring', monitoringRoutes);
+
+// Auth routes (with enhanced rate limiting)
 apiRouter.use('/auth', authRoutes);
 
 // Protected routes (auth required)
@@ -75,6 +185,11 @@ app.use('/api', apiRouter);
 
 // 404 handler
 app.use((req, res) => {
+  monitoringService.logSecurityEvent('404_not_found', {
+    path: req.path,
+    method: req.method,
+  }, req);
+  
   res.status(404).json({
     success: false,
     error: {
@@ -85,34 +200,100 @@ app.use((req, res) => {
   });
 });
 
-// Error handler
+// Enhanced error handler with sanitized messages
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Error:', err);
+  logger.error('Unhandled error', {
+    error: err.message,
+    stack: err.stack,
+    path: req.path,
+    method: req.method,
+    userId: (req as any).user?.id,
+    requestId: (req as any).requestId,
+  });
+  
+  // Sanitize error messages for production
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  const errorMessage = isDevelopment ? err.message : 'Internal server error';
+  
   res.status(err.statusCode || 500).json({
     success: false,
     error: {
       code: err.code || 'SERVER_ERROR',
-      message: err.message || 'Internal server error',
+      message: errorMessage,
     },
     statusCode: err.statusCode || 500,
   });
 });
 
-// Initialize database and start server
+// Initialize services and start server
 async function start() {
   try {
-    console.log('Initializing database...');
+    logger.info('Security configuration validated');
+    
+    logger.info('Initializing Redis session service...');
+    await sessionService.initialize();
+    
+    logger.info('Initializing database...');
     await initializeDatabase();
-    console.log('Database initialized successfully');
+    logger.info('Database initialized successfully');
+
+    // Start periodic cleanup tasks
+    setInterval(async () => {
+      try {
+        await sessionService.cleanupExpiredSessions();
+        monitoringService.cleanup();
+      } catch (error) {
+        logger.error('Cleanup task error', { error });
+      }
+    }, 60 * 60 * 1000); // Every hour
 
     httpServer.listen(PORT, () => {
-      console.log(`✅ Server running on http://localhost:${PORT}`);
-      console.log(`🔌 WebSocket server ready on ws://localhost:${PORT}`);
-      console.log(`📚 API Documentation: http://localhost:${PORT}/api`);
-      console.log(`🏥 Health check: http://localhost:${PORT}/health`);
+      logger.info(`Server running on http://localhost:${PORT}`);
+      logger.info(`WebSocket server ready on ws://localhost:${PORT}`);
+      logger.info(`API Documentation: http://localhost:${PORT}/api`);
+      logger.info(`Health check: http://localhost:${PORT}/health`);
+      logger.info(`Monitoring: http://localhost:${PORT}/api/monitoring/health`);
+      logger.info('Security: Enhanced protection enabled');
+      logger.info(`CORS: ${securityConfig.corsOrigins.length} origins configured`);
+      logger.info(`Rate Limiting: ${securityConfig.rateLimitMax} requests per ${securityConfig.rateLimitWindow / 1000}s`);
+      
+      // Record startup metric
+      monitoringService.recordMetric('server_startup', 1, {
+        environment: process.env.NODE_ENV || 'development',
+        version: process.env.npm_package_version || '1.0.0',
+      });
     });
+
+    // Graceful shutdown
+    const shutdown = async (signal: string) => {
+      logger.info(`${signal} received, shutting down gracefully...`);
+      
+      try {
+        await sessionService.shutdown();
+        logger.info('Session service shutdown complete');
+        
+        httpServer.close(() => {
+          logger.info('HTTP server closed');
+          process.exit(0);
+        });
+        
+        // Force exit after 10 seconds
+        setTimeout(() => {
+          logger.error('Forced shutdown after timeout');
+          process.exit(1);
+        }, 10000);
+        
+      } catch (error) {
+        logger.error('Shutdown error', { error });
+        process.exit(1);
+      }
+    };
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
+
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logger.error('Failed to start server', { error });
     process.exit(1);
   }
 }

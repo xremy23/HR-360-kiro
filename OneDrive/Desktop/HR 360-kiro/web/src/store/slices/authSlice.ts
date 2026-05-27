@@ -12,7 +12,7 @@ export interface User {
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
-  isLoading: boolean;
+  loading: boolean;
   error: string | null;
   token: string | null;
 }
@@ -20,7 +20,7 @@ interface AuthState {
 const initialState: AuthState = {
   user: null,
   isAuthenticated: false,
-  isLoading: false,
+  loading: false,
   error: null,
   token: null,
 };
@@ -30,7 +30,7 @@ const authSlice = createSlice({
   initialState,
   reducers: {
     setLoading: (state, action: PayloadAction<boolean>) => {
-      state.isLoading = action.payload;
+      state.loading = action.payload;
     },
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
@@ -39,7 +39,7 @@ const authSlice = createSlice({
       state.user = action.payload.user;
       state.token = action.payload.token;
       state.isAuthenticated = true;
-      state.isLoading = false;
+      state.loading = false;
       state.error = null;
     },
     logout: (state) => {

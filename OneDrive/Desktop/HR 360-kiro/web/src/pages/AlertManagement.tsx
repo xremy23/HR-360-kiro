@@ -3,30 +3,54 @@
  * Broadcast and manage alerts
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch } from '../store/store';
+import { setLoading, setError, setItems, addAlert, updateAlert, deleteAlert } from '../store/slices/alertSlice';
 import { colors, typography, spacing, borderRadius, shadows } from '../styles/designSystem';
 import websocketService from '../services/websocketService';
 
-interface Alert {
-  id: string;
+interface AlertFormData {
   title: string;
   message: string;
   severity: 'advisory' | 'watch' | 'emergency';
-  createdAt: string;
   isDrill: boolean;
   teamIds: string[];
 }
 
 const AlertManagement: React.FC = () => {
-  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const dispatch = useDispatch<AppDispatch>();
+  const { items: alerts, loading, error } = useSelector((state: RootState) => state.alert);
+  
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<AlertFormData>({
     title: '',
     message: '',
-    severity: 'watch' as const,
+    severity: 'watch',
     isDrill: false,
-    teamIds: [] as string[],
+    teamIds: [],
   });
+
+  // Fetch alerts on mount
+  useEffect(() => {
+    const fetchAlerts = async () => {
+      dispatch(setLoading(true));
+      try {
+        // TODO: Replace with actual API call
+        // const response = await apiService.getAlerts();
+        // if (response.success) {
+        //   dispatch(setItems(response.data));
+        // } else {
+        //   dispatch(setError('Failed to load alerts'));
+        // }
+        dispatch(setItems([]));
+      } catch (err) {
+        dispatch(setError((err as any).message || 'Failed to load alerts'));
+      }
+    };
+
+    fetchAlerts();
+  }, [dispatch]);
 
   const handleBroadcastAlert = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,25 +60,50 @@ const AlertManagement: React.FC = () => {
       return;
     }
 
-    // Send via WebSocket
-    websocketService.send({
-      type: 'alert',
-      action: 'created',
-      data: {
-        ...formData,
+    try {
+      dispatch(setLoading(true));
+      
+      const newAlert = {
+        id: `${Date.now()}`,
+        title: formData.title,
+        description: formData.message,
+        severity: formData.severity === 'advisory' ? 'low' : formData.severity === 'watch' ? 'medium' : 'high',
+        type: formData.isDrill ? 'drill' : 'incident',
+        startTime: new Date().toISOString(),
+        isActive: true,
         createdAt: new Date().toISOString(),
-      },
-      timestamp: new Date().toISOString(),
-    });
+      };
 
-    setFormData({
-      title: '',
-      message: '',
-      severity: 'watch',
-      isDrill: false,
-      teamIds: [],
-    });
-    setShowForm(false);
+      // TODO: Replace with actual API call
+      // const response = await apiService.createAlert(newAlert);
+      // if (response.success) {
+      //   dispatch(addAlert(response.data));
+      // } else {
+      //   dispatch(setError('Failed to create alert'));
+      // }
+      
+      dispatch(addAlert(newAlert));
+      
+      // Send via WebSocket
+      websocketService.send({
+        type: 'alert',
+        action: 'created',
+        data: newAlert,
+        timestamp: new Date().toISOString(),
+      });
+
+      setFormData({
+        title: '',
+        message: '',
+        severity: 'watch',
+        isDrill: false,
+        teamIds: [],
+      });
+      setShowForm(false);
+      dispatch(setLoading(false));
+    } catch (err) {
+      dispatch(setError((err as any).message || 'Failed to create alert'));
+    }
   };
 
   const getSeverityColor = (severity: string) => {
@@ -291,7 +340,31 @@ const AlertManagement: React.FC = () => {
           Recent Alerts
         </h2>
 
-        {alerts.length > 0 ? (
+        {loading ? (
+          <div
+            style={{
+              padding: spacing.xl,
+              backgroundColor: colors.neutral[50],
+              borderRadius: borderRadius.md,
+              textAlign: 'center',
+              color: colors.neutral[500],
+            }}
+          >
+            Loading alerts...
+          </div>
+        ) : error ? (
+          <div
+            style={{
+              padding: spacing.xl,
+              backgroundColor: colors.error,
+              borderRadius: borderRadius.md,
+              textAlign: 'center',
+              color: colors.primary.white,
+            }}
+          >
+            {error}
+          </div>
+        ) : alerts.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}>
             {alerts.map((alert) => (
               <div
@@ -327,10 +400,10 @@ const AlertManagement: React.FC = () => {
                         lineHeight: '1.5',
                       }}
                     >
-                      {alert.message}
+                      {alert.description}
                     </p>
                   </div>
-                  {alert.isDrill && (
+                  {alert.type === 'drill' && (
                     <span
                       style={{
                         padding: `${spacing.xs} ${spacing.sm}`,

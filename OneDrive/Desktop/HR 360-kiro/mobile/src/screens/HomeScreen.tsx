@@ -1,13 +1,16 @@
 /**
  * Home Screen - Main dashboard for mobile app
  * Shows quick actions, recent check-ins, and alerts
+ * UPDATED: Redux integration with real-time updates
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { colors, typography, spacing, borderRadius, shadows } from '../styles/designSystem';
-import { RootState } from '../store';
+import { RootState, AppDispatch } from '../store/store';
+import { setItems as setCheckInItems, setLoading as setCheckInLoading, setError as setCheckInError } from '../store/slices/checkinSlice';
+import { setItems as setAlertItems, setLoading as setAlertLoading, setError as setAlertError } from '../store/slices/alertsSlice';
 import apiService, { ApiError } from '../services/apiService';
 
 interface HomeScreenProps {
@@ -15,55 +18,62 @@ interface HomeScreenProps {
 }
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
+  
+  // Redux selectors
   const user = useSelector((state: RootState) => state.auth.user);
-  const checkIns = useSelector((state: RootState) => state.checkins.items);
+  const checkIns = useSelector((state: RootState) => state.checkin.items);
+  const checkInsLoading = useSelector((state: RootState) => state.checkin.loading);
+  const checkInsError = useSelector((state: RootState) => state.checkin.error);
+  
   const alerts = useSelector((state: RootState) => state.alerts.items);
-  const [lastCheckIn, setLastCheckIn] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const alertsLoading = useSelector((state: RootState) => state.alerts.loading);
+  const alertsError = useSelector((state: RootState) => state.alerts.error);
+  
+  const isOffline = useSelector((state: RootState) => state.offline.isOnline === false);
 
   // Fetch data on mount
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Fetch check-ins
-        const checkInsResponse = await apiService.getCheckInHistory({ pageSize: 10 });
-        if (checkInsResponse.success && checkInsResponse.data.length > 0) {
-          setLastCheckIn(checkInsResponse.data[0]);
-        }
-
-        // Fetch alerts
-        const alertsResponse = await apiService.getAlerts({ pageSize: 5 });
-        if (alertsResponse.success) {
-          // TODO: Update Redux with alerts
-        }
-      } catch (err) {
-        const apiError = err as ApiError;
-        setError(apiError.message || 'Failed to load data');
-        console.error('Error fetching home data:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
+    fetchHomeData();
   }, []);
 
-  // Update last check-in when Redux updates
-  useEffect(() => {
-    if (checkIns.length > 0) {
-      setLastCheckIn(checkIns[0]);
-    }
-  }, [checkIns]);
+  // Fetch data from backend
+  const fetchHomeData = async () => {
+    try {
+      // Fetch check-ins
+      dispatch(setCheckInLoading(true));
+      const checkInsResponse = await apiService.getCheckInHistory({ pageSize: 10 });
+      if (checkInsResponse.success && checkInsResponse.data) {
+        dispatch(setCheckInItems(checkInsResponse.data));
+      } else {
+        dispatch(setCheckInError('Failed to load check-ins'));
+      }
 
+      // Fetch alerts
+      dispatch(setAlertLoading(true));
+      const alertsResponse = await apiService.getAlerts({ pageSize: 5 });
+      if (alertsResponse.success && alertsResponse.data) {
+        dispatch(setAlertItems(alertsResponse.data));
+      } else {
+        dispatch(setAlertError('Failed to load alerts'));
+      }
+    } catch (err) {
+      const apiError = err as ApiError;
+      console.error('Error fetching home data:', err);
+      dispatch(setCheckInError(apiError.message || 'Failed to load data'));
+      dispatch(setAlertError(apiError.message || 'Failed to load data'));
+    }
+  };
+
+  // Get last check-in from Redux
+  const lastCheckIn = checkIns.length > 0 ? checkIns[0] : null;
+
+  // Handle check-in button press
   const handleCheckIn = (status: 'safe' | 'need_help' | 'sos') => {
     navigation.navigate('CheckIn', { status });
   };
 
+  // Handle navigation
   const handleViewKB = () => {
     navigation.navigate('KnowledgeBase');
   };
@@ -74,6 +84,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
   const handleViewToBag = () => {
     navigation.navigate('ToBag');
+  };
+
+  const handleViewAlerts = () => {
+    navigation.navigate('Alerts');
   };
 
   return (
@@ -91,6 +105,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           })}
         </Text>
       </View>
+
+      {/* Offline Notice */}
+      {isOffline && (
+        <View style={styles.offlineBanner}>
+          <Text style={styles.offlineText}>📡 You're offline. Data will sync when online.</Text>
+        </View>
+      )}
 
       {/* Quick Actions */}
       <View style={styles.section}>
@@ -118,14 +139,29 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       </View>
 
       {/* Last Check-In Status */}
-      {lastCheckIn && (
+      {checkInsLoading ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Last Check-In</Text>
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="small" color={colors.primary.teal} />
+            <Text style={styles.loadingText}>Loading...</Text>
+          </View>
+        </View>
+      ) : checkInsError ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Last Check-In</Text>
+          <View style={styles.errorCard}>
+            <Text style={styles.errorText}>⚠️ {checkInsError}</Text>
+          </View>
+        </View>
+      ) : lastCheckIn ? (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Last Check-In</Text>
           <View style={[styles.card, { borderLeftColor: getStatusColor(lastCheckIn.status), borderLeftWidth: 4 }]}>
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle}>Status: {lastCheckIn.status.toUpperCase()}</Text>
               <Text style={styles.cardTime}>
-                {new Date(lastCheckIn.createdAt).toLocaleTimeString()}
+                {new Date(lastCheckIn.timestamp).toLocaleTimeString()}
               </Text>
             </View>
             {lastCheckIn.notes && (
@@ -133,27 +169,42 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             )}
           </View>
         </View>
-      )}
+      ) : null}
 
       {/* Recent Alerts */}
-      {alerts.length > 0 && (
+      {alertsLoading ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Recent Alerts</Text>
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="small" color={colors.primary.teal} />
+            <Text style={styles.loadingText}>Loading alerts...</Text>
+          </View>
+        </View>
+      ) : alertsError ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Recent Alerts</Text>
+          <View style={styles.errorCard}>
+            <Text style={styles.errorText}>⚠️ {alertsError}</Text>
+          </View>
+        </View>
+      ) : alerts.length > 0 ? (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Alerts</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Alerts')}>
+            <TouchableOpacity onPress={handleViewAlerts}>
               <Text style={styles.viewAll}>View All</Text>
             </TouchableOpacity>
           </View>
-          {alerts.slice(0, 2).map((alert) => (
+          {alerts.slice(0, 2).map((alert: any) => (
             <View key={alert.id} style={[styles.card, styles.alertCard]}>
-              <Text style={styles.alertTitle}>{alert.message}</Text>
+              <Text style={styles.alertTitle}>{alert.title}</Text>
               <Text style={styles.alertTime}>
                 {new Date(alert.createdAt).toLocaleTimeString()}
               </Text>
             </View>
           ))}
         </View>
-      )}
+      ) : null}
 
       {/* Navigation Cards */}
       <View style={styles.section}>
@@ -264,39 +315,19 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.body2.size,
     color: colors.secondary.lightTeal,
   },
-  errorBanner: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.error,
+  offlineBanner: {
+    backgroundColor: colors.warning,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     marginHorizontal: spacing.lg,
     marginTop: spacing.lg,
     borderRadius: borderRadius.md,
   },
-  errorText: {
-    flex: 1,
+  offlineText: {
     fontSize: typography.fontSize.body2.size,
     color: colors.primary.white,
     fontWeight: '600',
-  },
-  retryText: {
-    fontSize: typography.fontSize.label2.size,
-    color: colors.primary.white,
-    fontWeight: '700',
-    marginLeft: spacing.lg,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: spacing.xxl,
-  },
-  loadingText: {
-    fontSize: typography.fontSize.body2.size,
-    color: colors.neutral[600],
-    marginTop: spacing.lg,
+    textAlign: 'center',
   },
   section: {
     paddingHorizontal: spacing.lg,
@@ -349,6 +380,34 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.neutral[200],
     ...shadows.sm,
+  },
+  loadingCard: {
+    backgroundColor: colors.primary.white,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.sm,
+  },
+  loadingText: {
+    fontSize: typography.fontSize.body2.size,
+    color: colors.neutral[600],
+    marginTop: spacing.md,
+  },
+  errorCard: {
+    backgroundColor: colors.error,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    ...shadows.sm,
+  },
+  errorText: {
+    fontSize: typography.fontSize.body2.size,
+    color: colors.primary.white,
+    fontWeight: '600',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -415,11 +474,6 @@ const styles = StyleSheet.create({
   resourceDescription: {
     fontSize: typography.fontSize.body2.size,
     color: colors.neutral[500],
-    textAlign: 'center',
-  },
-  offlineText: {
-    fontSize: typography.fontSize.body2.size,
-    color: colors.neutral[600],
     textAlign: 'center',
   },
 });

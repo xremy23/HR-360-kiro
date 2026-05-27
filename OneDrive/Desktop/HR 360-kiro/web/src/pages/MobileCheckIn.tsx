@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
-import { addCheckIn } from '../store/slices/checkinSlice';
-import { AppDispatch } from '../store/store';
+import { useDispatch, useSelector } from 'react-redux';
+import { addCheckIn, setLoading, setError } from '../store/slices/checkinSlice';
+import { AppDispatch, RootState } from '../store/store';
 import toast from 'react-hot-toast';
 
 type CheckInStatus = 'safe' | 'injured' | 'missing' | 'unknown';
@@ -10,6 +10,7 @@ type CheckInStatus = 'safe' | 'injured' | 'missing' | 'unknown';
 const MobileCheckIn: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
+  const { loading } = useSelector((state: RootState) => state.checkin);
   const [status, setStatus] = useState<CheckInStatus>('safe');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -24,6 +25,8 @@ const MobileCheckIn: React.FC = () => {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
+      dispatch(setLoading(true));
+      
       const checkIn = {
         id: `${Date.now()}`,
         userId: 'current-user',
@@ -33,10 +36,19 @@ const MobileCheckIn: React.FC = () => {
         syncStatus: 'pending' as const,
       };
 
+      // TODO: Replace with actual API call
+      // const response = await apiService.createCheckIn(checkIn);
+      // if (response.success) {
+      //   dispatch(addCheckIn(response.data));
+      // } else {
+      //   dispatch(setError('Failed to submit check-in'));
+      // }
+
       dispatch(addCheckIn(checkIn));
       toast.success('Check-in submitted!');
       setTimeout(() => navigate('/'), 1500);
     } catch (error) {
+      dispatch(setError((error as any).message || 'Failed to submit check-in'));
       toast.error('Failed to submit check-in');
     } finally {
       setIsSubmitting(false);

@@ -4,7 +4,10 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch } from '../store/store';
+import { setLoading as setAlertLoading, setError as setAlertError, setItems as setAlertItems, addAlert } from '../store/slices/alertSlice';
+import { setLoading as setCheckInLoading, setError as setCheckInError, setItems as setCheckInItems, addCheckIn } from '../store/slices/checkinSlice';
 import { colors, typography, spacing, borderRadius, shadows } from '../styles/designSystem';
 import websocketService from '../services/websocketService';
 import IncidentCard from '../components/IncidentCard';
@@ -20,6 +23,10 @@ interface DashboardStats {
 }
 
 const Dashboard: React.FC = () => {
+  const dispatch = useDispatch<AppDispatch>();
+  const alertData = useSelector((state: RootState) => state.alert);
+  const checkInData = useSelector((state: RootState) => state.checkin);
+  
   const [stats, setStats] = useState<DashboardStats>({
     activeIncidents: 0,
     totalCheckIns: 0,
@@ -27,21 +34,55 @@ const Dashboard: React.FC = () => {
     responseRate: 0,
   });
   const [incidents, setIncidents] = useState<any[]>([]);
-  const [alerts, setAlerts] = useState<any[]>([]);
   const [isLive, setIsLive] = useState(false);
 
+  // Fetch alerts and check-ins on mount
   useEffect(() => {
-    // Subscribe to real-time updates
+    const fetchData = async () => {
+      try {
+        // Fetch alerts
+        dispatch(setAlertLoading(true));
+        // TODO: Replace with actual API call
+        // const alertsResponse = await apiService.getAlerts();
+        // if (alertsResponse.success) {
+        //   dispatch(setAlertItems(alertsResponse.data));
+        // } else {
+        //   dispatch(setAlertError('Failed to load alerts'));
+        // }
+        dispatch(setAlertItems([]));
+
+        // Fetch check-ins
+        dispatch(setCheckInLoading(true));
+        // TODO: Replace with actual API call
+        // const checkInsResponse = await apiService.getCheckIns();
+        // if (checkInsResponse.success) {
+        //   dispatch(setCheckInItems(checkInsResponse.data));
+        // } else {
+        //   dispatch(setCheckInError('Failed to load check-ins'));
+        // }
+        dispatch(setCheckInItems([]));
+      } catch (error) {
+        dispatch(setAlertError('Failed to load data'));
+        dispatch(setCheckInError('Failed to load data'));
+      }
+    };
+
+    fetchData();
+  }, [dispatch]);
+
+  // Subscribe to real-time updates
+  useEffect(() => {
     const unsubscribeIncident = websocketService.on('incident:created', (data) => {
       setIncidents((prev) => [data, ...prev]);
       setStats((prev) => ({ ...prev, activeIncidents: prev.activeIncidents + 1 }));
     });
 
     const unsubscribeAlert = websocketService.on('alert:created', (data) => {
-      setAlerts((prev) => [data, ...prev]);
+      dispatch(addAlert(data));
     });
 
     const unsubscribeCheckIn = websocketService.on('checkin:created', (data) => {
+      dispatch(addCheckIn(data));
       setStats((prev) => ({ ...prev, totalCheckIns: prev.totalCheckIns + 1 }));
     });
 
@@ -65,7 +106,7 @@ const Dashboard: React.FC = () => {
       unsubscribeConnected();
       unsubscribeDisconnected();
     };
-  }, []);
+  }, [dispatch]);
 
   return (
     <div
@@ -227,8 +268,32 @@ const Dashboard: React.FC = () => {
               Recent Alerts
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}>
-              {alerts.length > 0 ? (
-                alerts.slice(0, 3).map((alert) => (
+              {alertData.loading ? (
+                <div
+                  style={{
+                    padding: spacing.xl,
+                    backgroundColor: colors.neutral[50],
+                    borderRadius: borderRadius.md,
+                    textAlign: 'center',
+                    color: colors.neutral[500],
+                  }}
+                >
+                  Loading alerts...
+                </div>
+              ) : alertData.error ? (
+                <div
+                  style={{
+                    padding: spacing.xl,
+                    backgroundColor: colors.error,
+                    borderRadius: borderRadius.md,
+                    textAlign: 'center',
+                    color: colors.primary.white,
+                  }}
+                >
+                  {alertData.error}
+                </div>
+              ) : alertData.items.length > 0 ? (
+                alertData.items.slice(0, 3).map((alert) => (
                   <AlertPanel key={alert.id} alert={alert} />
                 ))
               ) : (

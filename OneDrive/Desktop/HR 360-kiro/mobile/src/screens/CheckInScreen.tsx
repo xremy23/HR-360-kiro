@@ -1,13 +1,15 @@
 /**
  * Check-In Screen - Submit status updates
  * Allows users to report their status: Safe, Need Help, or SOS
+ * UPDATED: Redux integration with real-time updates
  */
 
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { colors, typography, spacing, borderRadius, shadows } from '../styles/designSystem';
-import { RootState } from '../store';
+import { RootState, AppDispatch } from '../store/store';
+import { setLoading, setError, setCurrentCheckIn, addToHistory } from '../store/slices/checkinSlice';
 import apiService, { ApiError } from '../services/apiService';
 
 interface CheckInScreenProps {
@@ -16,14 +18,16 @@ interface CheckInScreenProps {
 }
 
 const CheckInScreen: React.FC<CheckInScreenProps> = ({ navigation, route }) => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const initialStatus = route.params?.status || 'safe';
   const [status, setStatus] = useState<'safe' | 'need_help' | 'sos'>(initialStatus);
   const [notes, setNotes] = useState('');
   const [location, setLocation] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  // Redux selectors
   const user = useSelector((state: RootState) => state.auth.user);
+  const checkInError = useSelector((state: RootState) => state.checkin.error);
 
   const handleSubmit = async () => {
     if (!notes.trim()) {
@@ -32,9 +36,10 @@ const CheckInScreen: React.FC<CheckInScreenProps> = ({ navigation, route }) => {
     }
 
     setIsSubmitting(true);
-    setError(null);
 
     try {
+      dispatch(setLoading(true));
+
       // Submit check-in to backend
       const response = await apiService.submitCheckIn({
         status,
@@ -42,7 +47,10 @@ const CheckInScreen: React.FC<CheckInScreenProps> = ({ navigation, route }) => {
         location: location.trim() || undefined,
       });
 
-      if (response.success) {
+      if (response.success && response.data) {
+        dispatch(setCurrentCheckIn(response.data));
+        dispatch(addToHistory(response.data));
+        dispatch(setError(null));
         Alert.alert('Success', 'Check-in submitted successfully', [
           {
             text: 'OK',
@@ -50,17 +58,18 @@ const CheckInScreen: React.FC<CheckInScreenProps> = ({ navigation, route }) => {
           },
         ]);
       } else {
-        setError(response.error?.message || 'Failed to submit check-in');
-        Alert.alert('Error', response.error?.message || 'Failed to submit check-in. Please try again.');
+        dispatch(setError('Failed to submit check-in'));
+        Alert.alert('Error', 'Failed to submit check-in. Please try again.');
       }
     } catch (err) {
       const apiError = err as ApiError;
       const errorMessage = apiError.message || 'Failed to submit check-in. Please try again.';
-      setError(errorMessage);
+      dispatch(setError(errorMessage));
       Alert.alert('Error', errorMessage);
       console.error('Check-in submission error:', err);
     } finally {
       setIsSubmitting(false);
+      dispatch(setLoading(false));
     }
   };
 
@@ -200,7 +209,7 @@ const CheckInScreen: React.FC<CheckInScreenProps> = ({ navigation, route }) => {
 
         {error && (
           <View style={styles.errorBanner}>
-            <Text style={styles.errorText}>⚠️ {error}</Text>
+            <Text style={styles.errorText}>⚠️ {checkInError}</Text>
           </View>
         )}
       </View>

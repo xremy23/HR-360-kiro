@@ -2,23 +2,25 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { KBGuide } from '@types/index';
 
 interface KBState {
+  items: KBGuide[];
   guides: KBGuide[];
   selectedGuide: KBGuide | null;
   filteredGuides: KBGuide[];
   searchQuery: string;
   selectedCategory: string | null;
-  isLoading: boolean;
+  loading: boolean;
   error: string | null;
   acknowledgedGuideIds: string[];
 }
 
 const initialState: KBState = {
+  items: [],
   guides: [],
   selectedGuide: null,
   filteredGuides: [],
   searchQuery: '',
   selectedCategory: null,
-  isLoading: false,
+  loading: false,
   error: null,
   acknowledgedGuideIds: []
 };
@@ -28,23 +30,33 @@ const kbSlice = createSlice({
   initialState,
   reducers: {
     setLoading: (state, action: PayloadAction<boolean>) => {
-      state.isLoading = action.payload;
+      state.loading = action.payload;
     },
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
     },
+    setItems: (state, action: PayloadAction<KBGuide[]>) => {
+      state.items = action.payload;
+      state.guides = action.payload;
+      state.filteredGuides = action.payload;
+      state.loading = false;
+      state.error = null;
+    },
     setGuides: (state, action: PayloadAction<KBGuide[]>) => {
       state.guides = action.payload;
+      state.items = action.payload;
       state.filteredGuides = action.payload;
     },
     addGuide: (state, action: PayloadAction<KBGuide>) => {
       state.guides.push(action.payload);
+      state.items.push(action.payload);
       state.filteredGuides.push(action.payload);
     },
     updateGuide: (state, action: PayloadAction<KBGuide>) => {
       const index = state.guides.findIndex(g => g.id === action.payload.id);
       if (index !== -1) {
         state.guides[index] = action.payload;
+        state.items[index] = action.payload;
       }
       state.filteredGuides = state.guides.filter(g => {
         let matches = true;
@@ -60,6 +72,7 @@ const kbSlice = createSlice({
     },
     deleteGuide: (state, action: PayloadAction<string>) => {
       state.guides = state.guides.filter(g => g.id !== action.payload);
+      state.items = state.items.filter(g => g.id !== action.payload);
       state.filteredGuides = state.filteredGuides.filter(g => g.id !== action.payload);
     },
     setSelectedGuide: (state, action: PayloadAction<KBGuide | null>) => {
@@ -107,6 +120,7 @@ const kbSlice = createSlice({
 export const {
   setLoading,
   setError,
+  setItems,
   setGuides,
   addGuide,
   updateGuide,

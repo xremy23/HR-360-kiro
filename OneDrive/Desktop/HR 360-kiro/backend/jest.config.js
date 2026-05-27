@@ -13,12 +13,12 @@ module.exports = {
     '/node_modules/',
     '/__tests__/',
   ],
-  globals: {
-    'ts-jest': {
+  transform: {
+    '^.+\\.ts$': ['ts-jest', {
       tsconfig: {
         esModuleInterop: true,
         allowSyntheticDefaultImports: true,
       },
-    },
+    }],
   },
 };
