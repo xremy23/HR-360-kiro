@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { sendSuccess, sendError, sendPaginated } from '../utils/response';
 import { AuthRequest, authMiddleware, adminMiddleware } from '../middleware/auth';
-import { KBGuideEntity } from '../entities';
+import { KBGuideEntity, GuideAcknowledgmentEntity } from '../entities';
 
 const router = Router();
 
@@ -69,9 +69,17 @@ router.get('/:id/versions', authMiddleware, async (req: AuthRequest, res: Respon
       return sendError(res, 'GUIDE_NOT_FOUND', 'Guide not found', 404);
     }
 
-    // Note: Version history would require additional entity methods
-    // For now, returning the current guide as a single version
-    const versions = [guide];
+    // Return current guide as version history
+    // Note: Full version history would require storing versions in a separate table
+    const versions = [
+      {
+        version: guide.version,
+        title: guide.title,
+        content: guide.content,
+        updatedAt: guide.updatedAt,
+        updatedBy: guide.updatedBy,
+      },
+    ];
 
     return sendSuccess(res, versions, 'Guide versions retrieved successfully', 200);
   } catch (error) {
@@ -180,9 +188,26 @@ router.post('/:id/acknowledge', authMiddleware, async (req: AuthRequest, res: Re
 
     const { id } = req.params;
 
-    // Note: Guide acknowledgment would require additional entity methods
-    // For now, returning success as placeholder
-    return sendSuccess(res, {}, 'Guide acknowledged', 200);
+    const guide = await KBGuideEntity.findById(id);
+
+    if (!guide) {
+      return sendError(res, 'GUIDE_NOT_FOUND', 'Guide not found', 404);
+    }
+
+    // Check if already acknowledged
+    const existing = await GuideAcknowledgmentEntity.findByUserAndGuide(req.user.id, id);
+
+    if (existing) {
+      return sendSuccess(res, existing, 'Guide already acknowledged', 200);
+    }
+
+    // Create acknowledgment
+    const acknowledgment = await GuideAcknowledgmentEntity.create({
+      userId: req.user.id,
+      guideId: id,
+    });
+
+    return sendSuccess(res, acknowledgment, 'Guide acknowledged successfully', 201);
   } catch (error) {
     console.error('Acknowledge guide error:', error);
     return sendError(res, 'SERVER_ERROR', 'Failed to acknowledge guide', 500);

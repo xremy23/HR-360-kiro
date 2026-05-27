@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { sendSuccess, sendError, sendPaginated } from '../utils/response';
 import { AuthRequest, authMiddleware, adminMiddleware } from '../middleware/auth';
 import { validateAlertSeverity } from '../utils/validators';
-import { AlertEntity } from '../entities';
+import { AlertEntity, NotificationEntity, UserEntity } from '../entities';
 import { getWebSocketServer } from '../websocket/server';
 
 const router = Router();
@@ -91,11 +91,23 @@ router.get('/:id/notifications', authMiddleware, async (req: AuthRequest, res: R
   try {
     const { id } = req.params;
 
-    // Note: Notification retrieval would require additional entity methods
-    // For now, returning empty array as placeholder
-    const notifications: any[] = [];
+    const notifications = await NotificationEntity.findByAlertId(id);
 
-    return sendSuccess(res, notifications, 'Notifications retrieved successfully', 200);
+    const formattedNotifications = await Promise.all(
+      notifications.map(async (n) => {
+        const user = await UserEntity.findById(n.userId);
+        return {
+          id: n.id,
+          userId: n.userId,
+          userName: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
+          isRead: n.isRead,
+          readAt: n.readAt,
+          createdAt: n.createdAt,
+        };
+      })
+    );
+
+    return sendSuccess(res, formattedNotifications, 'Notifications retrieved successfully', 200);
   } catch (error) {
     console.error('Get notifications error:', error);
     return sendError(res, 'SERVER_ERROR', 'Failed to retrieve notifications', 500);
@@ -110,9 +122,15 @@ router.put('/:id/notifications/:nId', authMiddleware, async (req: AuthRequest, r
   try {
     const { id, nId } = req.params;
 
-    // Note: Notification update would require additional entity methods
-    // For now, returning success as placeholder
-    return sendSuccess(res, {}, 'Notification marked as read', 200);
+    const notification = await NotificationEntity.findById(nId);
+
+    if (!notification) {
+      return sendError(res, 'NOTIFICATION_NOT_FOUND', 'Notification not found', 404);
+    }
+
+    const updated = await NotificationEntity.markAsRead(nId);
+
+    return sendSuccess(res, updated, 'Notification marked as read', 200);
   } catch (error) {
     console.error('Mark notification error:', error);
     return sendError(res, 'SERVER_ERROR', 'Failed to mark notification', 500);
