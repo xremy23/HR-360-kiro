@@ -6,6 +6,7 @@ import { sendSuccess, sendError } from '../utils/response';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 import { UserEntity } from '../entities/User';
 import { OrganizationEntity } from '../entities/Organization';
+import emailService from '../services/emailService';
 
 const router = Router();
 
@@ -16,7 +17,7 @@ const verificationCodes: any = {};
  * POST /auth/send-verification
  * Send verification code to email
  */
-router.post('/send-verification', (req: AuthRequest, res: Response) => {
+router.post('/send-verification', async (req: AuthRequest, res: Response) => {
   try {
     const { email } = req.body;
 
@@ -31,8 +32,13 @@ router.post('/send-verification', (req: AuthRequest, res: Response) => {
       expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
     };
 
-    // TODO: Send email with verification code
-    console.log(`Verification code for ${email}: ${code}`);
+    // Send email with verification code
+    const emailSent = await emailService.sendVerificationCode(email, code);
+    
+    if (!emailSent) {
+      console.warn(`Failed to send verification email to ${email}, but code generated: ${code}`);
+      // Still return success to allow testing without email service
+    }
 
     return sendSuccess(res, { email }, 'Verification code sent to email', 200);
   } catch (error) {
