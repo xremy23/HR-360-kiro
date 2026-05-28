@@ -11,6 +11,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { colors } from './styles/designSystem';
 import store from './store';
+import DeviceRedirect from './DeviceRedirect';
 
 // Screens
 import HomeScreen from './screens/HomeScreen';
@@ -227,8 +228,10 @@ const RootNavigator = () => (
  */
 export default function App() {
   return (
-    <Provider store={store}>
-      <RootNavigator />
-    </Provider>
+    <DeviceRedirect>
+      <Provider store={store}>
+        <RootNavigator />
+      </Provider>
+    </DeviceRedirect>
   );
 }
