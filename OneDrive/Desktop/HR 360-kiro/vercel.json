@@ -1,0 +1,9 @@
+{
+  "buildCommand": "cd web && npm run build",
+  "outputDirectory": "web/dist",
+  "framework": "vite",
+  "env": {
+    "VITE_API_URL": "http://localhost:3000/api",
+    "VITE_ENV": "production"
+  }
+}
