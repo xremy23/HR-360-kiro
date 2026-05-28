@@ -1,0 +1,40 @@
+# This file specifies files that gcloud should NOT upload to Google Cloud
+# when deploying
+
+.git
+.gitignore
+.github
+.vscode
+node_modules
+npm-debug.log
+.DS_Store
+.env
+.env.local
+.env.*.local
+
+# Documentation
+*.md
+docs/
+
+# Mobile and Web source (only deploy built versions)
+web/src
+web/node_modules
+mobile/src
+mobile/node_modules
+
+# Test files
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+jest.config.js
+
+# Build artifacts
+dist/
+build/
+.next/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
