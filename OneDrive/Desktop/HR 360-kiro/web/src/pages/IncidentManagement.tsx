@@ -9,6 +9,7 @@ import { RootState, AppDispatch } from '../store/store';
 import { setLoading, setError, setItems, addIncident, updateIncident } from '../store/slices/incidentSlice';
 import { colors, typography, spacing, borderRadius, shadows } from '../styles/designSystem';
 import websocketService from '../services/websocketService';
+import apiService, { ApiError } from '../services/apiService';
 
 interface IncidentFormData {
   type: string;
@@ -32,16 +33,15 @@ const IncidentManagement: React.FC = () => {
     const fetchIncidents = async () => {
       dispatch(setLoading(true));
       try {
-        // TODO: Replace with actual API call
-        // const response = await apiService.getIncidents();
-        // if (response.success) {
-        //   dispatch(setItems(response.data));
-        // } else {
-        //   dispatch(setError('Failed to load incidents'));
-        // }
-        dispatch(setItems([]));
+        const response = await apiService.getIncidents({ pageSize: 100 });
+        if (response.success && response.data) {
+          dispatch(setItems(response.data));
+        } else {
+          dispatch(setError('Failed to load incidents'));
+        }
       } catch (err) {
-        dispatch(setError((err as any).message || 'Failed to load incidents'));
+        const apiError = err as ApiError;
+        dispatch(setError(apiError.message || 'Failed to load incidents'));
       }
     };
 
@@ -62,42 +62,39 @@ const IncidentManagement: React.FC = () => {
       const severityMap = {
         advisory: 'low',
         watch: 'medium',
-        emergency: 'high',
+        emergency: 'critical',
       };
 
-      const newIncident = {
-        id: `${Date.now()}`,
-        type: formData.type,
-        severity: severityMap[formData.severity] as 'low' | 'medium' | 'high' | 'critical',
-        startTime: new Date().toISOString(),
-        isDrill: formData.isDrill,
-        status: 'active' as const,
-        createdAt: new Date().toISOString(),
-      };
-
-      // TODO: Replace with actual API call
-      // const response = await apiService.createIncident(newIncident);
-      // if (response.success) {
-      //   dispatch(addIncident(response.data));
-      // } else {
-      //   dispatch(setError('Failed to create incident'));
-      // }
-
-      dispatch(addIncident(newIncident));
-
-      // Send via WebSocket
-      websocketService.send({
-        type: 'incident',
-        action: 'created',
-        data: newIncident,
-        timestamp: new Date().toISOString(),
+      const response = await apiService.createIncident({
+        title: formData.type,
+        description: `${formData.isDrill ? '[DRILL] ' : ''}${formData.type}`,
+        severity: severityMap[formData.severity] as 'low' | 'medium' | 'critical',
+        location: undefined,
       });
 
-      setFormData({ type: '', severity: 'watch', isDrill: false });
-      setShowForm(false);
-      dispatch(setLoading(false));
+      if (response.success && response.data) {
+        dispatch(addIncident(response.data));
+
+        // Send via WebSocket
+        websocketService.send({
+          type: 'incident',
+          action: 'created',
+          data: response.data,
+          timestamp: new Date().toISOString(),
+        });
+
+        setFormData({ type: '', severity: 'watch', isDrill: false });
+        setShowForm(false);
+        alert('Incident created successfully!');
+      } else {
+        dispatch(setError('Failed to create incident'));
+      }
     } catch (err) {
-      dispatch(setError((err as any).message || 'Failed to create incident'));
+      const apiError = err as ApiError;
+      dispatch(setError(apiError.message || 'Failed to create incident'));
+      alert(apiError.message || 'Failed to create incident');
+    } finally {
+      dispatch(setLoading(false));
     }
   };
 

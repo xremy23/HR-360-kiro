@@ -96,17 +96,30 @@ describe('Knowledge Base Routes', () => {
     });
 
     it('should filter guides by category', async () => {
-      const emergencyGuides = [mockGuides[0]];
+      const emergencyGuides = [{
+        id: 'guide-1',
+        orgId: 'org-123',
+        title: 'Emergency Procedures',
+        category: 'general' as const,
+        type: 'procedure',
+        content: 'Step-by-step emergency procedures...',
+        isRequired: true,
+        version: 1,
+        createdBy: 'admin-123',
+        updatedBy: 'admin-123',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }];
       mockedKBGuideEntity.findByOrgId.mockResolvedValue(emergencyGuides);
 
       const response = await request(app)
-        .get('/kb/guides?orgId=org-123&category=emergency')
+        .get('/kb/guides?orgId=org-123&category=general')
         .set('Authorization', 'Bearer valid-token');
 
       expect(response.status).toBe(200);
       expect(response.body.data).toHaveLength(1);
-      expect(response.body.data[0].category).toBe('emergency');
-      expect(mockedKBGuideEntity.findByOrgId).toHaveBeenCalledWith('org-123', 'emergency', undefined);
+      expect(response.body.data[0].category).toBe('general');
+      expect(mockedKBGuideEntity.findByOrgId).toHaveBeenCalledWith('org-123', 'general', undefined);
     });
 
     it('should filter guides by type', async () => {

@@ -11,11 +11,15 @@ import incidentsRouter from '../incidents';
 import { IncidentEntity, CheckInEntity, UserEntity, OrganizationEntity } from '../../entities';
 import { getWebSocketServer } from '../../websocket/server';
 import { pushNotificationService } from '../../services/pushNotificationService';
+import { authMiddleware, adminMiddleware } from '../../middleware/auth';
+import { sessionService } from '../../services/sessionService';
 
 // Mock dependencies
 jest.mock('../../entities');
 jest.mock('../../websocket/server');
 jest.mock('../../services/pushNotificationService');
+jest.mock('../../middleware/auth');
+jest.mock('../../services/sessionService');
 jest.mock('jsonwebtoken');
 
 const mockedIncidentEntity = IncidentEntity as jest.Mocked<typeof IncidentEntity>;
@@ -25,6 +29,8 @@ const mockedOrganizationEntity = OrganizationEntity as jest.Mocked<typeof Organi
 const mockedGetWebSocketServer = getWebSocketServer as jest.MockedFunction<typeof getWebSocketServer>;
 const mockedPushNotificationService = pushNotificationService as jest.Mocked<typeof pushNotificationService>;
 const mockedJwt = jwt as jest.Mocked<typeof jwt>;
+const mockedAuthMiddleware = authMiddleware as jest.MockedFunction<typeof authMiddleware>;
+const mockedAdminMiddleware = adminMiddleware as jest.MockedFunction<typeof adminMiddleware>;
 
 // Test app setup
 const app = express();
@@ -43,6 +49,45 @@ describe('Incidents Routes', () => {
     
     // Set JWT secret for testing
     process.env.JWT_SECRET = 'test-jwt-secret-for-incidents-testing-32-chars-minimum';
+    
+    // Mock auth middleware
+    mockedAuthMiddleware.mockImplementation(((req: any, res: any, next: any) => {
+      const token = req.headers.authorization?.split(' ')[1];
+      if (token === 'admin-token') {
+        req.user = {
+          id: 'admin-123',
+          email: 'admin@example.com',
+          role: 'admin',
+          orgId: 'org-123',
+          teamId: 'team-123',
+        };
+      } else {
+        req.user = {
+          id: 'user-123',
+          email: 'test@example.com',
+          role: 'employee',
+          orgId: 'org-123',
+          teamId: 'team-123',
+        };
+      }
+      next();
+    }) as any);
+
+    // Mock admin middleware
+    mockedAdminMiddleware.mockImplementation(((req: any, res: any, next: any) => {
+      if (req.user?.role === 'admin' || req.user?.role === 'hr') {
+        next();
+      } else {
+        res.status(403).json({
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Admin access required',
+          },
+          statusCode: 403,
+        });
+      }
+    }) as any);
     
     // Mock JWT verify for auth middleware
     mockedJwt.verify.mockImplementation(((token: any) => {
@@ -247,14 +292,25 @@ describe('Incidents Routes', () => {
         severity: 'emergency',
         startTime: expect.any(Date),
         isDrill: false,
-        createdBy: 'user-123',
+        createdBy: 'admin-123',
       });
     });
 
     it('should create drill incident successfully', async () => {
+      const drillIncident = {
+        id: 'incident-123',
+        orgId: 'org-123',
+        type: 'earthquake',
+        severity: 'watch' as const,
+        startTime: new Date(),
+        isDrill: true,
+        createdBy: 'admin-123',
+      };
+      mockedIncidentEntity.create.mockResolvedValue(drillIncident);
+
       const drillData = {
         type: 'earthquake',
-        severity: 'medium',
+        severity: 'watch',
         isDrill: true,
       };
 

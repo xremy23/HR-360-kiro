@@ -1,40 +1,90 @@
 import React, { useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import toast from 'react-hot-toast';
 import { loginSuccess, setError, setLoading } from '../store/slices/authSlice';
 import { AppDispatch } from '../store/store';
+import apiService, { ApiError } from '../services/apiService';
 
 const LoginPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
   const [isLoading, setIsLoadingLocal] = useState(false);
+  const [step, setStep] = useState<'email' | 'verify'>('email');
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSendVerification = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoadingLocal(true);
     dispatch(setLoading(true));
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-      const response = await axios.post(
-        `${apiUrl}/api/auth/login`,
-        { email, password }
-      );
-
-      const { user, token } = response.data;
-
-      dispatch(loginSuccess({ user, token }));
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
-
-      toast.success('Login successful!');
-      navigate('/');
+      const response = await apiService.sendVerification(email);
+      if (response.success) {
+        toast.success('Verification code sent to your email!');
+        setStep('verify');
+      } else {
+        const errorMessage = response.error?.message || 'Failed to send verification code';
+        dispatch(setError(errorMessage));
+        toast.error(errorMessage);
+      }
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 'Login failed';
+      const apiError = error as ApiError;
+      const errorMessage = apiError.message || 'Failed to send verification code';
+      dispatch(setError(errorMessage));
+      toast.error(errorMessage);
+    } finally {
+      setIsLoadingLocal(false);
+      dispatch(setLoading(false));
+    }
+  };
+
+  const handleVerifyEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoadingLocal(true);
+    dispatch(setLoading(true));
+
+    try {
+      const response = await apiService.verifyEmail(email, verificationCode);
+      
+      if (response.success && response.data) {
+        const token = response.data.token;
+        
+        // Fetch user profile
+        apiService.setToken(token);
+        const profileResponse = await apiService.getUserProfile();
+        
+        if (profileResponse.success && profileResponse.data) {
+          const backendUser = profileResponse.data;
+          
+          // Map backend user to frontend User interface
+          const user = {
+            id: backendUser.id,
+            email: backendUser.email,
+            name: `${backendUser.firstName} ${backendUser.lastName}`.trim() || backendUser.email,
+            role: backendUser.role || 'employee',
+            organizationId: backendUser.orgId,
+            avatar: backendUser.avatar,
+          };
+
+          dispatch(loginSuccess({ user, token }));
+          localStorage.setItem('token', token);
+          localStorage.setItem('user', JSON.stringify(user));
+
+          toast.success('Login successful!');
+          navigate('/');
+        } else {
+          throw new Error('Failed to fetch user profile');
+        }
+      } else {
+        const errorMessage = response.error?.message || 'Verification failed';
+        dispatch(setError(errorMessage));
+        toast.error(errorMessage);
+      }
+    } catch (error: any) {
+      const apiError = error as ApiError;
+      const errorMessage = apiError.message || 'Verification failed';
       dispatch(setError(errorMessage));
       toast.error(errorMessage);
     } finally {
@@ -62,42 +112,76 @@ const LoginPage: React.FC = () => {
 
         {/* Login Card */}
         <div className="bg-primary-white rounded-2xl shadow-xl p-8 mb-6">
-          <form onSubmit={handleLogin} className="space-y-6">
-            {/* Email Input */}
-            <div>
-              <label className="block font-sans text-label1 text-primary-black mb-2">
-                Email Address
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="your@email.com"
-                required
-                className="w-full px-4 py-3 border-2 border-secondary-light rounded-lg font-sans text-body2 focus:outline-none focus:border-primary-teal focus:ring-2 focus:ring-primary-teal focus:ring-opacity-20 transition"
-              />
-            </div>
+          <form onSubmit={step === 'email' ? handleSendVerification : handleVerifyEmail} className="space-y-6">
+            {step === 'email' ? (
+              <>
+                {/* Email Input */}
+                <div>
+                  <label className="block font-sans text-label1 text-primary-black mb-2">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="your@email.com"
+                    required
+                    className="w-full px-4 py-3 border-2 border-secondary-light rounded-lg font-sans text-body2 focus:outline-none focus:border-primary-teal focus:ring-2 focus:ring-primary-teal focus:ring-opacity-20 transition"
+                  />
+                </div>
 
-            {/* Password Input */}
-            <div>
-              <label className="block font-sans text-label1 text-primary-black mb-2">
-                Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                className="w-full px-4 py-3 border-2 border-secondary-light rounded-lg font-sans text-body2 focus:outline-none focus:border-primary-teal focus:ring-2 focus:ring-primary-teal focus:ring-opacity-20 transition"
-              />
-            </div>
+                {/* Login Button */}
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full bg-primary-teal hover:bg-secondary-medium disabled:bg-secondary-light text-primary-white font-sans font-semibold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2"
+                >
+                  {isLoading ? 'Sending...' : 'Send Verification Code'}
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Verification Code Input */}
+                <div>
+                  <label className="block font-sans text-label1 text-primary-black mb-2">
+                    Verification Code
+                  </label>
+                  <p className="text-body2 text-secondary-medium mb-3">
+                    Check your email for the 6-digit code
+                  </p>
+                  <input
+                    type="text"
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value.slice(0, 6))}
+                    placeholder="000000"
+                    maxLength={6}
+                    required
+                    className="w-full px-4 py-3 border-2 border-secondary-light rounded-lg font-sans text-body2 text-center text-2xl tracking-widest focus:outline-none focus:border-primary-teal focus:ring-2 focus:ring-primary-teal focus:ring-opacity-20 transition"
+                  />
+                </div>
 
-            {/* Login Button */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-primary-teal hover:bg-secondary-medium disabled:bg-secondary-light text-primary-white font-sans font-semibold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2"
+                {/* Verify Button */}
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full bg-primary-teal hover:bg-secondary-medium disabled:bg-secondary-light text-primary-white font-sans font-semibold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2"
+                >
+                  {isLoading ? 'Verifying...' : 'Verify & Login'}
+                </button>
+
+                {/* Back Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep('email');
+                    setVerificationCode('');
+                  }}
+                  className="w-full bg-secondary-light hover:bg-secondary-medium text-primary-black font-sans font-semibold py-3 px-4 rounded-lg transition duration-200"
+                >
+                  Back
+                </button>
+              </>
+            )}
             >
               {isLoading ? (
                 <>

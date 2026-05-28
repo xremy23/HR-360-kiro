@@ -4,6 +4,7 @@ import kbReducer from './slices/kbSlice';
 import checkinReducer from './slices/checkinSlice';
 import alertReducer from './slices/alertSlice';
 import incidentReducer from './slices/incidentSlice';
+import userReducer from './slices/userSlice';
 
 const store = configureStore({
   reducer: {
@@ -12,6 +13,7 @@ const store = configureStore({
     checkin: checkinReducer,
     alert: alertReducer,
     incident: incidentReducer,
+    user: userReducer,
   },
 });
 

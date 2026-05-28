@@ -8,8 +8,10 @@ import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '../store/store';
 import { setLoading as setAlertLoading, setError as setAlertError, setItems as setAlertItems, addAlert } from '../store/slices/alertSlice';
 import { setLoading as setCheckInLoading, setError as setCheckInError, setItems as setCheckInItems, addCheckIn } from '../store/slices/checkinSlice';
+import { setLoading as setIncidentLoading, setError as setIncidentError, setItems as setIncidentItems, addIncident } from '../store/slices/incidentSlice';
 import { colors, typography, spacing, borderRadius, shadows } from '../styles/designSystem';
 import websocketService from '../services/websocketService';
+import apiService, { ApiError } from '../services/apiService';
 import IncidentCard from '../components/IncidentCard';
 import CheckInSummary from '../components/CheckInSummary';
 import AlertPanel from '../components/AlertPanel';
@@ -36,34 +38,46 @@ const Dashboard: React.FC = () => {
   const [incidents, setIncidents] = useState<any[]>([]);
   const [isLive, setIsLive] = useState(false);
 
-  // Fetch alerts and check-ins on mount
+  // Fetch alerts, check-ins, and incidents on mount
   useEffect(() => {
     const fetchData = async () => {
       try {
         // Fetch alerts
         dispatch(setAlertLoading(true));
-        // TODO: Replace with actual API call
-        // const alertsResponse = await apiService.getAlerts();
-        // if (alertsResponse.success) {
-        //   dispatch(setAlertItems(alertsResponse.data));
-        // } else {
-        //   dispatch(setAlertError('Failed to load alerts'));
-        // }
-        dispatch(setAlertItems([]));
+        const alertsResponse = await apiService.getAlerts({ pageSize: 100 });
+        if (alertsResponse.success && alertsResponse.data) {
+          dispatch(setAlertItems(alertsResponse.data));
+        } else {
+          dispatch(setAlertError('Failed to load alerts'));
+        }
 
         // Fetch check-ins
         dispatch(setCheckInLoading(true));
-        // TODO: Replace with actual API call
-        // const checkInsResponse = await apiService.getCheckIns();
-        // if (checkInsResponse.success) {
-        //   dispatch(setCheckInItems(checkInsResponse.data));
-        // } else {
-        //   dispatch(setCheckInError('Failed to load check-ins'));
-        // }
-        dispatch(setCheckInItems([]));
+        const checkInsResponse = await apiService.getCheckIns({ pageSize: 100 });
+        if (checkInsResponse.success && checkInsResponse.data) {
+          dispatch(setCheckInItems(checkInsResponse.data));
+        } else {
+          dispatch(setCheckInError('Failed to load check-ins'));
+        }
+
+        // Fetch incidents
+        dispatch(setIncidentLoading(true));
+        const incidentsResponse = await apiService.getIncidents({ pageSize: 100 });
+        if (incidentsResponse.success && incidentsResponse.data) {
+          dispatch(setIncidentItems(incidentsResponse.data));
+          setIncidents(incidentsResponse.data);
+          setStats((prev) => ({
+            ...prev,
+            activeIncidents: incidentsResponse.data.filter((i: any) => i.status === 'active').length,
+          }));
+        } else {
+          dispatch(setIncidentError('Failed to load incidents'));
+        }
       } catch (error) {
-        dispatch(setAlertError('Failed to load data'));
-        dispatch(setCheckInError('Failed to load data'));
+        const apiError = error as ApiError;
+        dispatch(setAlertError(apiError.message || 'Failed to load alerts'));
+        dispatch(setCheckInError(apiError.message || 'Failed to load check-ins'));
+        dispatch(setIncidentError(apiError.message || 'Failed to load incidents'));
       }
     };
 

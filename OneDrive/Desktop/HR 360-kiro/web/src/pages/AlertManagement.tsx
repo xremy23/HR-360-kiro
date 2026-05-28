@@ -9,6 +9,7 @@ import { RootState, AppDispatch } from '../store/store';
 import { setLoading, setError, setItems, addAlert, updateAlert, deleteAlert } from '../store/slices/alertSlice';
 import { colors, typography, spacing, borderRadius, shadows } from '../styles/designSystem';
 import websocketService from '../services/websocketService';
+import apiService, { ApiError } from '../services/apiService';
 
 interface AlertFormData {
   title: string;
@@ -36,16 +37,15 @@ const AlertManagement: React.FC = () => {
     const fetchAlerts = async () => {
       dispatch(setLoading(true));
       try {
-        // TODO: Replace with actual API call
-        // const response = await apiService.getAlerts();
-        // if (response.success) {
-        //   dispatch(setItems(response.data));
-        // } else {
-        //   dispatch(setError('Failed to load alerts'));
-        // }
-        dispatch(setItems([]));
+        const response = await apiService.getAlerts({ pageSize: 100 });
+        if (response.success && response.data) {
+          dispatch(setItems(response.data));
+        } else {
+          dispatch(setError('Failed to load alerts'));
+        }
       } catch (err) {
-        dispatch(setError((err as any).message || 'Failed to load alerts'));
+        const apiError = err as ApiError;
+        dispatch(setError(apiError.message || 'Failed to load alerts'));
       }
     };
 
@@ -63,46 +63,41 @@ const AlertManagement: React.FC = () => {
     try {
       dispatch(setLoading(true));
       
-      const newAlert = {
-        id: `${Date.now()}`,
-        title: formData.title,
-        description: formData.message,
-        severity: formData.severity === 'advisory' ? 'low' : formData.severity === 'watch' ? 'medium' : 'high',
-        type: formData.isDrill ? 'drill' : 'incident',
-        startTime: new Date().toISOString(),
-        isActive: true,
-        createdAt: new Date().toISOString(),
-      };
-
-      // TODO: Replace with actual API call
-      // const response = await apiService.createAlert(newAlert);
-      // if (response.success) {
-      //   dispatch(addAlert(response.data));
-      // } else {
-      //   dispatch(setError('Failed to create alert'));
-      // }
-      
-      dispatch(addAlert(newAlert));
-      
-      // Send via WebSocket
-      websocketService.send({
-        type: 'alert',
-        action: 'created',
-        data: newAlert,
-        timestamp: new Date().toISOString(),
+      const response = await apiService.broadcastAlert({
+        message: formData.message,
+        severity: formData.severity === 'advisory' ? 'low' : formData.severity === 'watch' ? 'medium' : 'critical',
+        teamIds: formData.teamIds.length > 0 ? formData.teamIds : undefined,
       });
 
-      setFormData({
-        title: '',
-        message: '',
-        severity: 'watch',
-        isDrill: false,
-        teamIds: [],
-      });
-      setShowForm(false);
-      dispatch(setLoading(false));
+      if (response.success && response.data) {
+        dispatch(addAlert(response.data));
+        
+        // Send via WebSocket
+        websocketService.send({
+          type: 'alert',
+          action: 'created',
+          data: response.data,
+          timestamp: new Date().toISOString(),
+        });
+
+        setFormData({
+          title: '',
+          message: '',
+          severity: 'watch',
+          isDrill: false,
+          teamIds: [],
+        });
+        setShowForm(false);
+        alert('Alert broadcast successfully!');
+      } else {
+        dispatch(setError('Failed to broadcast alert'));
+      }
     } catch (err) {
-      dispatch(setError((err as any).message || 'Failed to create alert'));
+      const apiError = err as ApiError;
+      dispatch(setError(apiError.message || 'Failed to broadcast alert'));
+      alert(apiError.message || 'Failed to broadcast alert');
+    } finally {
+      dispatch(setLoading(false));
     }
   };
 
