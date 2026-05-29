@@ -263,6 +263,14 @@ class ApiService {
     return this.post('/auth/verify-email', { email, code });
   }
 
+  async sendMagicLink(email: string): Promise<ApiResponse> {
+    return this.post('/auth/send-magic-link', { email });
+  }
+
+  async verifyMagicLink(email: string, token: string): Promise<ApiResponse<{ token: string }>> {
+    return this.post('/auth/verify-magic-link', { email, token });
+  }
+
   async joinOrganization(
     email: string,
     code: string,
@@ -557,10 +565,6 @@ class ApiService {
     return this.get('/org');
   }
 
-  async updateOrganization(data: Record<string, any>): Promise<ApiResponse<any>> {
-    return this.put('/org', data);
-  }
-
   async getOrganizationTeams(): Promise<ApiResponse<any[]>> {
     return this.get('/org/teams');
   }
@@ -591,6 +595,36 @@ class ApiService {
 
   async updateOrganizationSettings(data: Record<string, any>): Promise<ApiResponse<any>> {
     return this.put('/org/settings', data);
+  }
+
+  async createOrganization(data: {
+    name: string;
+    emailDomain?: string;
+    logo?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.post('/org', data);
+  }
+
+  async updateOrganization(data: {
+    name?: string;
+    logo?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.put('/org', data);
+  }
+
+  async inviteUserToOrganization(data: {
+    email: string;
+    role?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.post('/org/invite', data);
+  }
+
+  async removeUserFromOrganization(userId: string): Promise<ApiResponse<any>> {
+    return this.delete(`/org/users/${userId}`);
+  }
+
+  async switchOrganization(orgId: string): Promise<ApiResponse<any>> {
+    return this.post('/org/switch', { orgId });
   }
 
   // ============================================================================

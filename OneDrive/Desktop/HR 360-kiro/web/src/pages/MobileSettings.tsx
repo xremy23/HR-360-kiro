@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../store/slices/authSlice';
 import { RootState, AppDispatch } from '../store/store';
 import toast from 'react-hot-toast';
+import apiService from '../services/apiService';
 
 const MobileSettings: React.FC = () => {
   const navigate = useNavigate();
@@ -11,6 +12,23 @@ const MobileSettings: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [notifications, setNotifications] = useState(true);
   const [location, setLocation] = useState(false);
+  const [hasOrganization, setHasOrganization] = useState<boolean | null>(null);
+  const [loadingOrgStatus, setLoadingOrgStatus] = useState(true);
+
+  React.useEffect(() => {
+    checkOrganizationStatus();
+  }, []);
+
+  const checkOrganizationStatus = async () => {
+    try {
+      const response = await apiService.getOrganization();
+      setHasOrganization(response.success && !!response.data);
+    } catch (error) {
+      setHasOrganization(false);
+    } finally {
+      setLoadingOrgStatus(false);
+    }
+  };
 
   const handleLogout = () => {
     dispatch(logout());
@@ -164,6 +182,43 @@ const MobileSettings: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Organization Section */}
+        {!loadingOrgStatus && (
+          <div className="mb-6">
+            <h3 className="font-sans text-h5 text-primary-black font-semibold mb-4">
+              Organization
+            </h3>
+
+            {!hasOrganization ? (
+              // Show create org button when user has no organization
+              <button
+                onClick={() => navigate('/org-settings')}
+                className="w-full bg-primary-white rounded-xl shadow-md p-4 text-left hover:shadow-lg transition"
+              >
+                <h4 className="font-sans text-label1 text-primary-black font-semibold">
+                  ➕ Create Organization
+                </h4>
+                <p className="font-sans text-body3 text-neutral-600 mt-1">
+                  Set up your organization to manage your team
+                </p>
+              </button>
+            ) : (
+              // Show organization settings button when user is part of org
+              <button
+                onClick={() => navigate('/org-settings')}
+                className="w-full bg-primary-white rounded-xl shadow-md p-4 text-left hover:shadow-lg transition"
+              >
+                <h4 className="font-sans text-label1 text-primary-black font-semibold">
+                  🏢 Organization Settings
+                </h4>
+                <p className="font-sans text-body3 text-neutral-600 mt-1">
+                  Manage organization and team members
+                </p>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* App Section */}
         <div className="mb-6">
