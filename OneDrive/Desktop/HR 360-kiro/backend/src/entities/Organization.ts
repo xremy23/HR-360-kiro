@@ -69,4 +69,13 @@ export class OrganizationEntity {
     );
     return result.rows[0] || null;
   }
+
+  static async findAll(limit: number = 100, offset: number = 0): Promise<Organization[]> {
+    const result = await query(
+      `SELECT id, name, email_domain as "emailDomain", invite_code as "inviteCode", logo, created_at as "createdAt", updated_at as "updatedAt"
+       FROM organizations LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    return result.rows;
+  }
 }

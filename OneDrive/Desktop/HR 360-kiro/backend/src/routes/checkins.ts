@@ -8,6 +8,76 @@ import { getWebSocketServer } from '../websocket/server';
 const router = Router();
 
 /**
+ * PUT /check-ins/:id
+ * Update check-in status
+ */
+router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
+    }
+
+    const { id } = req.params;
+    const { status, notes } = req.body;
+
+    if (!validateCheckInStatus(status)) {
+      return sendError(res, 'INVALID_STATUS', 'Invalid check-in status', 400);
+    }
+
+    // Get existing check-in
+    const existingCheckIn = await CheckInEntity.findById(id);
+    if (!existingCheckIn) {
+      return sendError(res, 'NOT_FOUND', 'Check-in not found', 404);
+    }
+
+    // Verify user owns this check-in
+    if (existingCheckIn.userId !== req.user.id) {
+      return sendError(res, 'FORBIDDEN', 'Cannot update check-in from another user', 403);
+    }
+
+    // Update check-in
+    const updatedCheckIn = await CheckInEntity.update(id, {
+      status,
+      notes: notes || existingCheckIn.notes,
+    });
+
+    // Broadcast via WebSocket
+    try {
+      const wsServer = getWebSocketServer();
+      wsServer.broadcastCheckInUpdated(updatedCheckIn);
+    } catch (wsError) {
+      console.warn('WebSocket broadcast failed:', wsError);
+      // Don't fail the request if WebSocket fails
+    }
+
+    return sendSuccess(res, updatedCheckIn, 'Check-in updated successfully', 200);
+  } catch (error) {
+    console.error('Update check-in error:', error);
+    return sendError(res, 'SERVER_ERROR', 'Failed to update check-in', 500);
+  }
+});
+
+/**
+ * GET /check-ins/:id
+ * Get check-in by ID
+ */
+router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const checkIn = await CheckInEntity.findById(id);
+    if (!checkIn) {
+      return sendError(res, 'NOT_FOUND', 'Check-in not found', 404);
+    }
+
+    return sendSuccess(res, checkIn, 'Check-in retrieved', 200);
+  } catch (error) {
+    console.error('Get check-in error:', error);
+    return sendError(res, 'SERVER_ERROR', 'Failed to retrieve check-in', 500);
+  }
+});
+
+/**
  * POST /check-ins
  * Submit check-in
  */

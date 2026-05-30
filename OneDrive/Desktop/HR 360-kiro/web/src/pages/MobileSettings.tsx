@@ -20,10 +20,13 @@ const MobileSettings: React.FC = () => {
   }, []);
 
   const checkOrganizationStatus = async () => {
+    setLoadingOrgStatus(true);
     try {
       const response = await apiService.getOrganization();
       setHasOrganization(response.success && !!response.data);
+      console.log('Organization status:', response.success && !!response.data);
     } catch (error) {
+      console.error('Failed to check org status:', error);
       setHasOrganization(false);
     } finally {
       setLoadingOrgStatus(false);

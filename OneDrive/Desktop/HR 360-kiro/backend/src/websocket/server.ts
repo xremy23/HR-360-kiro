@@ -173,6 +173,19 @@ export class WebSocketServer {
   }
 
   /**
+   * Broadcast check-in updated event
+   */
+  public broadcastCheckInUpdated(checkIn: any): void {
+    this.io.emit('checkin:updated', {
+      type: 'checkin',
+      action: 'updated',
+      data: checkIn,
+      timestamp: new Date().toISOString(),
+    });
+    console.log(`[${new Date().toISOString()}] Broadcast: checkin:updated`);
+  }
+
+  /**
    * Broadcast SOS created event
    */
   public broadcastSOSCreated(sos: any): void {
