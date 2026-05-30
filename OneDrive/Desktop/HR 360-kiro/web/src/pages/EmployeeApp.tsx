@@ -10,6 +10,9 @@ import MobileCheckIn from './MobileCheckIn';
 import MobileAlerts from './MobileAlerts';
 import MobileKB from './MobileKB';
 import MobileSettings from './MobileSettings';
+import OrganizationSettings from './OrganizationSettings';
+import Chatbot from '../components/Chatbot';
+import { chatbotService } from '../services/chatbotService';
 
 const EmployeeApp: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -18,6 +21,9 @@ const EmployeeApp: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Cache knowledge base for chatbot offline support
+        await chatbotService.cacheKnowledgeBase();
+
         // Fetch check-ins
         dispatch(setCheckInLoading(true));
         // TODO: Replace with actual API call
@@ -66,7 +72,9 @@ const EmployeeApp: React.FC = () => {
       <Route path="/alerts" element={<MobileAlerts />} />
       <Route path="/kb" element={<MobileKB />} />
       <Route path="/contacts" element={<div className="p-4">Contacts coming soon</div>} />
+      <Route path="/chatbot" element={<Chatbot />} />
       <Route path="/settings" element={<MobileSettings />} />
+      <Route path="/org-settings" element={<OrganizationSettings />} />
     </Routes>
   );
 };

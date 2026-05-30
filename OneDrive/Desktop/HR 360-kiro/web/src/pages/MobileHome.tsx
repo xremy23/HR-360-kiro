@@ -44,12 +44,12 @@ const MobileHome: React.FC = () => {
       path: '/kb',
     },
     {
-      id: 'contacts',
-      icon: '👥',
-      label: 'Contacts',
-      description: 'Emergency contacts',
-      color: 'bg-secondary-light',
-      path: '/contacts',
+      id: 'chatbot',
+      icon: '💬',
+      label: 'Assistant',
+      description: 'Ask questions',
+      color: 'bg-success',
+      path: '/chatbot',
     },
   ];
 
@@ -184,8 +184,8 @@ const MobileHome: React.FC = () => {
           {[
             { icon: '🏠', label: 'Home', path: '/' },
             { icon: '✓', label: 'Check In', path: '/checkin' },
+            { icon: '💬', label: 'Assistant', path: '/chatbot' },
             { icon: '📚', label: 'KB', path: '/kb' },
-            { icon: '🔔', label: 'Alerts', path: '/alerts' },
             { icon: '⚙️', label: 'Settings', path: '/settings' },
           ].map((item) => (
             <button

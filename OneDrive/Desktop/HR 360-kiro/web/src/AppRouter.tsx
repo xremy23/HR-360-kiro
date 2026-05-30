@@ -12,30 +12,49 @@ import EmployeeApp from './pages/EmployeeApp';
 import AdminConsole from './pages/AdminConsole';
 import NotFoundPage from './pages/NotFoundPage';
 
+// Components
+import ChatbotButton from './components/ChatbotButton';
+
 const AppRouter: React.FC = () => {
-  const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
+  const { user, isAuthenticated, loading } = useSelector((state: RootState) => state.auth);
   const [deviceType, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    // Initialize PWA
-    pwaService.initialize();
-    indexedDBService.initialize();
+    try {
+      // Initialize PWA
+      pwaService.initialize();
+      indexedDBService.initialize();
 
-    // Set device type
-    setDeviceType(getDeviceType());
+      // Set device type
+      setDeviceType(getDeviceType());
 
-    // Listen for online/offline changes
-    const unsubscribe = pwaService.onOnlineStatusChange((online) => {
-      setIsOnline(online);
-      if (online) {
-        // Trigger background sync when coming online
-        pwaService.requestBackgroundSync('sync-data');
-      }
-    });
+      // Listen for online/offline changes
+      const unsubscribe = pwaService.onOnlineStatusChange((online) => {
+        setIsOnline(online);
+        if (online) {
+          // Trigger background sync when coming online
+          pwaService.requestBackgroundSync('sync-data');
+        }
+      });
 
-    return unsubscribe;
+      setIsInitialized(true);
+      return unsubscribe;
+    } catch (error) {
+      console.error('AppRouter initialization error:', error);
+      setIsInitialized(true); // Still initialize even if there's an error
+    }
   }, []);
+
+  if (!isInitialized) {
+    return <div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>;
+  }
+
+  // Show loading screen while verifying magic link
+  if (loading) {
+    return <div style={{ padding: '20px', textAlign: 'center' }}>Verifying magic link...</div>;
+  }
 
   if (!isAuthenticated) {
     return (
@@ -71,9 +90,12 @@ const AppRouter: React.FC = () => {
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
 
+      {/* Chatbot Button - Available everywhere */}
+      {isAuthenticated && <ChatbotButton />}
+
       {/* Offline indicator */}
       {!isOnline && (
-        <div className="fixed bottom-4 left-4 bg-yellow-500 text-white px-4 py-2 rounded-lg shadow-lg">
+        <div className="fixed bottom-4 left-4 bg-yellow-500 text-white px-4 py-2 rounded-lg shadow-lg z-20">
           📡 Offline Mode - Changes will sync when online
         </div>
       )}
