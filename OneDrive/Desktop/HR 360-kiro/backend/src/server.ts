@@ -23,6 +23,7 @@ import organizationRoutes from './routes/organization';
 import tobagRoutes from './routes/tobag';
 import monitoringRoutes from './routes/monitoring';
 import superadminRoutes from './routes/superadmin';
+import chatbotRoutes from './routes/chatbot';
 
 const app = express();
 const httpServer = createServer(app);
@@ -196,6 +197,7 @@ apiRouter.use('/incidents', incidentsRoutes);
 apiRouter.use('/sos', sosRoutes);
 apiRouter.use('/org', organizationRoutes);
 apiRouter.use('/tobag', tobagRoutes);
+apiRouter.use('/chatbot', chatbotRoutes);
 
 // Super-admin routes
 apiRouter.use('/superadmin', superadminRoutes);
