@@ -170,17 +170,28 @@ class ChatbotService {
    */
   async cacheKnowledgeBase(): Promise<void> {
     try {
-      // Get all guides from API
-      const response = await apiService.get('/kb/guides', { limit: 1000 });
+      // Get organization ID from localStorage (set during login)
+      const userStr = localStorage.getItem('user');
+      if (!userStr) {
+        throw new Error('User not found in localStorage');
+      }
+      
+      const user = JSON.parse(userStr);
+      const orgId = user.orgId;
+      
+      if (!orgId) {
+        throw new Error('Organization ID not found in user data');
+      }
+      
+      // Get all guides from API with organization ID
+      const response = await apiService.get('/kb/guides', { limit: 1000, orgId });
       
       if (response.success && response.data) {
         // Clear existing cache
-        await indexedDBService.clear('kbGuides');
+        await indexedDBService.saveKBGuides([]);
         
         // Cache all guides
-        for (const guide of response.data) {
-          await indexedDBService.add('kbGuides', guide);
-        }
+        await indexedDBService.saveKBGuides(response.data);
         
         console.log(`Cached ${response.data.length} guides for offline use`);
       }
