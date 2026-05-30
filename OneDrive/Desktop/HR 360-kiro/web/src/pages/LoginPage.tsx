@@ -71,18 +71,23 @@ const LoginPage: React.FC = () => {
         localStorage.setItem('user', JSON.stringify(user));
 
         toast.success('Login successful!');
-        navigate('/');
+        
+        // Small delay to ensure state is updated before navigation
+        setTimeout(() => {
+          navigate('/', { replace: true });
+        }, 100);
       } else {
         const errorMessage = response.error?.message || 'Magic link verification failed';
         dispatch(setError(errorMessage));
         toast.error(errorMessage);
+        setIsVerifyingLink(false);
+        dispatch(setLoading(false));
       }
     } catch (error: any) {
       const apiError = error as ApiError;
       const errorMessage = apiError.message || 'Magic link verification failed';
       dispatch(setError(errorMessage));
       toast.error(errorMessage);
-    } finally {
       setIsVerifyingLink(false);
       dispatch(setLoading(false));
     }

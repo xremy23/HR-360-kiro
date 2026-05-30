@@ -48,12 +48,22 @@ const AppRouter: React.FC = () => {
   }, []);
 
   if (!isInitialized) {
-    return <div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>;
-  }
-
-  // Show loading screen while verifying magic link
-  if (loading) {
-    return <div style={{ padding: '20px', textAlign: 'center' }}>Verifying magic link...</div>;
+    return (
+      <div style={{ 
+        padding: '20px', 
+        textAlign: 'center',
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#f5f5f5'
+      }}>
+        <div>
+          <h2>Loading...</h2>
+          <p>Initializing application</p>
+        </div>
+      </div>
+    );
   }
 
   if (!isAuthenticated) {
@@ -64,6 +74,26 @@ const AppRouter: React.FC = () => {
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </Router>
+    );
+  }
+
+  // Show loading screen while verifying magic link (only if loading after authenticated)
+  if (loading && isAuthenticated) {
+    return (
+      <div style={{ 
+        padding: '20px', 
+        textAlign: 'center',
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#f5f5f5'
+      }}>
+        <div>
+          <h2>Verifying magic link...</h2>
+          <p>Please wait while we log you in</p>
+        </div>
+      </div>
     );
   }
 
