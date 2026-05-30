@@ -16,13 +16,19 @@ import { chatbotService } from '../services/chatbotService';
 
 const EmployeeApp: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
+  const [isInitialized, setIsInitialized] = React.useState(false);
 
   // Fetch all data on mount
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Cache knowledge base for chatbot offline support
-        await chatbotService.cacheKnowledgeBase();
+        // Cache knowledge base for chatbot offline support (non-blocking)
+        try {
+          await chatbotService.cacheKnowledgeBase();
+        } catch (error) {
+          console.warn('Failed to cache knowledge base:', error);
+          // Don't block app initialization if KB caching fails
+        }
 
         // Fetch check-ins
         dispatch(setCheckInLoading(true));
@@ -57,14 +63,36 @@ const EmployeeApp: React.FC = () => {
         // }
         dispatch(setKBItems([]));
       } catch (error) {
+        console.error('Error in EmployeeApp fetchData:', error);
         dispatch(setCheckInError('Failed to load data'));
         dispatch(setAlertError('Failed to load data'));
         dispatch(setKBError('Failed to load data'));
+      } finally {
+        setIsInitialized(true);
       }
     };
 
     fetchData();
   }, [dispatch]);
+
+  if (!isInitialized) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#f5f5f5',
+        fontFamily: 'sans-serif'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <h2>Loading...</h2>
+          <p>Initializing app</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Routes>
       <Route path="/" element={<MobileHome />} />
