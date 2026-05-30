@@ -1,0 +1,25 @@
+{
+  "displayName": "Backend API - High Latency",
+  "conditions": [
+    {
+      "displayName": "P95 latency > 2000ms",
+      "conditionThreshold": {
+        "filter": "resource.type=\"cloud_run_revision\" resource.labels.service_name=\"backend\" metric.type=\"run.googleapis.com/request_latencies\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 2000,
+        "duration": "300s",
+        "aggregations": [
+          {
+            "alignmentPeriod": "60s",
+            "perSeriesAligner": "ALIGN_PERCENTILE_95"
+          }
+        ]
+      }
+    }
+  ],
+  "combiner": "OR",
+  "notificationChannels": [],
+  "alertStrategy": {
+    "autoClose": "1800s"
+  }
+}
