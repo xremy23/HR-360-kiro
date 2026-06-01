@@ -5,6 +5,7 @@ import { AppDispatch } from '../store/store';
 import { setLoading as setCheckInLoading, setError as setCheckInError, setItems as setCheckInItems } from '../store/slices/checkinSlice';
 import { setLoading as setAlertLoading, setError as setAlertError, setItems as setAlertItems } from '../store/slices/alertSlice';
 import { setLoading as setKBLoading, setError as setKBError, setItems as setKBItems } from '../store/slices/kbSlice';
+import MobileLayout from '../components/MobileLayout';
 import MobileHome from './MobileHome';
 import MobileCheckIn from './MobileCheckIn';
 import MobileAlerts from './MobileAlerts';
@@ -19,6 +20,7 @@ import { chatbotService } from '../services/chatbotService';
 const EmployeeApp: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const [isInitialized, setIsInitialized] = React.useState(false);
+  const [showMenu, setShowMenu] = React.useState(false);
 
   // Fetch all data on mount
   useEffect(() => {
@@ -96,18 +98,25 @@ const EmployeeApp: React.FC = () => {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<MobileHome />} />
-      <Route path="/checkin" element={<MobileCheckIn />} />
-      <Route path="/alerts" element={<MobileAlerts />} />
-      <Route path="/kb" element={<MobileKB />} />
-      <Route path="/contacts" element={<div className="p-4">Contacts coming soon</div>} />
-      <Route path="/chatbot" element={<Chatbot />} />
-      <Route path="/settings" element={<MobileSettings />} />
-      <Route path="/edit-profile" element={<EditProfile />} />
-      <Route path="/org-settings" element={<OrganizationSettings />} />
-      <Route path="/join-org" element={<JoinOrganization />} />
-    </Routes>
+    <MobileLayout
+      showHeader={true}
+      headerTitle="HR 360"
+      onMenuClick={() => setShowMenu(!showMenu)}
+      showMenu={showMenu}
+    >
+      <Routes>
+        <Route path="/" element={<MobileHome onMenuClick={() => setShowMenu(!showMenu)} showMenu={showMenu} />} />
+        <Route path="/checkin" element={<MobileCheckIn />} />
+        <Route path="/alerts" element={<MobileAlerts />} />
+        <Route path="/kb" element={<MobileKB />} />
+        <Route path="/contacts" element={<div className="p-4">Contacts coming soon</div>} />
+        <Route path="/chatbot" element={<Chatbot />} />
+        <Route path="/settings" element={<MobileSettings />} />
+        <Route path="/edit-profile" element={<EditProfile />} />
+        <Route path="/org-settings" element={<OrganizationSettings />} />
+        <Route path="/join-org" element={<JoinOrganization />} />
+      </Routes>
+    </MobileLayout>
   );
 };
 
