@@ -608,6 +608,10 @@ class ApiService {
     return this.post('/org', data);
   }
 
+  async joinOrganizationWithCode(inviteCode: string): Promise<ApiResponse<any>> {
+    return this.post('/org/join', { inviteCode });
+  }
+
   async updateOrganization(data: {
     name?: string;
     logo?: string;

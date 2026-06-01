@@ -141,6 +141,59 @@ router.put('/', authMiddleware, adminMiddleware, async (req: AuthRequest, res: R
 });
 
 /**
+ * POST /org/join
+ * Join organization using invite code
+ */
+router.post('/join', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
+    }
+
+    const { inviteCode } = req.body;
+
+    if (!inviteCode || inviteCode.trim().length === 0) {
+      return sendError(res, 'INVALID_CODE', 'Invite code is required', 400);
+    }
+
+    // Find organization by invite code
+    const org = await OrganizationEntity.findByInviteCode(inviteCode.trim().toUpperCase());
+    if (!org) {
+      return sendError(res, 'INVALID_CODE', 'Invalid or expired invite code', 404);
+    }
+
+    // Check if user is already in an organization
+    if (req.user.orgId) {
+      return sendError(res, 'ALREADY_IN_ORG', 'You are already part of an organization', 400);
+    }
+
+    // Update user's orgId to join the organization
+    const updatedUser = await UserEntity.update(req.user.id, {
+      orgId: org.id,
+    });
+
+    if (!updatedUser) {
+      return sendError(res, 'UPDATE_FAILED', 'Failed to join organization', 500);
+    }
+
+    console.log(`✅ User ${req.user.email} joined organization ${org.name}`);
+
+    return sendSuccess(
+      res,
+      {
+        organization: org,
+        user: updatedUser,
+      },
+      'Successfully joined organization',
+      200
+    );
+  } catch (error) {
+    console.error('Join organization error:', error);
+    return sendError(res, 'SERVER_ERROR', 'Failed to join organization', 500);
+  }
+});
+
+/**
  * POST /org/invite
  * Invite user to organization (admin only)
  */

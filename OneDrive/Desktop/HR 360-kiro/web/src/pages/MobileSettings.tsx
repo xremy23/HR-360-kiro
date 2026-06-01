@@ -261,18 +261,32 @@ const MobileSettings: React.FC = () => {
               <p className="font-sans text-body2 text-neutral-600">Loading...</p>
             </div>
           ) : !hasOrganization ? (
-            // Show create org button when user has no organization
-            <button
-              onClick={() => navigate('/org-settings')}
-              className="w-full bg-primary-white rounded-xl shadow-md p-4 text-left hover:shadow-lg transition"
-            >
-              <h4 className="font-sans text-label1 text-primary-black font-semibold">
-                ➕ Create Organization
-              </h4>
-              <p className="font-sans text-body3 text-neutral-600 mt-1">
-                Set up your organization to manage your team
-              </p>
-            </button>
+            // Show create org and join org buttons when user has no organization
+            <div className="space-y-3">
+              <button
+                onClick={() => navigate('/org-settings')}
+                className="w-full bg-primary-white rounded-xl shadow-md p-4 text-left hover:shadow-lg transition"
+              >
+                <h4 className="font-sans text-label1 text-primary-black font-semibold">
+                  ➕ Create Organization
+                </h4>
+                <p className="font-sans text-body3 text-neutral-600 mt-1">
+                  Set up your organization to manage your team
+                </p>
+              </button>
+
+              <button
+                onClick={() => navigate('/join-org')}
+                className="w-full bg-primary-white rounded-xl shadow-md p-4 text-left hover:shadow-lg transition"
+              >
+                <h4 className="font-sans text-label1 text-primary-black font-semibold">
+                  🔗 Join Organization
+                </h4>
+                <p className="font-sans text-body3 text-neutral-600 mt-1">
+                  Join an existing organization with an invite code
+                </p>
+              </button>
+            </div>
           ) : (
             // Show organization settings button when user is part of org
             <button

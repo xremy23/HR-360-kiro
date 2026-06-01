@@ -12,6 +12,7 @@ import MobileKB from './MobileKB';
 import MobileSettings from './MobileSettings';
 import EditProfile from './EditProfile';
 import OrganizationSettings from './OrganizationSettings';
+import JoinOrganization from './JoinOrganization';
 import Chatbot from '../components/Chatbot';
 import { chatbotService } from '../services/chatbotService';
 
@@ -105,6 +106,7 @@ const EmployeeApp: React.FC = () => {
       <Route path="/settings" element={<MobileSettings />} />
       <Route path="/edit-profile" element={<EditProfile />} />
       <Route path="/org-settings" element={<OrganizationSettings />} />
+      <Route path="/join-org" element={<JoinOrganization />} />
     </Routes>
   );
 };
