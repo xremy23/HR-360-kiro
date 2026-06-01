@@ -5,6 +5,10 @@ const response_1 = require("../utils/response");
 const auth_1 = require("../middleware/auth");
 const validators_1 = require("../utils/validators");
 const entities_1 = require("../entities");
+const server_1 = require("../websocket/server");
+const pushNotificationService_1 = require("../services/pushNotificationService");
+const userService_1 = require("../services/userService");
+const organizationService_1 = require("../services/organizationService");
 const router = (0, express_1.Router)();
 /**
  * GET /incidents
@@ -55,6 +59,34 @@ router.post('/', auth_1.authMiddleware, auth_1.adminMiddleware, async (req, res)
             isDrill: isDrill || false,
             createdBy: req.user.id,
         });
+        // Get organization members for notification
+        const org = await organizationService_1.organizationService.getOrganizationById(req.user.orgId);
+        const { users: members } = await userService_1.userService.getOrganizationUsers(req.user.orgId, { page: 1, pageSize: 1000 });
+        const memberIds = members.map((m) => m.id);
+        // Send push notifications
+        try {
+            await pushNotificationService_1.pushNotificationService.sendIncidentNotification(memberIds, type, `Incident: ${type} (Severity: ${severity})`);
+            console.log(`Incident push notifications sent to ${memberIds.length} members`);
+        }
+        catch (pushError) {
+            console.warn('Push notification failed:', pushError);
+            // Don't fail the request if push notifications fail
+        }
+        // Broadcast via WebSocket
+        try {
+            const wsServer = (0, server_1.getWebSocketServer)();
+            wsServer.broadcastIncidentCreated(incident);
+            wsServer.broadcastNotificationToOrganization(req.user.orgId, {
+                type: 'incident',
+                incidentId: incident.id,
+                incidentType: type,
+                severity,
+            });
+        }
+        catch (wsError) {
+            console.warn('WebSocket broadcast failed:', wsError);
+            // Don't fail the request if WebSocket fails
+        }
         return (0, response_1.sendSuccess)(res, incident, 'Incident created successfully', 201);
     }
     catch (error) {

@@ -7,4 +7,10 @@ export { ContactEntity, type Contact } from './Contact';
 export { ToBagItemEntity, type ToBagItem } from './ToBagItem';
 export { IncidentEntity, type Incident } from './Incident';
 export { SOSEscalationEntity, type SOSEscalation } from './SOSEscalation';
+export { NotificationEntity, type Notification } from './Notification';
+export { GuideAcknowledgmentEntity, type GuideAcknowledgment } from './GuideAcknowledgment';
+export { PushNotificationEntity, type PushNotification } from './PushNotification';
+export { DeviceTokenEntity, type DeviceToken } from './DeviceToken';
+export { MagicLinkTokenEntity, type MagicLinkToken } from './MagicLinkToken';
+export { ChatMessageEntity, type ChatMessage } from './ChatMessage';
 //# sourceMappingURL=index.d.ts.map

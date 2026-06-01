@@ -4,6 +4,8 @@ import { AuthRequest, authMiddleware, adminMiddleware } from '../middleware/auth
 import { SOSEscalationEntity, UserEntity, OrganizationEntity } from '../entities';
 import { getWebSocketServer } from '../websocket/server';
 import { pushNotificationService } from '../services/pushNotificationService';
+import { userService } from '../services/userService';
+import { organizationService } from '../services/organizationService';
 
 const router = Router();
 
@@ -26,15 +28,15 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     });
 
     // Get user details for notification
-    const user = await UserEntity.findById(req.user.id);
+    const user = await userService.getUserById(req.user.id);
     const userName = user ? `${user.firstName} ${user.lastName}` : 'Unknown User';
 
     // Get organization members for notification
-    const org = await OrganizationEntity.findById(req.user.orgId);
-    const members = org ? await UserEntity.findByOrgId(req.user.orgId) : [];
-    const memberIds = members
-      .filter((m) => m.id !== req.user?.id) // Don't notify the SOS initiator
-      .map((m) => m.id);
+    const org = await organizationService.getOrganizationById(req.user.orgId);
+    const { users: members } = await userService.getOrganizationUsers(req.user.orgId, { page: 1, pageSize: 1000 });
+    const memberIds = (members as any[])
+      .filter((m: any) => m.id !== req.user?.id) // Don't notify the SOS initiator
+      .map((m: any) => m.id);
 
     // Send push notifications
     try {
@@ -92,7 +94,7 @@ router.get('/escalations', authMiddleware, adminMiddleware, async (req: AuthRequ
 
     const formattedEscalations = await Promise.all(
       escalations.map(async (s) => {
-        const user = await UserEntity.findById(s.userId);
+        const user = await userService.getUserById(s.userId);
         return {
           id: s.id,
           userId: s.userId,

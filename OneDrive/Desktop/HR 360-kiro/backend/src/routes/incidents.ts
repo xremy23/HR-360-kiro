@@ -5,6 +5,8 @@ import { validateAlertSeverity } from '../utils/validators';
 import { IncidentEntity, CheckInEntity, UserEntity, OrganizationEntity } from '../entities';
 import { getWebSocketServer } from '../websocket/server';
 import { pushNotificationService } from '../services/pushNotificationService';
+import { userService } from '../services/userService';
+import { organizationService } from '../services/organizationService';
 
 const router = Router();
 
@@ -67,9 +69,9 @@ router.post('/', authMiddleware, adminMiddleware, async (req: AuthRequest, res: 
     });
 
     // Get organization members for notification
-    const org = await OrganizationEntity.findById(req.user.orgId);
-    const members = org ? await UserEntity.findByOrgId(req.user.orgId) : [];
-    const memberIds = members.map((m) => m.id);
+    const org = await organizationService.getOrganizationById(req.user.orgId);
+    const { users: members } = await userService.getOrganizationUsers(req.user.orgId, { page: 1, pageSize: 1000 });
+    const memberIds = (members as any[]).map((m: any) => m.id);
 
     // Send push notifications
     try {

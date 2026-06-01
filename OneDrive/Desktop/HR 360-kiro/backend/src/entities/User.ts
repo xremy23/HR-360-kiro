@@ -42,6 +42,7 @@ export interface UpdateUserInput {
   lastName?: string;
   phone?: string;
   avatarUrl?: string;
+  organizationId?: string;
   departmentId?: string;
   teamId?: string;
   position?: string;

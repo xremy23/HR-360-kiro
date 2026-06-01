@@ -20,10 +20,17 @@ router.get('/', auth_1.authMiddleware, async (req, res) => {
         if (!orgId) {
             return (0, response_1.sendError)(res, 'INVALID_ORG', 'Organization ID required', 400);
         }
-        const guides = await entities_1.KBGuideEntity.findByOrgId(orgId, category, type);
-        const total = guides.length;
-        const paginated = guides.slice(offset, offset + limit);
-        return (0, response_1.sendPaginated)(res, paginated, total, limit, offset, 200);
+        try {
+            const guides = await entities_1.KBGuideEntity.findByOrgId(orgId, category, type);
+            const total = guides.length;
+            const paginated = guides.slice(offset, offset + limit);
+            return (0, response_1.sendPaginated)(res, paginated, total, limit, offset, 200);
+        }
+        catch (dbError) {
+            console.error('Database error retrieving guides:', dbError);
+            // Return empty array if database is unavailable
+            return (0, response_1.sendPaginated)(res, [], 0, limit, offset, 200);
+        }
     }
     catch (error) {
         console.error('Get guides error:', error);
@@ -59,9 +66,17 @@ router.get('/:id/versions', auth_1.authMiddleware, async (req, res) => {
         if (!guide) {
             return (0, response_1.sendError)(res, 'GUIDE_NOT_FOUND', 'Guide not found', 404);
         }
-        // Note: Version history would require additional entity methods
-        // For now, returning the current guide as a single version
-        const versions = [guide];
+        // Return current guide as version history
+        // Note: Full version history would require storing versions in a separate table
+        const versions = [
+            {
+                version: guide.version,
+                title: guide.title,
+                content: guide.content,
+                updatedAt: guide.updatedAt,
+                updatedBy: guide.updatedBy,
+            },
+        ];
         return (0, response_1.sendSuccess)(res, versions, 'Guide versions retrieved successfully', 200);
     }
     catch (error) {
@@ -155,9 +170,21 @@ router.post('/:id/acknowledge', auth_1.authMiddleware, async (req, res) => {
             return (0, response_1.sendError)(res, 'USER_NOT_FOUND', 'User not found', 404);
         }
         const { id } = req.params;
-        // Note: Guide acknowledgment would require additional entity methods
-        // For now, returning success as placeholder
-        return (0, response_1.sendSuccess)(res, {}, 'Guide acknowledged', 200);
+        const guide = await entities_1.KBGuideEntity.findById(id);
+        if (!guide) {
+            return (0, response_1.sendError)(res, 'GUIDE_NOT_FOUND', 'Guide not found', 404);
+        }
+        // Check if already acknowledged
+        const existing = await entities_1.GuideAcknowledgmentEntity.findByUserAndGuide(req.user.id, id);
+        if (existing) {
+            return (0, response_1.sendSuccess)(res, existing, 'Guide already acknowledged', 200);
+        }
+        // Create acknowledgment
+        const acknowledgment = await entities_1.GuideAcknowledgmentEntity.create({
+            userId: req.user.id,
+            guideId: id,
+        });
+        return (0, response_1.sendSuccess)(res, acknowledgment, 'Guide acknowledged successfully', 201);
     }
     catch (error) {
         console.error('Acknowledge guide error:', error);

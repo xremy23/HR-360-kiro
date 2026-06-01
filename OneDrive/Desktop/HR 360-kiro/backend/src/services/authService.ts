@@ -4,6 +4,7 @@ import { emailService } from './emailService';
 import { sessionService } from './sessionService';
 import { logger } from './monitoringService';
 import { userService } from './userService';
+import { UserEntity } from '../entities/User';
 
 export interface MagicLinkPayload {
   email: string;
@@ -134,7 +135,7 @@ class AuthService {
         user: {
           id: user.id,
           email: user.email,
-          name: user.getFullName?.() || user.email,
+          name: user instanceof UserEntity ? user.getFullName() : user.email,
           role: user.role,
         },
       };

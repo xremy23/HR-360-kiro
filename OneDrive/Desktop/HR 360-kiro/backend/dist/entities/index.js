@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SOSEscalationEntity = exports.IncidentEntity = exports.ToBagItemEntity = exports.ContactEntity = exports.AlertEntity = exports.CheckInEntity = exports.KBGuideEntity = exports.OrganizationEntity = exports.UserEntity = void 0;
+exports.ChatMessageEntity = exports.MagicLinkTokenEntity = exports.DeviceTokenEntity = exports.PushNotificationEntity = exports.GuideAcknowledgmentEntity = exports.NotificationEntity = exports.SOSEscalationEntity = exports.IncidentEntity = exports.ToBagItemEntity = exports.ContactEntity = exports.AlertEntity = exports.CheckInEntity = exports.KBGuideEntity = exports.OrganizationEntity = exports.UserEntity = void 0;
 // Central export file for all entities
 var User_1 = require("./User");
 Object.defineProperty(exports, "UserEntity", { enumerable: true, get: function () { return User_1.UserEntity; } });
@@ -20,4 +20,16 @@ var Incident_1 = require("./Incident");
 Object.defineProperty(exports, "IncidentEntity", { enumerable: true, get: function () { return Incident_1.IncidentEntity; } });
 var SOSEscalation_1 = require("./SOSEscalation");
 Object.defineProperty(exports, "SOSEscalationEntity", { enumerable: true, get: function () { return SOSEscalation_1.SOSEscalationEntity; } });
+var Notification_1 = require("./Notification");
+Object.defineProperty(exports, "NotificationEntity", { enumerable: true, get: function () { return Notification_1.NotificationEntity; } });
+var GuideAcknowledgment_1 = require("./GuideAcknowledgment");
+Object.defineProperty(exports, "GuideAcknowledgmentEntity", { enumerable: true, get: function () { return GuideAcknowledgment_1.GuideAcknowledgmentEntity; } });
+var PushNotification_1 = require("./PushNotification");
+Object.defineProperty(exports, "PushNotificationEntity", { enumerable: true, get: function () { return PushNotification_1.PushNotificationEntity; } });
+var DeviceToken_1 = require("./DeviceToken");
+Object.defineProperty(exports, "DeviceTokenEntity", { enumerable: true, get: function () { return DeviceToken_1.DeviceTokenEntity; } });
+var MagicLinkToken_1 = require("./MagicLinkToken");
+Object.defineProperty(exports, "MagicLinkTokenEntity", { enumerable: true, get: function () { return MagicLinkToken_1.MagicLinkTokenEntity; } });
+var ChatMessage_1 = require("./ChatMessage");
+Object.defineProperty(exports, "ChatMessageEntity", { enumerable: true, get: function () { return ChatMessage_1.ChatMessageEntity; } });
 //# sourceMappingURL=index.js.map

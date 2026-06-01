@@ -1,87 +1,322 @@
 "use strict";
+/**
+ * Organization Routes
+ * Handles organization management endpoints
+ */
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = require("express");
-const response_1 = require("../utils/response");
-const auth_1 = require("../middleware/auth");
-const entities_1 = require("../entities");
-const router = (0, express_1.Router)();
+const express_1 = __importDefault(require("express"));
+const authMiddleware_1 = require("../middleware/authMiddleware");
+const organizationService_1 = require("../services/organizationService");
+const userService_1 = require("../services/userService");
+const monitoringService_1 = require("../services/monitoringService");
+const router = express_1.default.Router();
 /**
- * GET /org
- * Get organization
+ * POST /api/org
+ * Create new organization (guest users only)
  */
-router.get('/', auth_1.authMiddleware, async (req, res) => {
+router.post('/', authMiddleware_1.authMiddleware.verifyToken.bind(authMiddleware_1.authMiddleware), async (req, res) => {
     try {
         if (!req.user) {
-            return (0, response_1.sendError)(res, 'USER_NOT_FOUND', 'User not found', 404);
+            return res.status(401).json({
+                success: false,
+                error: {
+                    code: 'NOT_AUTHENTICATED',
+                    message: 'User not authenticated',
+                },
+            });
         }
-        const org = await entities_1.OrganizationEntity.findById(req.user.orgId);
-        if (!org) {
-            return (0, response_1.sendError)(res, 'ORG_NOT_FOUND', 'Organization not found', 404);
+        // Only guest users can create organizations
+        const user = await userService_1.userService.getUserById(req.user.userId);
+        if (!user || user.organizationId) {
+            return res.status(400).json({
+                success: false,
+                error: {
+                    code: 'ALREADY_IN_ORG',
+                    message: 'User is already part of an organization',
+                },
+            });
         }
-        return (0, response_1.sendSuccess)(res, org, 'Organization retrieved successfully', 200);
-    }
-    catch (error) {
-        console.error('Get organization error:', error);
-        return (0, response_1.sendError)(res, 'SERVER_ERROR', 'Failed to retrieve organization', 500);
-    }
-});
-/**
- * GET /org/teams
- * Get organization teams
- */
-router.get('/teams', auth_1.authMiddleware, async (req, res) => {
-    try {
-        if (!req.user) {
-            return (0, response_1.sendError)(res, 'USER_NOT_FOUND', 'User not found', 404);
+        const { name, emailDomain, logoUrl, description } = req.body;
+        // Validate input
+        if (!name || typeof name !== 'string') {
+            return res.status(400).json({
+                success: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'Organization name is required',
+                },
+            });
         }
-        const orgTeams = await entities_1.UserEntity.findByOrgId(req.user.orgId);
-        // Group users by team
-        const teamMap = new Map();
-        orgTeams.forEach((user) => {
-            if (user.teamId) {
-                if (!teamMap.has(user.teamId)) {
-                    teamMap.set(user.teamId, []);
-                }
-                teamMap.get(user.teamId).push(user);
-            }
+        // Check if organization already exists
+        const existingOrg = await organizationService_1.organizationService.getOrganizationByName(name);
+        if (existingOrg) {
+            return res.status(400).json({
+                success: false,
+                error: {
+                    code: 'ORG_EXISTS',
+                    message: 'Organization with this name already exists',
+                },
+            });
+        }
+        // Create organization
+        const organization = await organizationService_1.organizationService.createOrganization({
+            name,
+            emailDomain,
+            logoUrl,
+            description,
+            createdBy: req.user.userId,
         });
-        const teams = Array.from(teamMap.entries()).map(([teamId, members]) => ({
-            id: teamId,
-            memberCount: members.length,
-        }));
-        return (0, response_1.sendSuccess)(res, teams, 'Teams retrieved successfully', 200);
+        // Update user to be admin of new organization
+        await userService_1.userService.updateUser(req.user.userId, {
+            organizationId: organization.id,
+        });
+        monitoringService_1.logger.info('Organization created', { orgId: organization.id, createdBy: req.user.userId });
+        res.status(201).json({
+            success: true,
+            data: organization,
+        });
     }
     catch (error) {
-        console.error('Get teams error:', error);
-        return (0, response_1.sendError)(res, 'SERVER_ERROR', 'Failed to retrieve teams', 500);
+        monitoringService_1.logger.error('Create organization error', { error, userId: req.user?.userId });
+        res.status(500).json({
+            success: false,
+            error: {
+                code: 'ORG_CREATE_FAILED',
+                message: 'Failed to create organization',
+            },
+        });
     }
 });
 /**
- * GET /org/users
- * Get organization users (Admin)
+ * GET /api/org
+ * Get current user's organization
  */
-router.get('/users', auth_1.authMiddleware, auth_1.adminMiddleware, async (req, res) => {
+router.get('/', authMiddleware_1.authMiddleware.verifyToken.bind(authMiddleware_1.authMiddleware), async (req, res) => {
     try {
         if (!req.user) {
-            return (0, response_1.sendError)(res, 'USER_NOT_FOUND', 'User not found', 404);
+            return res.status(401).json({
+                success: false,
+                error: {
+                    code: 'NOT_AUTHENTICATED',
+                    message: 'User not authenticated',
+                },
+            });
         }
-        const { teamId, role } = req.query;
-        const limit = Math.min(parseInt(req.query.limit) || 50, 100);
-        const offset = parseInt(req.query.offset) || 0;
-        let users = await entities_1.UserEntity.findByOrgId(req.user.orgId);
-        if (teamId) {
-            users = users.filter((u) => u.teamId === teamId);
+        const user = await userService_1.userService.getUserById(req.user.userId);
+        if (!user || !user.organizationId) {
+            return res.status(400).json({
+                success: false,
+                error: {
+                    code: 'NO_ORGANIZATION',
+                    message: 'User is not part of an organization',
+                },
+            });
         }
-        if (role) {
-            users = users.filter((u) => u.role === role);
+        const organization = await organizationService_1.organizationService.getOrganizationById(user.organizationId);
+        if (!organization) {
+            return res.status(404).json({
+                success: false,
+                error: {
+                    code: 'ORG_NOT_FOUND',
+                    message: 'Organization not found',
+                },
+            });
         }
-        const total = users.length;
-        const paginated = users.slice(offset, offset + limit);
-        return (0, response_1.sendPaginated)(res, paginated, total, limit, offset, 200);
+        res.json({
+            success: true,
+            data: organization,
+        });
     }
     catch (error) {
-        console.error('Get organization users error:', error);
-        return (0, response_1.sendError)(res, 'SERVER_ERROR', 'Failed to retrieve organization users', 500);
+        monitoringService_1.logger.error('Get organization error', { error, userId: req.user?.userId });
+        res.status(500).json({
+            success: false,
+            error: {
+                code: 'ORG_FETCH_FAILED',
+                message: 'Failed to fetch organization',
+            },
+        });
+    }
+});
+/**
+ * GET /api/org/:id
+ * Get organization by ID (admin only)
+ */
+router.get('/:id', authMiddleware_1.authMiddleware.verifyToken.bind(authMiddleware_1.authMiddleware), authMiddleware_1.authMiddleware.requireRole('admin'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const organization = await organizationService_1.organizationService.getOrganizationById(id);
+        if (!organization) {
+            return res.status(404).json({
+                success: false,
+                error: {
+                    code: 'ORG_NOT_FOUND',
+                    message: 'Organization not found',
+                },
+            });
+        }
+        res.json({
+            success: true,
+            data: organization,
+        });
+    }
+    catch (error) {
+        monitoringService_1.logger.error('Get organization by ID error', { error, userId: req.user?.userId });
+        res.status(500).json({
+            success: false,
+            error: {
+                code: 'ORG_FETCH_FAILED',
+                message: 'Failed to fetch organization',
+            },
+        });
+    }
+});
+/**
+ * PUT /api/org
+ * Update current user's organization (admin only)
+ */
+router.put('/', authMiddleware_1.authMiddleware.verifyToken.bind(authMiddleware_1.authMiddleware), authMiddleware_1.authMiddleware.requireRole('admin'), async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({
+                success: false,
+                error: {
+                    code: 'NOT_AUTHENTICATED',
+                    message: 'User not authenticated',
+                },
+            });
+        }
+        const user = await userService_1.userService.getUserById(req.user.userId);
+        if (!user || !user.organizationId) {
+            return res.status(400).json({
+                success: false,
+                error: {
+                    code: 'NO_ORGANIZATION',
+                    message: 'User is not part of an organization',
+                },
+            });
+        }
+        const { name, emailDomain, logoUrl, description } = req.body;
+        const updatedOrg = await organizationService_1.organizationService.updateOrganization(user.organizationId, {
+            name,
+            emailDomain,
+            logoUrl,
+            description,
+        });
+        monitoringService_1.logger.info('Organization updated', { orgId: user.organizationId, updatedBy: req.user.userId });
+        res.json({
+            success: true,
+            data: updatedOrg,
+        });
+    }
+    catch (error) {
+        monitoringService_1.logger.error('Update organization error', { error, userId: req.user?.userId });
+        res.status(500).json({
+            success: false,
+            error: {
+                code: 'ORG_UPDATE_FAILED',
+                message: 'Failed to update organization',
+            },
+        });
+    }
+});
+/**
+ * GET /api/org/stats
+ * Get organization statistics
+ */
+router.get('/stats', authMiddleware_1.authMiddleware.verifyToken.bind(authMiddleware_1.authMiddleware), authMiddleware_1.authMiddleware.requireRole('admin'), async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({
+                success: false,
+                error: {
+                    code: 'NOT_AUTHENTICATED',
+                    message: 'User not authenticated',
+                },
+            });
+        }
+        const user = await userService_1.userService.getUserById(req.user.userId);
+        if (!user || !user.organizationId) {
+            return res.status(400).json({
+                success: false,
+                error: {
+                    code: 'NO_ORGANIZATION',
+                    message: 'User is not part of an organization',
+                },
+            });
+        }
+        const [userCount, teamCount, departmentCount] = await Promise.all([
+            organizationService_1.organizationService.getOrganizationUserCount(user.organizationId),
+            organizationService_1.organizationService.getOrganizationTeamCount(user.organizationId),
+            organizationService_1.organizationService.getOrganizationDepartmentCount(user.organizationId),
+        ]);
+        res.json({
+            success: true,
+            data: {
+                userCount,
+                teamCount,
+                departmentCount,
+            },
+        });
+    }
+    catch (error) {
+        monitoringService_1.logger.error('Get organization stats error', { error, userId: req.user?.userId });
+        res.status(500).json({
+            success: false,
+            error: {
+                code: 'STATS_FETCH_FAILED',
+                message: 'Failed to fetch organization statistics',
+            },
+        });
+    }
+});
+/**
+ * POST /api/org/join
+ * Join organization with invite code
+ */
+router.post('/join', authMiddleware_1.authMiddleware.verifyToken.bind(authMiddleware_1.authMiddleware), async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({
+                success: false,
+                error: {
+                    code: 'NOT_AUTHENTICATED',
+                    message: 'User not authenticated',
+                },
+            });
+        }
+        const { inviteCode } = req.body;
+        if (!inviteCode || typeof inviteCode !== 'string') {
+            return res.status(400).json({
+                success: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'Invite code is required',
+                },
+            });
+        }
+        // TODO: Implement invite code validation and organization joining
+        // This will be implemented in Phase 2
+        res.status(501).json({
+            success: false,
+            error: {
+                code: 'NOT_IMPLEMENTED',
+                message: 'Organization joining is not yet implemented',
+            },
+        });
+    }
+    catch (error) {
+        monitoringService_1.logger.error('Join organization error', { error, userId: req.user?.userId });
+        res.status(500).json({
+            success: false,
+            error: {
+                code: 'JOIN_ORG_FAILED',
+                message: 'Failed to join organization',
+            },
+        });
     }
 });
 exports.default = router;

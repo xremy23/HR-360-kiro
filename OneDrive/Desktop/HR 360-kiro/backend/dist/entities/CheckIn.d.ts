@@ -18,5 +18,6 @@ export declare class CheckInEntity {
     static findByIncidentId(incidentId: string): Promise<CheckIn[]>;
     static countByIncidentIdAndStatus(incidentId: string, status: string): Promise<number>;
     static getIncidentSummary(incidentId: string): Promise<any>;
+    static update(id: string, data: Partial<Omit<CheckIn, 'id' | 'timestamp'>>): Promise<CheckIn>;
 }
 //# sourceMappingURL=CheckIn.d.ts.map

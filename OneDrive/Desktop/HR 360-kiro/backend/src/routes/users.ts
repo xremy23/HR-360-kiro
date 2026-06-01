@@ -1,217 +1,309 @@
-import { Router, Response } from 'express';
-import { sendSuccess, sendError } from '../utils/response';
-import { AuthRequest, authMiddleware } from '../middleware/auth';
-import { validateCoordinates } from '../utils/validators';
-import { UserEntity } from '../entities/User';
+/**
+ * User Routes
+ * Handles user profile and management endpoints
+ */
 
-const router = Router();
+import express, { Request, Response } from 'express';
+import { authMiddleware, AuthRequest } from '../middleware/authMiddleware';
+import { userService } from '../services/userService';
+import { logger } from '../services/monitoringService';
+
+const router = express.Router();
 
 /**
- * GET /users/profile
- * Get user profile (returns data from JWT token if DB unavailable)
+ * GET /api/users/profile
+ * Get current user profile
  */
-router.get('/profile', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/profile', authMiddleware.verifyToken.bind(authMiddleware), async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'NOT_AUTHENTICATED',
+          message: 'User not authenticated',
+        },
+      });
     }
 
-    // Try to get full user data from database
-    try {
-      const user = await UserEntity.findById(req.user.id);
-      if (user) {
-        return sendSuccess(res, user, 'Profile retrieved successfully', 200);
-      }
-    } catch (dbError) {
-      console.warn('⚠️  Database unavailable, returning user data from JWT token', dbError);
+    const userProfile = await userService.getUserProfile(req.user.userId);
+
+    if (!userProfile) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'USER_NOT_FOUND',
+          message: 'User profile not found',
+        },
+      });
     }
 
-    // Fallback: Return user data from JWT token (includes id, email, role, orgId, teamId)
-    // This allows login to work even when database is unavailable
-    const userFromToken = {
-      id: req.user.id,
-      email: req.user.email,
-      firstName: req.user.firstName || '',
-      lastName: req.user.lastName || '',
-      role: req.user.role || 'employee',
-      orgId: req.user.orgId,
-      teamId: req.user.teamId || null,
-      biometricEnabled: req.user.biometricEnabled || false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    return sendSuccess(res, userFromToken, 'Profile retrieved from session (DB unavailable)', 200);
+    res.json({
+      success: true,
+      data: userProfile,
+    });
   } catch (error) {
-    console.error('Get profile error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to retrieve profile', 500);
+    logger.error('Get user profile error', { error, userId: req.user?.userId });
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'PROFILE_FETCH_FAILED',
+        message: 'Failed to fetch user profile',
+      },
+    });
   }
 });
 
 /**
- * PUT /users/profile
- * Update user profile
+ * PUT /api/users/profile
+ * Update current user profile
  */
-router.put('/profile', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.put('/profile', authMiddleware.verifyToken.bind(authMiddleware), async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'NOT_AUTHENTICATED',
+          message: 'User not authenticated',
+        },
+      });
     }
 
-    const { firstName, lastName, address, latitude, longitude } = req.body;
+    const { firstName, lastName, phone, avatarUrl, position, address, personalEmergencyContact } = req.body;
 
-    // Validate coordinates if provided
-    if (latitude !== undefined || longitude !== undefined) {
-      if (!validateCoordinates(latitude || 0, longitude || 0)) {
-        return sendError(res, 'INVALID_COORDINATES', 'Invalid coordinates', 400);
-      }
+    // Validate input
+    if (firstName && typeof firstName !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'firstName must be a string',
+        },
+      });
     }
 
-    const updatedUser = await UserEntity.update(req.user.id, {
+    const updatedUser = await userService.updateUser(req.user.userId, {
       firstName,
       lastName,
+      phone,
+      avatarUrl,
+      position,
       address,
-      latitude,
-      longitude,
+      personalEmergencyContact,
     });
 
-    if (!updatedUser) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
-    }
+    logger.info('User profile updated', { userId: req.user.userId });
 
-    return sendSuccess(res, updatedUser, 'Profile updated successfully', 200);
-  } catch (error) {
-    console.error('Update profile error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to update profile', 500);
-  }
-});
-
-/**
- * POST /users/biometric/enable
- * Enable biometric authentication
- */
-router.post('/biometric/enable', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
-    }
-
-    const { type } = req.body;
-
-    if (!['faceId', 'fingerprint', 'both'].includes(type)) {
-      return sendError(res, 'INVALID_TYPE', 'Invalid biometric type', 400);
-    }
-
-    const updatedUser = await UserEntity.update(req.user.id, {
-      biometricEnabled: true,
+    res.json({
+      success: true,
+      data: updatedUser,
     });
-
-    if (!updatedUser) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
-    }
-
-    return sendSuccess(res, { biometricType: type }, 'Biometric authentication enabled', 200);
   } catch (error) {
-    console.error('Enable biometric error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to enable biometric', 500);
-  }
-});
-
-/**
- * POST /users/biometric/disable
- * Disable biometric authentication
- */
-router.post('/biometric/disable', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
-    }
-
-    const updatedUser = await UserEntity.update(req.user.id, {
-      biometricEnabled: false,
+    logger.error('Update user profile error', { error, userId: req.user?.userId });
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'PROFILE_UPDATE_FAILED',
+        message: 'Failed to update user profile',
+      },
     });
-
-    if (!updatedUser) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
-    }
-
-    return sendSuccess(res, {}, 'Biometric authentication disabled', 200);
-  } catch (error) {
-    console.error('Disable biometric error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to disable biometric', 500);
   }
 });
 
 /**
- * POST /users/camera/enable
- * Enable camera access
+ * GET /api/users/:id
+ * Get user by ID (admin only)
  */
-router.post('/camera/enable', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
-    }
+router.get(
+  '/:id',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  authMiddleware.requireRole('admin', 'hr'),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
 
-    // Store camera permission in user preferences (could be extended to database)
-    return sendSuccess(res, { cameraEnabled: true }, 'Camera access enabled', 200);
-  } catch (error) {
-    console.error('Enable camera error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to enable camera', 500);
+      const user = await userService.getUserById(id);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: {
+            code: 'USER_NOT_FOUND',
+            message: 'User not found',
+          },
+        });
+      }
+
+      res.json({
+        success: true,
+        data: user,
+      });
+    } catch (error) {
+      logger.error('Get user by ID error', { error, userId: req.user?.userId });
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'USER_FETCH_FAILED',
+          message: 'Failed to fetch user',
+        },
+      });
+    }
   }
-});
+);
 
 /**
- * POST /users/camera/disable
- * Disable camera access
+ * GET /api/users
+ * Get organization users (paginated)
  */
-router.post('/camera/disable', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
-    }
+router.get(
+  '/',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: {
+            code: 'NOT_AUTHENTICATED',
+            message: 'User not authenticated',
+          },
+        });
+      }
 
-    // Remove camera permission from user preferences
-    return sendSuccess(res, { cameraEnabled: false }, 'Camera access disabled', 200);
-  } catch (error) {
-    console.error('Disable camera error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to disable camera', 500);
+      // Get user to find their organization
+      const user = await userService.getUserById(req.user.userId);
+      if (!user || !user.organizationId) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'NO_ORGANIZATION',
+            message: 'User is not part of an organization',
+          },
+        });
+      }
+
+      const page = parseInt(req.query.page as string) || 1;
+      const pageSize = parseInt(req.query.pageSize as string) || 20;
+      const search = req.query.search as string;
+      const role = req.query.role as string;
+
+      const { users, total } = await userService.getOrganizationUsers(user.organizationId, {
+        page,
+        pageSize,
+        search,
+        role,
+      });
+
+      res.json({
+        success: true,
+        data: users,
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages: Math.ceil(total / pageSize),
+        },
+      });
+    } catch (error) {
+      logger.error('Get organization users error', { error, userId: req.user?.userId });
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'USERS_FETCH_FAILED',
+          message: 'Failed to fetch users',
+        },
+      });
+    }
   }
-});
+);
 
 /**
- * POST /users/location/enable
- * Enable location tracking
+ * PUT /api/users/:id
+ * Update user (admin/hr only)
  */
-router.post('/location/enable', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
-    }
+router.put(
+  '/:id',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  authMiddleware.requireRole('admin', 'hr'),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { firstName, lastName, phone, position, departmentId, teamId, address, personalEmergencyContact, isActive } = req.body;
 
-    // Store location permission in user preferences
-    return sendSuccess(res, { locationEnabled: true }, 'Location tracking enabled', 200);
-  } catch (error) {
-    console.error('Enable location error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to enable location', 500);
+      const updatedUser = await userService.updateUser(id, {
+        firstName,
+        lastName,
+        phone,
+        position,
+        departmentId,
+        teamId,
+        address,
+        personalEmergencyContact,
+        isActive,
+      });
+
+      logger.info('User updated by admin', { updatedUserId: id, adminId: req.user?.userId });
+
+      res.json({
+        success: true,
+        data: updatedUser,
+      });
+    } catch (error) {
+      logger.error('Update user error', { error, userId: req.user?.userId });
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'USER_UPDATE_FAILED',
+          message: 'Failed to update user',
+        },
+      });
+    }
   }
-});
+);
 
 /**
- * POST /users/location/disable
- * Disable location tracking
+ * DELETE /api/users/:id
+ * Delete user (admin only)
  */
-router.post('/location/disable', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
-    }
+router.delete(
+  '/:id',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  authMiddleware.requireRole('admin'),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
 
-    // Remove location permission from user preferences
-    return sendSuccess(res, { locationEnabled: false }, 'Location tracking disabled', 200);
-  } catch (error) {
-    console.error('Disable location error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to disable location', 500);
+      // Prevent self-deletion
+      if (id === req.user?.userId) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'CANNOT_DELETE_SELF',
+            message: 'Cannot delete your own account',
+          },
+        });
+      }
+
+      await userService.deleteUser(id);
+
+      logger.info('User deleted', { deletedUserId: id, adminId: req.user?.userId });
+
+      res.json({
+        success: true,
+        message: 'User deleted successfully',
+      });
+    } catch (error) {
+      logger.error('Delete user error', { error, userId: req.user?.userId });
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'USER_DELETE_FAILED',
+          message: 'Failed to delete user',
+        },
+      });
+    }
   }
-});
+);
 
 export default router;

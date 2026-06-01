@@ -4,6 +4,10 @@ const express_1 = require("express");
 const response_1 = require("../utils/response");
 const auth_1 = require("../middleware/auth");
 const entities_1 = require("../entities");
+const server_1 = require("../websocket/server");
+const pushNotificationService_1 = require("../services/pushNotificationService");
+const userService_1 = require("../services/userService");
+const organizationService_1 = require("../services/organizationService");
 const router = (0, express_1.Router)();
 /**
  * POST /sos
@@ -20,6 +24,40 @@ router.post('/', auth_1.authMiddleware, async (req, res) => {
             notes,
             status: 'pending',
         });
+        // Get user details for notification
+        const user = await userService_1.userService.getUserById(req.user.id);
+        const userName = user ? `${user.firstName} ${user.lastName}` : 'Unknown User';
+        // Get organization members for notification
+        const org = await organizationService_1.organizationService.getOrganizationById(req.user.orgId);
+        const { users: members } = await userService_1.userService.getOrganizationUsers(req.user.orgId, { page: 1, pageSize: 1000 });
+        const memberIds = members
+            .filter((m) => m.id !== req.user?.id) // Don't notify the SOS initiator
+            .map((m) => m.id);
+        // Send push notifications
+        try {
+            await pushNotificationService_1.pushNotificationService.sendSOSNotification(memberIds, req.user.id, userName);
+            console.log(`SOS push notifications sent to ${memberIds.length} members`);
+        }
+        catch (pushError) {
+            console.warn('Push notification failed:', pushError);
+            // Don't fail the request if push notifications fail
+        }
+        // Broadcast via WebSocket
+        try {
+            const wsServer = (0, server_1.getWebSocketServer)();
+            wsServer.broadcastSOSCreated(sos);
+            wsServer.broadcastNotificationToOrganization(req.user.orgId, {
+                type: 'sos',
+                sosId: sos.id,
+                userId: req.user.id,
+                userName,
+                notes,
+            });
+        }
+        catch (wsError) {
+            console.warn('WebSocket broadcast failed:', wsError);
+            // Don't fail the request if WebSocket fails
+        }
         return (0, response_1.sendSuccess)(res, sos, 'SOS triggered successfully', 201);
     }
     catch (error) {
@@ -42,7 +80,7 @@ router.get('/escalations', auth_1.authMiddleware, auth_1.adminMiddleware, async 
         }
         const escalations = await entities_1.SOSEscalationEntity.findByOrgId(orgId);
         const formattedEscalations = await Promise.all(escalations.map(async (s) => {
-            const user = await entities_1.UserEntity.findById(s.userId);
+            const user = await userService_1.userService.getUserById(s.userId);
             return {
                 id: s.id,
                 userId: s.userId,

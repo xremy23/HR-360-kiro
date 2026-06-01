@@ -4,6 +4,7 @@ import { AuthRequest, authMiddleware, managerMiddleware } from '../middleware/au
 import { validateCheckInStatus, validateCoordinates } from '../utils/validators';
 import { CheckInEntity, UserEntity } from '../entities';
 import { getWebSocketServer } from '../websocket/server';
+import { userService } from '../services/userService';
 
 const router = Router();
 
@@ -137,7 +138,7 @@ router.get('/team/:teamId', authMiddleware, managerMiddleware, async (req: AuthR
 
     const formattedCheckIns = await Promise.all(
       checkIns.map(async (c) => {
-        const user = await UserEntity.findById(c.userId);
+        const user = await userService.getUserById(c.userId);
         return {
           userId: c.userId,
           userName: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
@@ -191,7 +192,7 @@ router.get('/incident/:incidentId', authMiddleware, async (req: AuthRequest, res
 
     const formattedCheckIns = await Promise.all(
       incidentCheckIns.map(async (c) => {
-        const user = await UserEntity.findById(c.userId);
+        const user = await userService.getUserById(c.userId);
         return {
           userId: c.userId,
           userName: user ? `${user.firstName} ${user.lastName}` : 'Unknown',

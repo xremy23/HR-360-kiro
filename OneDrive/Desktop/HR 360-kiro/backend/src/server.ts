@@ -25,6 +25,9 @@ import monitoringRoutes from './routes/monitoring';
 import superadminRoutes from './routes/superadmin';
 import chatbotRoutes from './routes/chatbot';
 
+// Import middleware
+import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+
 const app = express();
 const httpServer = createServer(app);
 const PORT = process.env.PORT || process.env.API_PORT || 3000;
@@ -206,46 +209,10 @@ apiRouter.use('/superadmin', superadminRoutes);
 app.use('/api', apiRouter);
 
 // 404 handler
-app.use((req, res) => {
-  monitoringService.logSecurityEvent('404_not_found', {
-    path: req.path,
-    method: req.method,
-  }, req);
-  
-  res.status(404).json({
-    success: false,
-    error: {
-      code: 'NOT_FOUND',
-      message: 'Endpoint not found',
-    },
-    statusCode: 404,
-  });
-});
+app.use(notFoundHandler);
 
 // Enhanced error handler with sanitized messages
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  logger.error('Unhandled error', {
-    error: err.message,
-    stack: err.stack,
-    path: req.path,
-    method: req.method,
-    userId: (req as any).user?.id,
-    requestId: (req as any).requestId,
-  });
-  
-  // Sanitize error messages for production
-  const isDevelopment = process.env.NODE_ENV === 'development';
-  const errorMessage = isDevelopment ? err.message : 'Internal server error';
-  
-  res.status(err.statusCode || 500).json({
-    success: false,
-    error: {
-      code: err.code || 'SERVER_ERROR',
-      message: errorMessage,
-    },
-    statusCode: err.statusCode || 500,
-  });
-});
+app.use(errorHandler);
 
 // Initialize services and start server
 async function start() {

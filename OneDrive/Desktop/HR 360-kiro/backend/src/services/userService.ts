@@ -217,6 +217,27 @@ class UserService {
   }
 
   /**
+   * Update user role
+   */
+  async updateUserRole(id: string, role: string): Promise<User> {
+    try {
+      const result = await query(
+        'UPDATE users SET role = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+        [role, id]
+      );
+
+      if (result.rows.length === 0) {
+        throw new Error('User not found');
+      }
+
+      return this.mapRowToUser(result.rows[0]);
+    } catch (error) {
+      logger.error('Failed to update user role', { id, role, error });
+      throw error;
+    }
+  }
+
+  /**
    * Update last login
    */
   async updateLastLogin(id: string): Promise<void> {
