@@ -1,223 +1,332 @@
-import { Router, Response } from 'express';
-import { sendSuccess, sendError, sendPaginated } from '../utils/response';
-import { AuthRequest, authMiddleware, adminMiddleware } from '../middleware/auth';
-import { KBGuideEntity, GuideAcknowledgmentEntity } from '../entities';
+/**
+ * Knowledge Base Routes
+ * Handles KB guides and categories
+ */
 
-const router = Router();
+import express, { Response } from 'express';
+import { authMiddleware, AuthRequest } from '../middleware/authMiddleware';
+import { kbService } from '../services/kbService';
+import { userService } from '../services/userService';
+import { logger } from '../services/monitoringService';
+
+const router = express.Router();
 
 /**
- * GET /kb/guides
- * Get KB guides
+ * GET /api/kb/guides
+ * Get all guides for organization
  */
-router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
-    }
-
-    const { orgId, category, type } = req.query;
-    const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
-    const offset = parseInt(req.query.offset as string) || 0;
-
-    if (!orgId) {
-      return sendError(res, 'INVALID_ORG', 'Organization ID required', 400);
-    }
-
+router.get(
+  '/guides',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response, next) => {
     try {
-      const guides = await KBGuideEntity.findByOrgId(orgId as string, category as string, type as string);
-      const total = guides.length;
-      const paginated = guides.slice(offset, offset + limit);
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'NOT_AUTHENTICATED', message: 'User not authenticated' },
+        });
+      }
 
-      return sendPaginated(res, paginated, total, limit, offset, 200);
-    } catch (dbError) {
-      console.error('Database error retrieving guides:', dbError);
-      // Return empty array if database is unavailable
-      return sendPaginated(res, [], 0, limit, offset, 200);
+      const user = await userService.getUserById(req.user.userId);
+      if (!user || !user.organizationId) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'NO_ORGANIZATION', message: 'User is not part of an organization' },
+        });
+      }
+
+      const page = parseInt(req.query.page as string) || 1;
+      const pageSize = parseInt(req.query.pageSize as string) || 20;
+      const search = req.query.search as string;
+      const categoryId = req.query.categoryId as string;
+      const isPublished = req.query.isPublished !== 'false';
+
+      const { guides, total } = await kbService.getGuides(user.organizationId, {
+        page,
+        pageSize,
+        search,
+        categoryId,
+        isPublished,
+      });
+
+      res.json({
+        success: true,
+        data: guides,
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages: Math.ceil(total / pageSize),
+        },
+      });
+    } catch (error) {
+      logger.error('Failed to get guides', { error, userId: req.user?.userId });
+      next(error);
     }
-  } catch (error) {
-    console.error('Get guides error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to retrieve guides', 500);
   }
-});
+);
 
 /**
- * GET /kb/guides/:id
- * Get guide details
+ * GET /api/kb/guides/:id
+ * Get guide by ID
  */
-router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const { id } = req.params;
+router.get(
+  '/guides/:id',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response, next) => {
+    try {
+      const { id } = req.params;
 
-    const guide = await KBGuideEntity.findById(id);
+      const guide = await kbService.getGuideById(id);
 
-    if (!guide) {
-      return sendError(res, 'GUIDE_NOT_FOUND', 'Guide not found', 404);
+      if (!guide) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'GUIDE_NOT_FOUND', message: 'Guide not found' },
+        });
+      }
+
+      res.json({ success: true, data: guide });
+    } catch (error) {
+      logger.error('Failed to get guide', { error, guideId: req.params.id });
+      next(error);
     }
-
-    return sendSuccess(res, guide, 'Guide retrieved successfully', 200);
-  } catch (error) {
-    console.error('Get guide error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to retrieve guide', 500);
   }
-});
+);
 
 /**
- * GET /kb/guides/:id/versions
- * Get guide version history
+ * POST /api/kb/guides
+ * Create guide (admin/hr only)
  */
-router.get('/:id/versions', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const { id } = req.params;
+router.post(
+  '/guides',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  authMiddleware.requireRole('admin', 'hr'),
+  async (req: AuthRequest, res: Response, next) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'NOT_AUTHENTICATED', message: 'User not authenticated' },
+        });
+      }
 
-    const guide = await KBGuideEntity.findById(id);
+      const user = await userService.getUserById(req.user.userId);
+      if (!user || !user.organizationId) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'NO_ORGANIZATION', message: 'User is not part of an organization' },
+        });
+      }
 
-    if (!guide) {
-      return sendError(res, 'GUIDE_NOT_FOUND', 'Guide not found', 404);
+      const { title, description, content, author, tags, categoryId, isPublished } = req.body;
+
+      if (!title || !description || !content) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_INPUT', message: 'Missing required fields' },
+        });
+      }
+
+      const guide = await kbService.createGuide({
+        organizationId: user.organizationId,
+        title,
+        description,
+        content,
+        author: author || req.user.email,
+        tags,
+        categoryId,
+        isPublished,
+      });
+
+      logger.info('Guide created', { guideId: guide.id, createdBy: req.user.userId });
+
+      res.status(201).json({ success: true, data: guide });
+    } catch (error) {
+      logger.error('Failed to create guide', { error, userId: req.user?.userId });
+      next(error);
     }
-
-    // Return current guide as version history
-    // Note: Full version history would require storing versions in a separate table
-    const versions = [
-      {
-        version: guide.version,
-        title: guide.title,
-        content: guide.content,
-        updatedAt: guide.updatedAt,
-        updatedBy: guide.updatedBy,
-      },
-    ];
-
-    return sendSuccess(res, versions, 'Guide versions retrieved successfully', 200);
-  } catch (error) {
-    console.error('Get guide versions error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to retrieve guide versions', 500);
   }
-});
+);
 
 /**
- * POST /kb/guides
- * Create KB guide (Admin)
+ * PUT /api/kb/guides/:id
+ * Update guide (admin/hr only)
  */
-router.post('/', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
+router.put(
+  '/guides/:id',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  authMiddleware.requireRole('admin', 'hr'),
+  async (req: AuthRequest, res: Response, next) => {
+    try {
+      const { id } = req.params;
+      const { title, description, content, author, tags, isPublished, isActive } = req.body;
+
+      const guide = await kbService.updateGuide(id, {
+        title,
+        description,
+        content,
+        author,
+        tags,
+        isPublished,
+        isActive,
+      });
+
+      if (!guide) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'GUIDE_NOT_FOUND', message: 'Guide not found' },
+        });
+      }
+
+      logger.info('Guide updated', { guideId: id, updatedBy: req.user?.userId });
+
+      res.json({ success: true, data: guide });
+    } catch (error) {
+      logger.error('Failed to update guide', { error, guideId: req.params.id });
+      next(error);
     }
-
-    const { title, category, type, content, mediaUrls, isRequired } = req.body;
-
-    if (!title || !category || !type || !content) {
-      return sendError(res, 'INVALID_INPUT', 'Missing required fields', 400);
-    }
-
-    const guide = await KBGuideEntity.create({
-      orgId: req.user.orgId,
-      title,
-      category,
-      type,
-      content,
-      mediaUrls: mediaUrls || [],
-      isRequired: isRequired || false,
-      createdBy: req.user.id,
-      updatedBy: req.user.id,
-    });
-
-    return sendSuccess(res, guide, 'Guide created successfully', 201);
-  } catch (error) {
-    console.error('Create guide error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to create guide', 500);
   }
-});
+);
 
 /**
- * PUT /kb/guides/:id
- * Update KB guide (Admin)
+ * DELETE /api/kb/guides/:id
+ * Delete guide (admin only)
  */
-router.put('/:id', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
+router.delete(
+  '/guides/:id',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  authMiddleware.requireRole('admin'),
+  async (req: AuthRequest, res: Response, next) => {
+    try {
+      const { id } = req.params;
+
+      await kbService.deleteGuide(id);
+
+      logger.info('Guide deleted', { guideId: id, deletedBy: req.user?.userId });
+
+      res.json({ success: true, message: 'Guide deleted successfully' });
+    } catch (error) {
+      logger.error('Failed to delete guide', { error, guideId: req.params.id });
+      next(error);
     }
-
-    const { id } = req.params;
-    const { title, content, isRequired } = req.body;
-
-    const guide = await KBGuideEntity.findById(id);
-
-    if (!guide) {
-      return sendError(res, 'GUIDE_NOT_FOUND', 'Guide not found', 404);
-    }
-
-    const updated = await KBGuideEntity.update(id, {
-      title: title || guide.title,
-      content: content || guide.content,
-      isRequired: isRequired !== undefined ? isRequired : guide.isRequired,
-    }, req.user.id);
-
-    return sendSuccess(res, updated, 'Guide updated successfully', 200);
-  } catch (error) {
-    console.error('Update guide error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to update guide', 500);
   }
-});
+);
 
 /**
- * DELETE /kb/guides/:id
- * Delete KB guide (Admin)
+ * GET /api/kb/categories
+ * Get categories for organization
  */
-router.delete('/:id', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const { id } = req.params;
+router.get(
+  '/categories',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response, next) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'NOT_AUTHENTICATED', message: 'User not authenticated' },
+        });
+      }
 
-    const deleted = await KBGuideEntity.delete(id);
+      const user = await userService.getUserById(req.user.userId);
+      if (!user || !user.organizationId) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'NO_ORGANIZATION', message: 'User is not part of an organization' },
+        });
+      }
 
-    if (!deleted) {
-      return sendError(res, 'GUIDE_NOT_FOUND', 'Guide not found', 404);
+      const categories = await kbService.getCategories(user.organizationId);
+
+      res.json({ success: true, data: categories });
+    } catch (error) {
+      logger.error('Failed to get categories', { error, userId: req.user?.userId });
+      next(error);
     }
-
-    return sendSuccess(res, {}, 'Guide deleted successfully', 200);
-  } catch (error) {
-    console.error('Delete guide error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to delete guide', 500);
   }
-});
+);
 
 /**
- * POST /kb/guides/:id/acknowledge
+ * POST /api/kb/categories
+ * Create category (admin/hr only)
+ */
+router.post(
+  '/categories',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  authMiddleware.requireRole('admin', 'hr'),
+  async (req: AuthRequest, res: Response, next) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'NOT_AUTHENTICATED', message: 'User not authenticated' },
+        });
+      }
+
+      const user = await userService.getUserById(req.user.userId);
+      if (!user || !user.organizationId) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'NO_ORGANIZATION', message: 'User is not part of an organization' },
+        });
+      }
+
+      const { name, description, icon, order } = req.body;
+
+      if (!name) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_INPUT', message: 'Category name is required' },
+        });
+      }
+
+      const category = await kbService.createCategory({
+        organizationId: user.organizationId,
+        name,
+        description,
+        icon,
+        order,
+      });
+
+      logger.info('Category created', { categoryId: category.id, createdBy: req.user.userId });
+
+      res.status(201).json({ success: true, data: category });
+    } catch (error) {
+      logger.error('Failed to create category', { error, userId: req.user?.userId });
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/kb/guides/:id/acknowledge
  * Acknowledge guide
  */
-router.post('/:id/acknowledge', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
+router.post(
+  '/guides/:id/acknowledge',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response, next) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'NOT_AUTHENTICATED', message: 'User not authenticated' },
+        });
+      }
+
+      const { id } = req.params;
+
+      const acknowledgment = await kbService.acknowledgeGuide(req.user.userId, id);
+
+      logger.info('Guide acknowledged', { guideId: id, userId: req.user.userId });
+
+      res.json({ success: true, data: acknowledgment });
+    } catch (error) {
+      logger.error('Failed to acknowledge guide', { error, guideId: req.params.id });
+      next(error);
     }
-
-    const { id } = req.params;
-
-    const guide = await KBGuideEntity.findById(id);
-
-    if (!guide) {
-      return sendError(res, 'GUIDE_NOT_FOUND', 'Guide not found', 404);
-    }
-
-    // Check if already acknowledged
-    const existing = await GuideAcknowledgmentEntity.findByUserAndGuide(req.user.id, id);
-
-    if (existing) {
-      return sendSuccess(res, existing, 'Guide already acknowledged', 200);
-    }
-
-    // Create acknowledgment
-    const acknowledgment = await GuideAcknowledgmentEntity.create({
-      userId: req.user.id,
-      guideId: id,
-    });
-
-    return sendSuccess(res, acknowledgment, 'Guide acknowledged successfully', 201);
-  } catch (error) {
-    console.error('Acknowledge guide error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to acknowledge guide', 500);
   }
-});
+);
 
 export default router;
