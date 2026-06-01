@@ -69,6 +69,18 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         logo: logo || null,
       });
 
+      // Update user's orgId to link them to the organization
+      try {
+        await UserEntity.update(req.user.id, {
+          orgId: org.id,
+          role: 'admin', // User who creates org becomes admin
+        });
+        console.log(`✅ User ${req.user.email} linked to organization ${org.name}`);
+      } catch (updateError) {
+        console.error('Error updating user orgId:', updateError);
+        // Continue anyway - org was created, just user link failed
+      }
+
       console.log(`✅ Organization created: ${org.name} (${org.id})`);
 
       return sendSuccess(
@@ -86,24 +98,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       );
     } catch (dbError) {
       console.error('Database error creating organization:', dbError);
-      // Create temporary org object if DB unavailable
-      const tempOrg = {
-        id: uuidv4(),
-        name: name.trim(),
-        emailDomain: emailDomain || req.user.email.split('@')[1],
-        inviteCode,
-        logo: logo || null,
-        createdAt: new Date(),
-      };
-      
-      console.warn('⚠️  Using temporary organization object (DB unavailable)');
-      
-      return sendSuccess(
-        res,
-        tempOrg,
-        'Organization created (DB unavailable - will persist on next sync)',
-        201
-      );
+      return sendError(res, 'SERVER_ERROR', 'Failed to create organization', 500);
     }
   } catch (error) {
     console.error('Create organization error:', error);

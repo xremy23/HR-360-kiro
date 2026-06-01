@@ -69,6 +69,17 @@ const OrganizationSettings: React.FC = () => {
         setShowCreateOrg(false);
         toast.success('Organization created successfully!');
         
+        // Update user data in localStorage to reflect new orgId
+        if (user) {
+          const updatedUser = {
+            ...user,
+            orgId: response.data.id,
+            role: 'admin', // User who creates org becomes admin
+          };
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+          console.log('Updated user in localStorage:', updatedUser);
+        }
+        
         // Reload org data
         loadOrganization();
       }

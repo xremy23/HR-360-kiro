@@ -104,6 +104,14 @@ export class UserEntity {
       updates.push(`biometric_enabled = $${paramCount++}`);
       values.push(data.biometricEnabled);
     }
+    if (data.orgId) {
+      updates.push(`org_id = $${paramCount++}`);
+      values.push(data.orgId);
+    }
+    if (data.role) {
+      updates.push(`role = $${paramCount++}`);
+      values.push(data.role);
+    }
 
     if (updates.length === 0) return this.findById(id);
 
