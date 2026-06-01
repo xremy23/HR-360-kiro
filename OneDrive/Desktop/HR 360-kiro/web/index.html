@@ -2,10 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#1f2937" />
-    <meta name="description" content="Emergency Management App - PWA for emergency preparedness and response" />
+    <meta name="description" content="Emergency Management App - Emergency preparedness and response" />
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json" />
@@ -14,27 +14,12 @@
     <meta name="apple-mobile-web-app-capable" content="true" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Emergency App" />
-    <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
     
     <title>Emergency Management App</title>
-    
-    <script>
-      // Device detection and redirect
-      (function() {
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        const isTablet = /iPad|Android(?!.*Mobile)/i.test(navigator.userAgent);
-        const currentHost = window.location.hostname;
-        
-        // If on web domain and accessing from mobile/tablet, redirect to mobile app
-        if ((isMobile || isTablet) && currentHost.includes('web')) {
-          const mobileUrl = window.location.href.replace(/web/, 'mobile');
-          window.location.href = mobileUrl;
-        }
-      })();
-    </script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" src="./src/main.tsx"></script>
   </body>
 </html>

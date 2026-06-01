@@ -5,7 +5,7 @@ steps:
       - 'build'
       - '-t'
       - 'gcr.io/hr-360-497706/web:latest'
-      - '.'
+      - 'web'
 
   # Push the image to Container Registry
   - name: 'gcr.io/cloud-builders/docker'
