@@ -1,20 +1,17 @@
+#!/usr/bin/env node
 /**
  * Build wrapper for Vercel
  * Bypasses npm's path handling issues with spaces in directory names
  */
 
-import { execSync } from 'child_process';
+import { build } from 'vite';
 
 console.log('Starting Vite build...');
 
 try {
-  // Use vite directly
-  execSync('vite build', {
-    stdio: 'inherit',
-    shell: true,
-  });
+  await build();
   process.exit(0);
 } catch (error) {
-  console.error('Build failed:', error.message);
+  console.error('Build failed:', error);
   process.exit(1);
 }
