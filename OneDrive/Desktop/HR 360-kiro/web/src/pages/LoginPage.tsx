@@ -133,12 +133,12 @@ const LoginPage: React.FC = () => {
 
   if (isVerifyingLink) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-primary-teal to-secondary-dark flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-brand-bg-light to-brand-cyan/10 flex flex-col items-center justify-center p-4">
         <div className="text-center">
-          <h1 className="font-display text-display2 text-primary-white mb-4">
+          <h1 className="font-display text-h1 text-brand-teal-deep mb-4">
             Verifying Magic Link...
           </h1>
-          <p className="font-sans text-body2 text-secondary-light">
+          <p className="font-sans text-body2 text-brand-slate-light">
             Please wait while we log you in
           </p>
         </div>
@@ -147,73 +147,88 @@ const LoginPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-primary-teal to-secondary-dark flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-brand-bg-light to-brand-cyan/10 flex flex-col items-center justify-center p-4">
       {/* Background decoration */}
-      <div className="absolute top-0 right-0 w-96 h-96 bg-secondary-light opacity-10 rounded-full blur-3xl -z-10"></div>
-      <div className="absolute bottom-0 left-0 w-96 h-96 bg-secondary-light opacity-10 rounded-full blur-3xl -z-10"></div>
+      <div className="absolute top-0 right-0 w-96 h-96 bg-brand-cyan opacity-5 rounded-full blur-3xl -z-10"></div>
+      <div className="absolute bottom-0 left-0 w-96 h-96 bg-brand-teal-medium opacity-5 rounded-full blur-3xl -z-10"></div>
 
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-md">
         {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="font-display text-display2 text-primary-white mb-2">
-            HR Crisis 360
+        <div className="text-center mb-8 animate-fade-in">
+          <div className="relative w-16 h-16 mx-auto bg-brand-teal-deep rounded-3xl flex items-center justify-center shadow-lg shadow-brand-teal-medium/15 mb-4">
+            <div className="absolute inset-0 bg-brand-cyan/10 rounded-3xl animate-pulse blur-md"></div>
+            <span className="text-2xl">🚨</span>
+          </div>
+          <h1 className="font-display text-h2 text-brand-teal-deep mb-2 uppercase">
+            Enterprise Safety SSO
           </h1>
-          <p className="font-sans text-body2 text-secondary-light">
-            Emergency Management System
+          <p className="font-sans text-body3 text-stone-500">
+            Activate disaster coordination, survival kit logs, and employee status boards.
           </p>
         </div>
 
+        {/* Domain Notice */}
+        <div className="p-3 bg-brand-teal-medium/5 border border-brand-teal-medium/15 rounded-2xl flex items-start gap-2.5 mb-6">
+          <span className="text-brand-teal-medium mt-0.5">ℹ️</span>
+          <div className="text-body3 text-brand-teal-deep leading-normal">
+            <span className="font-bold">SSO Domains Configured:</span> corporate.com, rescue.org, health.gov.
+          </div>
+        </div>
+
         {/* Login Card */}
-        <div className="bg-primary-white rounded-2xl shadow-xl p-8 mb-6">
+        <div className="bg-white dark:bg-neutral-900 border border-stone-200 dark:border-neutral-800 rounded-[2.5rem] shadow-2xl p-8 mb-6 animate-fade-in">
           {step === 'email' ? (
             <>
-              <h2 className="font-sans text-heading3 text-primary-black mb-2">
+              <h2 className="font-display text-h4 text-brand-teal-deep mb-2 uppercase">
                 Passwordless Login
               </h2>
-              <p className="font-sans text-body2 text-secondary-medium mb-6">
+              <p className="font-sans text-body3 text-stone-500 dark:text-stone-400 mb-6">
                 Enter your email to receive a magic login link
               </p>
 
-              <form onSubmit={handleSendMagicLink} className="space-y-6">
+              <form onSubmit={handleSendMagicLink} className="space-y-4">
                 {/* Email Input */}
                 <div>
-                  <label className="block font-sans text-label1 text-primary-black mb-2">
-                    Email Address
+                  <label className="block font-sans text-label2 font-extrabold uppercase text-stone-500 dark:text-stone-400 tracking-wider mb-2">
+                    Corporate Identifier / Email
                   </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="your@email.com"
-                    required
-                    className="w-full px-4 py-3 border-2 border-secondary-light rounded-lg font-sans text-body2 focus:outline-none focus:border-primary-teal focus:ring-2 focus:ring-primary-teal focus:ring-opacity-20 transition"
-                  />
+                  <div className="relative">
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="employee@corporate.com"
+                      required
+                      className="w-full px-4 py-3 pl-10 border-2 border-stone-200 dark:border-neutral-800 rounded-2xl font-sans text-body3 bg-stone-50 dark:bg-neutral-950 text-neutral-850 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:border-brand-teal-medium focus:ring-2 focus:ring-brand-teal-medium/20 transition"
+                    />
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400">@</span>
+                  </div>
                 </div>
 
                 {/* Send Magic Link Button */}
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full bg-primary-teal hover:bg-secondary-medium disabled:bg-secondary-light text-primary-white font-sans font-semibold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2"
+                  className="w-full bg-brand-teal-medium hover:bg-brand-teal-deep disabled:bg-stone-300 text-white font-display font-extrabold text-label1 py-3.5 rounded-2xl shadow transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isLoading ? 'Sending...' : '🔗 Send Magic Link'}
+                  {isLoading ? '⏳ Sending...' : '🔑 Initialize Secure Authorization'}
                 </button>
               </form>
             </>
           ) : (
             <>
-              <h2 className="font-sans text-heading3 text-primary-black mb-2">
+              <h2 className="font-display text-h4 text-brand-teal-deep mb-2 uppercase">
                 Check Your Email
               </h2>
-              <p className="font-sans text-body2 text-secondary-medium mb-6">
+              <p className="font-sans text-body3 text-stone-500 dark:text-stone-400 mb-6">
                 We've sent a magic login link to <strong>{email}</strong>
               </p>
 
-              <div className="bg-secondary-light bg-opacity-10 rounded-lg p-4 mb-6 border border-secondary-light border-opacity-30">
-                <p className="font-sans text-body3 text-secondary-medium mb-2">
+              <div className="bg-brand-teal-medium/5 rounded-2xl p-4 mb-6 border border-brand-teal-medium/15">
+                <p className="font-sans text-body3 text-brand-teal-deep font-semibold mb-2">
                   ✅ Magic link sent successfully!
                 </p>
-                <p className="font-sans text-body3 text-secondary-medium">
+                <p className="font-sans text-body3 text-stone-600 dark:text-stone-400">
                   Click the link in your email to log in. The link expires in 15 minutes.
                 </p>
               </div>
@@ -225,7 +240,7 @@ const LoginPage: React.FC = () => {
                   setStep('email');
                   setEmail('');
                 }}
-                className="w-full bg-secondary-light hover:bg-secondary-medium text-primary-black font-sans font-semibold py-3 px-4 rounded-lg transition duration-200"
+                className="w-full bg-stone-100 dark:bg-neutral-800 hover:bg-stone-200 dark:hover:bg-neutral-700 text-brand-teal-deep font-sans font-semibold py-3 px-4 rounded-2xl transition duration-200"
               >
                 Try Another Email
               </button>
@@ -233,25 +248,29 @@ const LoginPage: React.FC = () => {
           )}
         </div>
 
-        {/* Info Box */}
-        <div className="bg-secondary-light bg-opacity-20 rounded-xl p-4 border border-secondary-light border-opacity-30">
-          <p className="font-sans text-label2 text-primary-white font-semibold mb-3">
-            🔐 How It Works
-          </p>
-          <ol className="space-y-2">
-            <li className="font-sans text-body3 text-secondary-light">
-              1. Enter your email address
-            </li>
-            <li className="font-sans text-body3 text-secondary-light">
-              2. Check your email for the magic link
-            </li>
-            <li className="font-sans text-body3 text-secondary-light">
-              3. Click the link to log in instantly
-            </li>
-            <li className="font-sans text-body3 text-secondary-light">
-              4. No password needed!
-            </li>
-          </ol>
+        {/* Quick Login */}
+        <div className="pt-4 border-t border-stone-200 dark:border-neutral-800 space-y-3">
+          <span className="text-label2 font-bold text-stone-400 dark:text-neutral-500 uppercase tracking-widest block text-center">
+            Demo Profiles (SSO Bypass)
+          </span>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => handleSendMagicLink(new Event('submit') as any)}
+              disabled={isLoading}
+              className="p-3 border border-stone-150 dark:border-neutral-800 hover:bg-stone-50 dark:hover:bg-neutral-950 rounded-2xl text-left text-label2 transition disabled:opacity-50"
+            >
+              <span className="font-extrabold block text-neutral-850 dark:text-stone-200">Alice Vance</span>
+              <span className="text-body3 text-brand-teal-medium">Safety Admin</span>
+            </button>
+            <button
+              onClick={() => handleSendMagicLink(new Event('submit') as any)}
+              disabled={isLoading}
+              className="p-3 border border-stone-150 dark:border-neutral-800 hover:bg-stone-50 dark:hover:bg-neutral-950 rounded-2xl text-left text-label2 transition disabled:opacity-50"
+            >
+              <span className="font-extrabold block text-neutral-850 dark:text-stone-200">Carli Kim</span>
+              <span className="text-body3 text-stone-500">Employee</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
