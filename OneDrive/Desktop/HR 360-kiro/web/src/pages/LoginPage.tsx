@@ -182,16 +182,6 @@ const LoginPage: React.FC = () => {
                 </button>
               </>
             )}
-            >
-              {isLoading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-primary-white border-t-transparent rounded-full animate-spin"></div>
-                  Logging in...
-                </>
-              ) : (
-                'Login'
-              )}
-            </button>
           </form>
         </div>
 
