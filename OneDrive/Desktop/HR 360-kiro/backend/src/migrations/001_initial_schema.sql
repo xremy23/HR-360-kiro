@@ -346,22 +346,33 @@ CREATE INDEX idx_tobag_items_user_id ON tobag_items(user_id);
 CREATE INDEX idx_tobag_items_category ON tobag_items(category);
 
 -- ============================================================================
--- CHAT MESSAGES
+-- CHAT MESSAGES (Chatbot conversations)
 -- ============================================================================
 
 CREATE TABLE chat_messages (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  message TEXT NOT NULL,
-  message_type VARCHAR(50) DEFAULT 'text', -- text, image, file
-  is_from_chatbot BOOLEAN DEFAULT false,
+  user_question TEXT NOT NULL,
+  bot_response TEXT NOT NULL,
+  context JSONB DEFAULT '{}', -- Store context like category, intent, etc
+  is_helpful BOOLEAN, -- User feedback: was the response helpful?
+  feedback_text TEXT, -- User's detailed feedback
+  feedback_provided_at TIMESTAMP,
+  status VARCHAR(50) DEFAULT 'active', -- active, flagged, archived
+  admin_notes TEXT, -- Admin notes for improving responses
+  updated_response TEXT, -- Admin can update the response
+  updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  updated_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_chat_messages_user_id ON chat_messages(user_id);
 CREATE INDEX idx_chat_messages_organization_id ON chat_messages(organization_id);
 CREATE INDEX idx_chat_messages_created_at ON chat_messages(created_at);
+CREATE INDEX idx_chat_messages_is_helpful ON chat_messages(is_helpful);
+CREATE INDEX idx_chat_messages_status ON chat_messages(status);
+CREATE INDEX idx_chat_messages_feedback_provided_at ON chat_messages(feedback_provided_at);
 
 -- ============================================================================
 -- NOTIFICATIONS

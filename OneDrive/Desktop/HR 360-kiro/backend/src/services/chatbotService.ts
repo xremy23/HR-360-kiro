@@ -1,358 +1,506 @@
-import { KBGuideEntity } from '../entities/KBGuide';
-import { ChatMessageEntity } from '../entities/ChatMessage';
-
 /**
- * Chatbot Service - Intelligent context-aware chatbot with knowledge base integration
- * Features:
- * - Context understanding (not just keyword matching)
- * - Knowledge base integration
- * - Conversation history tracking
- * - Offline support (works with cached data)
- * - Confidence scoring
+ * Chatbot Service
+ * Handles chatbot conversations, feedback, and admin management
  */
 
-interface ChatContext {
-  relatedGuideIds: string[];
-  confidence: number;
-  keywords: string[];
-  matchType: 'exact' | 'semantic' | 'partial';
+import { query } from '../config/database';
+import { v4 as uuidv4 } from 'uuid';
+
+interface ChatMessage {
+  id: string;
+  userId: string;
+  organizationId: string;
+  userQuestion: string;
+  botResponse: string;
+  context?: Record<string, any>;
+  isHelpful?: boolean;
+  feedbackText?: string;
+  feedbackProvidedAt?: Date;
+  status: string;
+  adminNotes?: string;
+  updatedResponse?: string;
+  updatedBy?: string;
+  updatedAt?: Date;
+  createdAt: Date;
 }
 
-interface ChatResponse {
-  message: string;
-  context: ChatContext;
-  suggestedGuides: any[];
+interface ChatbotResponse {
+  id: string;
+  organizationId?: string;
+  questionPattern: string;
+  response: string;
+  category?: string;
+  priority: number;
+  isActive: boolean;
+  createdBy?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-class ChatbotService {
+interface ChatbotFeedbackItem {
+  id: string;
+  chatMessageId: string;
+  organizationId: string;
+  userQuestion: string;
+  botResponse: string;
+  userFeedback?: string;
+  isHelpful?: boolean;
+  priority: string;
+  status: string;
+  assignedTo?: string;
+  reviewedAt?: Date;
+  resolvedAt?: Date;
+  adminAction?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export class ChatbotService {
   /**
-   * Extract keywords from user message
-   * Uses semantic analysis to understand intent
+   * Save a chat message with user question and bot response
    */
-  private extractKeywords(message: string): string[] {
-    const lowerMessage = message.toLowerCase();
-    
-    // Remove common words
-    const stopWords = new Set([
-      'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
-      'of', 'with', 'by', 'from', 'is', 'are', 'was', 'were', 'be', 'been',
-      'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
-      'could', 'should', 'may', 'might', 'must', 'can', 'what', 'which',
-      'who', 'when', 'where', 'why', 'how', 'i', 'you', 'he', 'she', 'it',
-      'we', 'they', 'me', 'him', 'her', 'us', 'them', 'my', 'your', 'his',
-      'her', 'its', 'our', 'their', 'this', 'that', 'these', 'those'
-    ]);
+  async saveChatMessage(
+    userId: string,
+    organizationId: string,
+    userQuestion: string,
+    botResponse: string,
+    context?: Record<string, any>
+  ): Promise<ChatMessage> {
+    const id = uuidv4();
+    const now = new Date();
 
-    // Split into words and filter
-    const words = lowerMessage
-      .split(/\s+/)
-      .filter(word => word.length > 2 && !stopWords.has(word))
-      .map(word => word.replace(/[^a-z0-9]/g, ''));
+    const result = await query(
+      `INSERT INTO chat_messages (
+        id, user_id, organization_id, user_question, bot_response, 
+        context, status, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING *`,
+      [
+        id,
+        userId,
+        organizationId,
+        userQuestion,
+        botResponse,
+        JSON.stringify(context || {}),
+        'active',
+        now,
+      ]
+    );
 
-    return [...new Set(words)]; // Remove duplicates
+    return this.mapChatMessage(result.rows[0]);
   }
 
   /**
-   * Calculate semantic similarity between two strings
-   * Uses Levenshtein distance and word overlap
+   * Submit feedback on a chat message
    */
-  private calculateSimilarity(str1: string, str2: string): number {
-    const s1 = str1.toLowerCase();
-    const s2 = str2.toLowerCase();
+  async submitFeedback(
+    chatMessageId: string,
+    isHelpful: boolean,
+    feedbackText?: string
+  ): Promise<ChatMessage> {
+    const now = new Date();
 
-    // Exact match
-    if (s1 === s2) return 1.0;
+    const result = await query(
+      `UPDATE chat_messages 
+       SET is_helpful = $1, feedback_text = $2, feedback_provided_at = $3
+       WHERE id = $4
+       RETURNING *`,
+      [isHelpful, feedbackText || null, now, chatMessageId]
+    );
 
-    // Substring match
-    if (s1.includes(s2) || s2.includes(s1)) return 0.8;
+    if (result.rows.length === 0) {
+      throw new Error('Chat message not found');
+    }
 
-    // Word overlap
-    const words1 = new Set(s1.split(/\s+/));
-    const words2 = new Set(s2.split(/\s+/));
-    const intersection = [...words1].filter(w => words2.has(w)).length;
-    const union = new Set([...words1, ...words2]).size;
-    const wordOverlap = union > 0 ? intersection / union : 0;
+    // Add to feedback queue if feedback is negative
+    if (!isHelpful) {
+      const chatMsg = result.rows[0];
+      await this.addToFeedbackQueue(
+        chatMessageId,
+        chatMsg.organization_id,
+        chatMsg.user_question,
+        chatMsg.bot_response,
+        feedbackText,
+        isHelpful
+      );
+    }
 
-    // Levenshtein distance
-    const maxLen = Math.max(s1.length, s2.length);
-    const distance = this.levenshteinDistance(s1, s2);
-    const levenshteinSimilarity = 1 - (distance / maxLen);
-
-    // Weighted average
-    return wordOverlap * 0.6 + levenshteinSimilarity * 0.4;
+    return this.mapChatMessage(result.rows[0]);
   }
 
   /**
-   * Calculate Levenshtein distance between two strings
+   * Add a chat message to the feedback queue for admin review
    */
-  private levenshteinDistance(str1: string, str2: string): number {
-    const matrix: number[][] = [];
+  private async addToFeedbackQueue(
+    chatMessageId: string,
+    organizationId: string,
+    userQuestion: string,
+    botResponse: string,
+    userFeedback?: string,
+    isHelpful?: boolean
+  ): Promise<ChatbotFeedbackItem> {
+    const id = uuidv4();
+    const now = new Date();
 
-    for (let i = 0; i <= str2.length; i++) {
-      matrix[i] = [i];
-    }
+    const result = await query(
+      `INSERT INTO chatbot_feedback_queue (
+        id, chat_message_id, organization_id, user_question, bot_response,
+        user_feedback, is_helpful, priority, status, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      RETURNING *`,
+      [
+        id,
+        chatMessageId,
+        organizationId,
+        userQuestion,
+        botResponse,
+        userFeedback || null,
+        isHelpful,
+        'medium',
+        'pending',
+        now,
+        now,
+      ]
+    );
 
-    for (let j = 0; j <= str1.length; j++) {
-      matrix[0][j] = j;
-    }
-
-    for (let i = 1; i <= str2.length; i++) {
-      for (let j = 1; j <= str1.length; j++) {
-        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1,
-            matrix[i][j - 1] + 1,
-            matrix[i - 1][j] + 1
-          );
-        }
-      }
-    }
-
-    return matrix[str2.length][str1.length];
+    return this.mapFeedbackItem(result.rows[0]);
   }
 
   /**
-   * Find relevant guides based on user message
-   * Uses semantic similarity and keyword matching
+   * Get feedback queue for admin dashboard
    */
-  async findRelevantGuides(userMessage: string, guides: any[]): Promise<{ guide: any; score: number }[]> {
-    const keywords = this.extractKeywords(userMessage);
-    const scored: { guide: any; score: number }[] = [];
+  async getFeedbackQueue(
+    organizationId: string,
+    status?: string,
+    priority?: string,
+    limit: number = 50,
+    offset: number = 0
+  ): Promise<{ items: ChatbotFeedbackItem[]; total: number }> {
+    let whereClause = 'WHERE organization_id = $1';
+    const params: any[] = [organizationId];
+    let paramIndex = 2;
 
-    for (const guide of guides) {
-      let score = 0;
-
-      // Title similarity (highest weight)
-      const titleSimilarity = this.calculateSimilarity(userMessage, guide.title);
-      score += titleSimilarity * 0.4;
-
-      // Content similarity
-      const contentSimilarity = this.calculateSimilarity(userMessage, guide.content.substring(0, 500));
-      score += contentSimilarity * 0.3;
-
-      // Keyword matching
-      const guideText = `${guide.title} ${guide.content}`.toLowerCase();
-      const matchedKeywords = keywords.filter(kw => guideText.includes(kw)).length;
-      const keywordScore = keywords.length > 0 ? matchedKeywords / keywords.length : 0;
-      score += keywordScore * 0.3;
-
-      if (score > 0.2) { // Only include if score is above threshold
-        scored.push({ guide, score });
-      }
+    if (status) {
+      whereClause += ` AND status = $${paramIndex}`;
+      params.push(status);
+      paramIndex++;
     }
 
-    // Sort by score descending
-    return scored.sort((a, b) => b.score - a.score);
-  }
+    if (priority) {
+      whereClause += ` AND priority = $${paramIndex}`;
+      params.push(priority);
+      paramIndex++;
+    }
 
-  /**
-   * Generate context-aware response based on relevant guides
-   */
-  private generateResponse(userMessage: string, relevantGuides: { guide: any; score: number }[]): string {
-    const lowerMessage = userMessage.toLowerCase();
+    // Get total count
+    const countResult = await query(
+      `SELECT COUNT(*) as count FROM chatbot_feedback_queue ${whereClause}`,
+      params
+    );
+    const total = parseInt(countResult.rows[0].count);
 
-    // Default responses for common emergency questions
-    const defaultResponses: { [key: string]: string } = {
-      'tornado': 'During a tornado:\n1. Go to the lowest floor of a sturdy building\n2. Stay away from windows\n3. Go to the center of the room\n4. Cover yourself with a mattress or blankets\n5. Stay there until the warning is lifted',
-      'earthquake': 'During an earthquake:\n1. Drop, Cover, and Hold On\n2. Drop to hands and knees\n3. Take cover under a sturdy desk or table\n4. Hold on until shaking stops\n5. Stay away from windows and heavy objects',
-      'fire': 'In case of fire:\n1. Alert others immediately\n2. Evacuate using nearest safe exit\n3. Feel doors before opening\n4. Stay low to avoid smoke\n5. Meet at designated assembly point',
-      'evacuation': 'Evacuation procedures:\n1. Hear the alarm or announcement\n2. Leave immediately - do not use elevators\n3. Follow exit signs to nearest exit\n4. Move to designated assembly point\n5. Wait for further instructions',
-      'first aid': 'Basic first aid:\n1. Check for responsiveness\n2. Call emergency services\n3. Perform CPR if needed\n4. Control bleeding with pressure\n5. Keep the person warm and calm',
-      'sos': 'SOS/Emergency:\n1. Press the SOS button on your device\n2. Your location will be shared with emergency contacts\n3. Emergency services will be notified\n4. Stay calm and wait for help\n5. Provide your location if possible',
+    // Get paginated results
+    const result = await query(
+      `SELECT * FROM chatbot_feedback_queue 
+       ${whereClause}
+       ORDER BY created_at DESC
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      [...params, limit, offset]
+    );
+
+    return {
+      items: result.rows.map((row) => this.mapFeedbackItem(row)),
+      total,
     };
-
-    // Check if message matches any default response
-    for (const [keyword, response] of Object.entries(defaultResponses)) {
-      if (lowerMessage.includes(keyword)) {
-        return response;
-      }
-    }
-
-    // If we have relevant guides from KB, use them
-    if (relevantGuides.length > 0) {
-      const topGuide = relevantGuides[0];
-      const confidence = topGuide.score;
-
-      let response = '';
-
-      if (confidence > 0.7) {
-        response = `Based on your question, here's the relevant information:\n\n${topGuide.guide.content.substring(0, 300)}...`;
-      } else if (confidence > 0.4) {
-        response = `I found some related information that might help:\n\n${topGuide.guide.content.substring(0, 300)}...`;
-      } else {
-        response = `I found some related information. Here's what I have:\n\n${topGuide.guide.content.substring(0, 200)}...`;
-      }
-
-      if (relevantGuides.length > 1) {
-        response += '\n\nYou might also find these helpful:';
-        for (let i = 1; i < Math.min(3, relevantGuides.length); i++) {
-          response += `\n- ${relevantGuides[i].guide.title}`;
-        }
-      }
-
-      return response;
-    }
-
-    // Fallback response
-    return `I'm here to help with emergency procedures and safety guidelines. Try asking about:\n- Tornado safety\n- Earthquake procedures\n- Fire evacuation\n- First aid\n- SOS emergency\n\nHow can I assist you?`;
   }
 
   /**
-   * Process user message and generate response
+   * Get a specific feedback item
    */
-  async processMessage(userMessage: string, orgId: string, userId: string): Promise<ChatResponse> {
-    try {
-      // Extract keywords for context
-      const keywords = this.extractKeywords(userMessage);
+  async getFeedbackItem(feedbackId: string): Promise<ChatbotFeedbackItem> {
+    const result = await query(
+      `SELECT * FROM chatbot_feedback_queue WHERE id = $1`,
+      [feedbackId]
+    );
 
-      let guides: any[] = [];
-      let relevantGuides: any[] = [];
-
-      try {
-        // Fetch organization's knowledge base guides
-        guides = await KBGuideEntity.findByOrgId(orgId, undefined, undefined, 1000, 0);
-        
-        // Find relevant guides
-        relevantGuides = await this.findRelevantGuides(userMessage, guides);
-      } catch (dbError) {
-        console.warn('Database unavailable for KB lookup, using empty guides:', dbError);
-        guides = [];
-        relevantGuides = [];
-      }
-
-      // Calculate confidence
-      const confidence = relevantGuides.length > 0 ? relevantGuides[0].score : 0;
-
-      // Generate response
-      const message = this.generateResponse(userMessage, relevantGuides);
-
-      // Determine match type
-      let matchType: 'exact' | 'semantic' | 'partial' = 'partial';
-      if (confidence > 0.8) {
-        matchType = 'exact';
-      } else if (confidence > 0.5) {
-        matchType = 'semantic';
-      }
-
-      // Build context
-      const context: ChatContext = {
-        relatedGuideIds: relevantGuides.slice(0, 3).map(rg => rg.guide.id),
-        confidence: Math.round(confidence * 100) / 100,
-        keywords,
-        matchType,
-      };
-
-      // Save to database (non-blocking)
-      try {
-        await ChatMessageEntity.create({
-          userId,
-          orgId,
-          userMessage,
-          botResponse: message,
-          context,
-        });
-      } catch (saveError) {
-        console.warn('Failed to save chat message to database:', saveError);
-        // Continue anyway - message was processed
-      }
-
-      return {
-        message,
-        context,
-        suggestedGuides: relevantGuides.slice(0, 3).map(rg => ({
-          id: rg.guide.id,
-          title: rg.guide.title,
-          category: rg.guide.category,
-          score: Math.round(rg.score * 100) / 100,
-        })),
-      };
-    } catch (error) {
-      console.error('Error processing chatbot message:', error);
-      throw error;
+    if (result.rows.length === 0) {
+      throw new Error('Feedback item not found');
     }
+
+    return this.mapFeedbackItem(result.rows[0]);
   }
 
   /**
-   * Get conversation history for a user
+   * Update feedback item status and admin action
    */
-  async getConversationHistory(userId: string, limit: number = 50): Promise<any[]> {
-    try {
-      const messages = await ChatMessageEntity.findByUserId(userId, limit, 0);
-      return messages.map(msg => ({
-        id: msg.id,
-        userMessage: msg.userMessage,
-        botResponse: msg.botResponse,
-        context: msg.context,
-        isHelpful: msg.isHelpful,
-        createdAt: msg.createdAt,
-      }));
-    } catch (error) {
-      console.error('Error fetching conversation history:', error);
-      throw error;
+  async updateFeedbackItem(
+    feedbackId: string,
+    status: string,
+    adminAction?: string,
+    assignedTo?: string
+  ): Promise<ChatbotFeedbackItem> {
+    const now = new Date();
+
+    const result = await query(
+      `UPDATE chatbot_feedback_queue 
+       SET status = $1, admin_action = $2, assigned_to = $3, 
+           reviewed_at = $4, updated_at = $5
+       WHERE id = $6
+       RETURNING *`,
+      [status, adminAction || null, assignedTo || null, now, now, feedbackId]
+    );
+
+    if (result.rows.length === 0) {
+      throw new Error('Feedback item not found');
     }
+
+    return this.mapFeedbackItem(result.rows[0]);
   }
 
   /**
-   * Record feedback on chatbot response
+   * Resolve a feedback item
    */
-  async recordFeedback(messageId: string, isHelpful: boolean, feedback?: string): Promise<any> {
-    try {
-      const updated = await ChatMessageEntity.updateFeedback(messageId, isHelpful, feedback);
-      return updated;
-    } catch (error) {
-      console.error('Error recording feedback:', error);
-      throw error;
+  async resolveFeedbackItem(
+    feedbackId: string,
+    adminAction: string,
+    updatedResponseId?: string
+  ): Promise<ChatbotFeedbackItem> {
+    const now = new Date();
+
+    const result = await query(
+      `UPDATE chatbot_feedback_queue 
+       SET status = $1, admin_action = $2, resolved_at = $3, updated_at = $4
+       WHERE id = $5
+       RETURNING *`,
+      ['resolved', adminAction, now, now, feedbackId]
+    );
+
+    if (result.rows.length === 0) {
+      throw new Error('Feedback item not found');
     }
+
+    return this.mapFeedbackItem(result.rows[0]);
   }
 
   /**
-   * Get analytics for chatbot usage
+   * Create or update a chatbot response pattern
    */
-  async getAnalytics(orgId: string): Promise<any> {
-    try {
-      const totalMessages = await ChatMessageEntity.countByOrgId(orgId);
-      const messages = await ChatMessageEntity.findByOrgId(orgId, 1000, 0);
+  async saveChatbotResponse(
+    organizationId: string | null,
+    questionPattern: string,
+    response: string,
+    category?: string,
+    priority: number = 0,
+    createdBy?: string
+  ): Promise<ChatbotResponse> {
+    const id = uuidv4();
+    const now = new Date();
 
-      // Calculate helpful percentage
-      const helpfulMessages = messages.filter(m => m.isHelpful === true).length;
-      const unhelpfulMessages = messages.filter(m => m.isHelpful === false).length;
-      const helpfulPercentage = totalMessages > 0 ? (helpfulMessages / totalMessages) * 100 : 0;
+    const result = await query(
+      `INSERT INTO chatbot_responses (
+        id, organization_id, question_pattern, response, category, 
+        priority, is_active, created_by, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      ON CONFLICT (organization_id, question_pattern) 
+      DO UPDATE SET response = $4, category = $5, priority = $6, updated_at = $10
+      RETURNING *`,
+      [
+        id,
+        organizationId,
+        questionPattern,
+        response,
+        category || null,
+        priority,
+        true,
+        createdBy || null,
+        now,
+        now,
+      ]
+    );
 
-      // Get most common topics
-      const topicCounts: { [key: string]: number } = {};
-      messages.forEach(msg => {
-        if (msg.context?.keywords) {
-          msg.context.keywords.forEach((kw: string) => {
-            topicCounts[kw] = (topicCounts[kw] || 0) + 1;
-          });
-        }
-      });
+    return this.mapChatbotResponse(result.rows[0]);
+  }
 
-      const topTopics = Object.entries(topicCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
-        .map(([topic, count]) => ({ topic, count }));
+  /**
+   * Get chatbot responses for an organization
+   */
+  async getChatbotResponses(
+    organizationId: string | null,
+    category?: string,
+    limit: number = 100,
+    offset: number = 0
+  ): Promise<{ items: ChatbotResponse[]; total: number }> {
+    let whereClause = 'WHERE (organization_id = $1 OR organization_id IS NULL) AND is_active = true';
+    const params: any[] = [organizationId];
+    let paramIndex = 2;
 
-      return {
-        totalMessages,
-        helpfulMessages,
-        unhelpfulMessages,
-        helpfulPercentage: Math.round(helpfulPercentage * 100) / 100,
-        topTopics,
-        averageConfidence: messages.length > 0
-          ? Math.round(
-              (messages.reduce((sum, m) => sum + (m.context?.confidence || 0), 0) / messages.length) * 100
-            ) / 100
-          : 0,
-      };
-    } catch (error) {
-      console.error('Error getting analytics:', error);
-      throw error;
+    if (category) {
+      whereClause += ` AND category = $${paramIndex}`;
+      params.push(category);
+      paramIndex++;
     }
+
+    // Get total count
+    const countResult = await query(
+      `SELECT COUNT(*) as count FROM chatbot_responses ${whereClause}`,
+      params
+    );
+    const total = parseInt(countResult.rows[0].count);
+
+    // Get paginated results
+    const result = await query(
+      `SELECT * FROM chatbot_responses 
+       ${whereClause}
+       ORDER BY priority DESC, created_at DESC
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      [...params, limit, offset]
+    );
+
+    return {
+      items: result.rows.map((row) => this.mapChatbotResponse(row)),
+      total,
+    };
+  }
+
+  /**
+   * Get chat history for a user
+   */
+  async getChatHistory(
+    userId: string,
+    organizationId: string,
+    limit: number = 50,
+    offset: number = 0
+  ): Promise<{ items: ChatMessage[]; total: number }> {
+    // Get total count
+    const countResult = await query(
+      `SELECT COUNT(*) as count FROM chat_messages 
+       WHERE user_id = $1 AND organization_id = $2`,
+      [userId, organizationId]
+    );
+    const total = parseInt(countResult.rows[0].count);
+
+    // Get paginated results
+    const result = await query(
+      `SELECT * FROM chat_messages 
+       WHERE user_id = $1 AND organization_id = $2
+       ORDER BY created_at DESC
+       LIMIT $3 OFFSET $4`,
+      [userId, organizationId, limit, offset]
+    );
+
+    return {
+      items: result.rows.map((row) => this.mapChatMessage(row)),
+      total,
+    };
+  }
+
+  /**
+   * Get statistics about chatbot performance
+   */
+  async getChatbotStats(organizationId: string): Promise<{
+    totalMessages: number;
+    helpfulMessages: number;
+    unhelpfulMessages: number;
+    helpfulPercentage: number;
+    pendingFeedback: number;
+    averageResponseLength: number;
+  }> {
+    const result = await query(
+      `SELECT 
+        COUNT(*) as total_messages,
+        SUM(CASE WHEN is_helpful = true THEN 1 ELSE 0 END) as helpful_messages,
+        SUM(CASE WHEN is_helpful = false THEN 1 ELSE 0 END) as unhelpful_messages,
+        AVG(LENGTH(bot_response)) as avg_response_length
+       FROM chat_messages 
+       WHERE organization_id = $1`,
+      [organizationId]
+    );
+
+    const row = result.rows[0];
+    const total = parseInt(row.total_messages) || 0;
+    const helpful = parseInt(row.helpful_messages) || 0;
+    const unhelpful = parseInt(row.unhelpful_messages) || 0;
+
+    // Get pending feedback count
+    const feedbackResult = await query(
+      `SELECT COUNT(*) as pending_count FROM chatbot_feedback_queue 
+       WHERE organization_id = $1 AND status = 'pending'`,
+      [organizationId]
+    );
+
+    return {
+      totalMessages: total,
+      helpfulMessages: helpful,
+      unhelpfulMessages: unhelpful,
+      helpfulPercentage: total > 0 ? Math.round((helpful / total) * 100) : 0,
+      pendingFeedback: parseInt(feedbackResult.rows[0].pending_count) || 0,
+      averageResponseLength: Math.round(parseFloat(row.avg_response_length) || 0),
+    };
+  }
+
+  /**
+   * Map database row to ChatMessage object
+   */
+  private mapChatMessage(row: any): ChatMessage {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      organizationId: row.organization_id,
+      userQuestion: row.user_question,
+      botResponse: row.bot_response,
+      context: row.context ? JSON.parse(row.context) : undefined,
+      isHelpful: row.is_helpful,
+      feedbackText: row.feedback_text,
+      feedbackProvidedAt: row.feedback_provided_at,
+      status: row.status,
+      adminNotes: row.admin_notes,
+      updatedResponse: row.updated_response,
+      updatedBy: row.updated_by,
+      updatedAt: row.updated_at,
+      createdAt: row.created_at,
+    };
+  }
+
+  /**
+   * Map database row to ChatbotResponse object
+   */
+  private mapChatbotResponse(row: any): ChatbotResponse {
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      questionPattern: row.question_pattern,
+      response: row.response,
+      category: row.category,
+      priority: row.priority,
+      isActive: row.is_active,
+      createdBy: row.created_by,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  /**
+   * Map database row to ChatbotFeedbackItem object
+   */
+  private mapFeedbackItem(row: any): ChatbotFeedbackItem {
+    return {
+      id: row.id,
+      chatMessageId: row.chat_message_id,
+      organizationId: row.organization_id,
+      userQuestion: row.user_question,
+      botResponse: row.bot_response,
+      userFeedback: row.user_feedback,
+      isHelpful: row.is_helpful,
+      priority: row.priority,
+      status: row.status,
+      assignedTo: row.assigned_to,
+      reviewedAt: row.reviewed_at,
+      resolvedAt: row.resolved_at,
+      adminAction: row.admin_action,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
   }
 }
 
-export const chatbotService = new ChatbotService();
-export default chatbotService;
+export default new ChatbotService();

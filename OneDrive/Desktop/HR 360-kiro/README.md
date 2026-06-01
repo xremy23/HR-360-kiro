@@ -2,8 +2,9 @@
 
 A modern, minimalistic Progressive Web App for emergency management and crisis response. Provides real-time communication, location tracking, incident management, and offline-first capabilities for organizations.
 
-**Status**: 🚀 Phase 2 In Progress (35% Complete)  
-**Last Updated**: June 1, 2026
+**Status**: 🚀 Phase 2 In Progress (40% Complete)  
+**Last Updated**: June 1, 2026  
+**Current Focus**: Frontend Component Development
 
 ---
 
@@ -104,12 +105,13 @@ HR 360-kiro/
 - ✅ Protected routes and middleware
 - ✅ Error handling and logging
 
-### Phase 2 - Core Features (🚀 In Progress - 35%)
+### Phase 2 - Core Features (🚀 In Progress - 40%)
 - ✅ Knowledge Base (KB) management - Complete
 - ✅ Alert system and notifications - Complete
 - ✅ Check-in functionality - Complete
 - ✅ Incident management - Complete
 - ✅ SOS and escalation - Complete
+- ✅ Chatbot with admin feedback system - Complete
 - ⏳ Offline support (Service Workers, IndexedDB) - Not started
 - ⏳ Frontend components - Not started
 
@@ -262,6 +264,18 @@ gcloud run deploy hr360-web \
 - `GET /api/sos/contacts` - List escalation contacts
 - `POST /api/sos/contacts` - Create contact (admin/hr)
 
+### Chatbot (Phase 2)
+- `POST /api/chatbot/messages` - Save chat message
+- `POST /api/chatbot/messages/:id/feedback` - Submit feedback
+- `GET /api/chatbot/history` - Get chat history
+- `GET /api/chatbot/admin/feedback-queue` - Get feedback queue (admin)
+- `GET /api/chatbot/admin/feedback-queue/:id` - Get feedback item (admin)
+- `PATCH /api/chatbot/admin/feedback-queue/:id` - Update feedback (admin)
+- `POST /api/chatbot/admin/feedback-queue/:id/resolve` - Resolve feedback (admin)
+- `POST /api/chatbot/admin/responses` - Create response pattern (admin)
+- `GET /api/chatbot/admin/responses` - Get response patterns (admin)
+- `GET /api/chatbot/admin/stats` - Get chatbot statistics (admin)
+
 ---
 
 ## 🧪 Testing
@@ -344,5 +358,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ---
 
 **Last Updated**: June 1, 2026  
-**Status**: 🚀 Phase 2 In Progress (35% Complete) - Database setup required
+**Status**: 🚀 Phase 2 In Progress (40% Complete) - Chatbot system complete, database ready
 

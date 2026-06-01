@@ -1,275 +1,377 @@
+/**
+ * Chatbot Routes
+ * Handles chatbot conversations and admin feedback management
+ */
+
 import { Router, Response } from 'express';
-import { sendSuccess, sendError } from '../utils/response';
-import { AuthRequest, authMiddleware, adminMiddleware } from '../middleware/auth';
-import { ChatMessageEntity } from '../entities/ChatMessage';
-import { chatbotService } from '../services/chatbotService';
+import { authMiddleware, AuthRequest } from '../middleware/authMiddleware';
+import chatbotService from '../services/chatbotService';
 
 const router = Router();
 
+// ============================================================================
+// USER ROUTES (Chatbot conversations)
+// ============================================================================
+
 /**
  * POST /api/chatbot/messages
- * Send message to chatbot and get response
+ * Save a chat message with user question and bot response
  */
-router.post('/messages', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
-    }
-
-    const { message } = req.body;
-
-    if (!message || message.trim().length === 0) {
-      return sendError(res, 'INVALID_MESSAGE', 'Message cannot be empty', 400);
-    }
-
-    if (message.length > 5000) {
-      return sendError(res, 'MESSAGE_TOO_LONG', 'Message must be 5000 characters or less', 400);
-    }
-
+router.post(
+  '/messages',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response) => {
     try {
-      // Process message with chatbot service
-      const response = await chatbotService.processMessage(message, req.user.orgId, req.user.id);
+      const { userQuestion, botResponse, context } = req.body;
+      const userId = req.user?.userId;
+      const organizationId = (req as any).user?.organizationId;
 
-      return sendSuccess(
-        res,
-        {
-          id: response.context.relatedGuideIds[0] || null, // Message ID would be returned from DB
-          message: response.message,
-          context: response.context,
-          suggestedGuides: response.suggestedGuides,
-        },
-        'Message processed successfully',
-        200
+      if (!userQuestion || !botResponse) {
+        return res.status(400).json({
+          error: 'userQuestion and botResponse are required',
+        });
+      }
+
+      if (!userId || !organizationId) {
+        return res.status(401).json({
+          error: 'User not authenticated',
+        });
+      }
+
+      const message = await chatbotService.saveChatMessage(
+        userId,
+        organizationId,
+        userQuestion,
+        botResponse,
+        context
       );
-    } catch (processError) {
-      console.error('Chatbot processing error:', processError);
-      // Return fallback response if processing fails
-      return sendSuccess(
-        res,
-        {
-          id: null,
-          message: `I'm here to help with emergency procedures and safety guidelines. Try asking about:\n- Tornado safety\n- Earthquake procedures\n- Fire evacuation\n- First aid\n- SOS emergency`,
-          context: {
-            relatedGuideIds: [],
-            confidence: 0,
-            keywords: [],
-            matchType: 'partial' as const,
-          },
-          suggestedGuides: [],
-        },
-        'Message processed (with fallback)',
-        200
-      );
+
+      res.status(201).json(message);
+    } catch (error) {
+      console.error('Error saving chat message:', error);
+      res.status(500).json({ error: 'Failed to save chat message' });
     }
-  } catch (error) {
-    console.error('Chatbot message error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to process message', 500);
   }
-});
-
-/**
- * GET /api/chatbot/messages
- * Get conversation history for current user
- */
-router.get('/messages', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
-    }
-
-    const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
-    const offset = parseInt(req.query.offset as string) || 0;
-
-    try {
-      const messages = await ChatMessageEntity.findByUserId(req.user.id, limit, offset);
-      const total = await ChatMessageEntity.countByUserId(req.user.id);
-
-      return sendSuccess(
-        res,
-        {
-          messages,
-          pagination: {
-            limit,
-            offset,
-            total,
-            hasMore: offset + limit < total,
-          },
-        },
-        'Conversation history retrieved successfully',
-        200
-      );
-    } catch (dbError) {
-      console.error('Database error retrieving conversation history:', dbError);
-      // Return empty messages if database is unavailable
-      return sendSuccess(
-        res,
-        {
-          messages: [],
-          pagination: {
-            limit,
-            offset,
-            total: 0,
-            hasMore: false,
-          },
-        },
-        'Conversation history retrieved (DB unavailable)',
-        200
-      );
-    }
-  } catch (error) {
-    console.error('Get conversation history error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to retrieve conversation history', 500);
-  }
-});
-
-/**
- * GET /api/chatbot/messages/:id
- * Get specific message
- */
-router.get('/messages/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const { id } = req.params;
-
-    const message = await ChatMessageEntity.findById(id);
-
-    if (!message) {
-      return sendError(res, 'MESSAGE_NOT_FOUND', 'Message not found', 404);
-    }
-
-    // Verify user owns this message
-    if (message.userId !== req.user?.id) {
-      return sendError(res, 'UNAUTHORIZED', 'You do not have access to this message', 403);
-    }
-
-    return sendSuccess(res, message, 'Message retrieved successfully', 200);
-  } catch (error) {
-    console.error('Get message error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to retrieve message', 500);
-  }
-});
+);
 
 /**
  * POST /api/chatbot/messages/:id/feedback
- * Record feedback on chatbot response
+ * Submit feedback on a chat message
  */
-router.post('/messages/:id/feedback', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
+router.post(
+  '/messages/:id/feedback',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { isHelpful, feedbackText } = req.body;
+
+      if (typeof isHelpful !== 'boolean') {
+        return res.status(400).json({
+          error: 'isHelpful is required and must be a boolean',
+        });
+      }
+
+      const message = await chatbotService.submitFeedback(
+        id,
+        isHelpful,
+        feedbackText
+      );
+
+      res.json(message);
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+      res.status(500).json({ error: 'Failed to submit feedback' });
     }
-
-    const { id } = req.params;
-    const { isHelpful, feedback } = req.body;
-
-    if (typeof isHelpful !== 'boolean') {
-      return sendError(res, 'INVALID_INPUT', 'isHelpful must be a boolean', 400);
-    }
-
-    const message = await ChatMessageEntity.findById(id);
-
-    if (!message) {
-      return sendError(res, 'MESSAGE_NOT_FOUND', 'Message not found', 404);
-    }
-
-    // Verify user owns this message
-    if (message.userId !== req.user.id) {
-      return sendError(res, 'UNAUTHORIZED', 'You do not have access to this message', 403);
-    }
-
-    const updated = await ChatMessageEntity.updateFeedback(id, isHelpful, feedback);
-
-    return sendSuccess(res, updated, 'Feedback recorded successfully', 200);
-  } catch (error) {
-    console.error('Record feedback error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to record feedback', 500);
   }
-});
+);
 
 /**
- * DELETE /api/chatbot/messages/:id
- * Delete a message from conversation history
+ * GET /api/chatbot/history
+ * Get chat history for the current user
  */
-router.delete('/messages/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
+router.get(
+  '/history',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user?.userId;
+      const organizationId = (req as any).user?.organizationId;
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      if (!userId || !organizationId) {
+        return res.status(401).json({
+          error: 'User not authenticated',
+        });
+      }
+
+      const result = await chatbotService.getChatHistory(
+        userId,
+        organizationId,
+        limit,
+        offset
+      );
+
+      res.json(result);
+    } catch (error) {
+      console.error('Error fetching chat history:', error);
+      res.status(500).json({ error: 'Failed to fetch chat history' });
     }
-
-    const { id } = req.params;
-
-    const message = await ChatMessageEntity.findById(id);
-
-    if (!message) {
-      return sendError(res, 'MESSAGE_NOT_FOUND', 'Message not found', 404);
-    }
-
-    // Verify user owns this message
-    if (message.userId !== req.user.id) {
-      return sendError(res, 'UNAUTHORIZED', 'You do not have access to this message', 403);
-    }
-
-    const deleted = await ChatMessageEntity.delete(id);
-
-    if (!deleted) {
-      return sendError(res, 'DELETE_FAILED', 'Failed to delete message', 500);
-    }
-
-    return sendSuccess(res, {}, 'Message deleted successfully', 200);
-  } catch (error) {
-    console.error('Delete message error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to delete message', 500);
   }
-});
+);
+
+// ============================================================================
+// ADMIN ROUTES (Chatbot management)
+// ============================================================================
 
 /**
- * GET /api/chatbot/analytics
- * Get chatbot analytics for organization (Admin only)
+ * GET /api/chatbot/admin/feedback-queue
+ * Get feedback queue for admin dashboard
+ * Requires: admin role
  */
-router.get('/analytics', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
+router.get(
+  '/admin/feedback-queue',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const organizationId = (req as any).user?.organizationId;
+      const userRole = req.user?.role;
+
+      // Check if user is admin
+      if (userRole !== 'admin') {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+
+      if (!organizationId) {
+        return res.status(401).json({
+          error: 'User not authenticated',
+        });
+      }
+
+      const status = req.query.status as string;
+      const priority = req.query.priority as string;
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      const result = await chatbotService.getFeedbackQueue(
+        organizationId,
+        status,
+        priority,
+        limit,
+        offset
+      );
+
+      res.json(result);
+    } catch (error) {
+      console.error('Error fetching feedback queue:', error);
+      res.status(500).json({ error: 'Failed to fetch feedback queue' });
     }
-
-    const analytics = await chatbotService.getAnalytics(req.user.orgId);
-
-    return sendSuccess(res, analytics, 'Analytics retrieved successfully', 200);
-  } catch (error) {
-    console.error('Get analytics error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to retrieve analytics', 500);
   }
-});
+);
 
 /**
- * DELETE /api/chatbot/messages
- * Clear entire conversation history (User only)
+ * GET /api/chatbot/admin/feedback-queue/:id
+ * Get a specific feedback item
+ * Requires: admin role
  */
-router.delete('/messages', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
+router.get(
+  '/admin/feedback-queue/:id',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const userRole = req.user?.role;
+
+      if (userRole !== 'admin') {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+
+      const item = await chatbotService.getFeedbackItem(req.params.id);
+      res.json(item);
+    } catch (error) {
+      console.error('Error fetching feedback item:', error);
+      res.status(500).json({ error: 'Failed to fetch feedback item' });
     }
-
-    // Get all messages for user
-    const messages = await ChatMessageEntity.findByUserId(req.user.id, 10000, 0);
-
-    // Delete each message
-    let deletedCount = 0;
-    for (const message of messages) {
-      const deleted = await ChatMessageEntity.delete(message.id);
-      if (deleted) deletedCount++;
-    }
-
-    return sendSuccess(
-      res,
-      { deletedCount },
-      `Deleted ${deletedCount} messages from conversation history`,
-      200
-    );
-  } catch (error) {
-    console.error('Clear history error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to clear conversation history', 500);
   }
-});
+);
+
+/**
+ * PATCH /api/chatbot/admin/feedback-queue/:id
+ * Update feedback item status and admin action
+ * Requires: admin role
+ */
+router.patch(
+  '/admin/feedback-queue/:id',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const userRole = req.user?.role;
+      const userId = req.user?.userId;
+
+      if (userRole !== 'admin') {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+
+      const { status, adminAction, assignedTo } = req.body;
+
+      if (!status) {
+        return res.status(400).json({ error: 'status is required' });
+      }
+
+      const item = await chatbotService.updateFeedbackItem(
+        req.params.id,
+        status,
+        adminAction,
+        assignedTo || userId
+      );
+
+      res.json(item);
+    } catch (error) {
+      console.error('Error updating feedback item:', error);
+      res.status(500).json({ error: 'Failed to update feedback item' });
+    }
+  }
+);
+
+/**
+ * POST /api/chatbot/admin/feedback-queue/:id/resolve
+ * Resolve a feedback item
+ * Requires: admin role
+ */
+router.post(
+  '/admin/feedback-queue/:id/resolve',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const userRole = req.user?.role;
+
+      if (userRole !== 'admin') {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+
+      const { adminAction, updatedResponseId } = req.body;
+
+      if (!adminAction) {
+        return res.status(400).json({ error: 'adminAction is required' });
+      }
+
+      const item = await chatbotService.resolveFeedbackItem(
+        req.params.id,
+        adminAction,
+        updatedResponseId
+      );
+
+      res.json(item);
+    } catch (error) {
+      console.error('Error resolving feedback item:', error);
+      res.status(500).json({ error: 'Failed to resolve feedback item' });
+    }
+  }
+);
+
+/**
+ * POST /api/chatbot/admin/responses
+ * Create or update a chatbot response pattern
+ * Requires: admin role
+ */
+router.post(
+  '/admin/responses',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const userRole = req.user?.role;
+      const organizationId = (req as any).user?.organizationId;
+      const userId = req.user?.userId;
+
+      if (userRole !== 'admin') {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+
+      const { questionPattern, response, category, priority } = req.body;
+
+      if (!questionPattern || !response) {
+        return res.status(400).json({
+          error: 'questionPattern and response are required',
+        });
+      }
+
+      const chatbotResponse = await chatbotService.saveChatbotResponse(
+        organizationId,
+        questionPattern,
+        response,
+        category,
+        priority || 0,
+        userId
+      );
+
+      res.status(201).json(chatbotResponse);
+    } catch (error) {
+      console.error('Error saving chatbot response:', error);
+      res.status(500).json({ error: 'Failed to save chatbot response' });
+    }
+  }
+);
+
+/**
+ * GET /api/chatbot/admin/responses
+ * Get chatbot response patterns
+ * Requires: admin role
+ */
+router.get(
+  '/admin/responses',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const userRole = req.user?.role;
+      const organizationId = (req as any).user?.organizationId;
+
+      if (userRole !== 'admin') {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+
+      const category = req.query.category as string;
+      const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      const result = await chatbotService.getChatbotResponses(
+        organizationId,
+        category,
+        limit,
+        offset
+      );
+
+      res.json(result);
+    } catch (error) {
+      console.error('Error fetching chatbot responses:', error);
+      res.status(500).json({ error: 'Failed to fetch chatbot responses' });
+    }
+  }
+);
+
+/**
+ * GET /api/chatbot/admin/stats
+ * Get chatbot performance statistics
+ * Requires: admin role
+ */
+router.get(
+  '/admin/stats',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const userRole = req.user?.role;
+      const organizationId = (req as any).user?.organizationId;
+
+      if (userRole !== 'admin') {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+
+      const stats = await chatbotService.getChatbotStats(organizationId);
+      res.json(stats);
+    } catch (error) {
+      console.error('Error fetching chatbot stats:', error);
+      res.status(500).json({ error: 'Failed to fetch chatbot stats' });
+    }
+  }
+);
 
 export default router;
