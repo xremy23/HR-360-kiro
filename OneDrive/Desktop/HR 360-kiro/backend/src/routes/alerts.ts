@@ -1,169 +1,348 @@
-import { Router, Response } from 'express';
-import { sendSuccess, sendError, sendPaginated } from '../utils/response';
-import { AuthRequest, authMiddleware, adminMiddleware } from '../middleware/auth';
-import { validateAlertSeverity } from '../utils/validators';
-import { AlertEntity, NotificationEntity, UserEntity, OrganizationEntity } from '../entities';
-import { getWebSocketServer } from '../websocket/server';
-import { pushNotificationService } from '../services/pushNotificationService';
-import { organizationService } from '../services/organizationService';
+/**
+ * Alert Routes
+ * Handles alert management and notifications
+ */
+
+import express, { Response } from 'express';
+import { authMiddleware, AuthRequest } from '../middleware/authMiddleware';
+import { alertService } from '../services/alertService';
 import { userService } from '../services/userService';
+import { logger } from '../services/monitoringService';
 
-const router = Router();
-
-/**
- * GET /alerts
- * Get alerts
- */
-router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
-    }
-
-    const { orgId, isDrill, severity } = req.query;
-    const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
-    const offset = parseInt(req.query.offset as string) || 0;
-
-    if (!orgId) {
-      return sendError(res, 'INVALID_ORG', 'Organization ID required', 400);
-    }
-
-    const alerts = await AlertEntity.findByOrgId(orgId as string, isDrill === 'true', severity as string);
-    const total = alerts.length;
-    const paginated = alerts.slice(offset, offset + limit);
-
-    return sendPaginated(res, paginated, total, limit, offset, 200);
-  } catch (error) {
-    console.error('Get alerts error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to retrieve alerts', 500);
-  }
-});
+const router = express.Router();
 
 /**
- * POST /alerts/broadcast
- * Broadcast alert (Admin)
+ * GET /api/alerts
+ * Get alerts for organization
  */
-router.post('/broadcast', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
-    }
-
-    const { title, message, severity, type, teamIds, isDrill } = req.body;
-
-    if (!title || !message || !severity || !type) {
-      return sendError(res, 'INVALID_INPUT', 'Missing required fields', 400);
-    }
-
-    if (!validateAlertSeverity(severity)) {
-      return sendError(res, 'INVALID_SEVERITY', 'Invalid severity level', 400);
-    }
-
-    const alert = await AlertEntity.create({
-      orgId: req.user.orgId,
-      teamIds: teamIds || [],
-      title,
-      message,
-      severity,
-      type,
-      createdBy: req.user.id,
-      isDrill: isDrill || false,
-    });
-
-    // Get organization members for notification
-    const org = await organizationService.getOrganizationById(req.user.orgId);
-    const { users: members } = await userService.getOrganizationUsers(req.user.orgId, { page: 1, pageSize: 1000 });
-    const memberIds = (members as any[]).map((m: any) => m.id);
-
-    // Send push notifications
+router.get(
+  '/',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response, next) => {
     try {
-      await pushNotificationService.sendAlertNotification(
-        memberIds,
-        title,
-        message,
-        severity
-      );
-      console.log(`Push notifications sent to ${memberIds.length} members for alert ${alert.id}`);
-    } catch (pushError) {
-      console.warn('Push notification failed:', pushError);
-      // Don't fail the request if push notifications fail
-    }
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'NOT_AUTHENTICATED', message: 'User not authenticated' },
+        });
+      }
 
-    // Broadcast via WebSocket
-    try {
-      const wsServer = getWebSocketServer();
-      wsServer.broadcastAlertCreated(alert);
-      wsServer.broadcastNotificationToOrganization(req.user.orgId, {
-        type: 'alert',
-        alertId: alert.id,
-        title,
-        message,
+      const user = await userService.getUserById(req.user.userId);
+      if (!user || !user.organizationId) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'NO_ORGANIZATION', message: 'User is not part of an organization' },
+        });
+      }
+
+      const page = parseInt(req.query.page as string) || 1;
+      const pageSize = parseInt(req.query.pageSize as string) || 20;
+      const severity = req.query.severity as string;
+      const isDrill = req.query.isDrill === 'true';
+
+      const { alerts, total } = await alertService.getAlerts(user.organizationId, {
+        page,
+        pageSize,
         severity,
+        isDrill,
       });
-    } catch (wsError) {
-      console.warn('WebSocket broadcast failed:', wsError);
-      // Don't fail the request if WebSocket fails
+
+      res.json({
+        success: true,
+        data: alerts,
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages: Math.ceil(total / pageSize),
+        },
+      });
+    } catch (error) {
+      logger.error('Failed to get alerts', { error, userId: req.user?.userId });
+      next(error);
     }
-
-    return sendSuccess(res, alert, 'Alert broadcast successfully', 201);
-  } catch (error) {
-    console.error('Broadcast alert error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to broadcast alert', 500);
   }
-});
+);
 
 /**
- * GET /alerts/:id/notifications
- * Get alert notifications
+ * GET /api/alerts/:id
+ * Get alert by ID
  */
-router.get('/:id/notifications', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const { id } = req.params;
+router.get(
+  '/:id',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response, next) => {
+    try {
+      const { id } = req.params;
 
-    const notifications = await NotificationEntity.findByAlertId(id);
+      const alert = await alertService.getAlertById(id);
 
-    const formattedNotifications = await Promise.all(
-      notifications.map(async (n) => {
-        const user = await userService.getUserById(n.userId);
-        return {
-          id: n.id,
-          userId: n.userId,
-          userName: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
-          isRead: n.isRead,
-          readAt: n.readAt,
-          createdAt: n.createdAt,
-        };
-      })
-    );
+      if (!alert) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'ALERT_NOT_FOUND', message: 'Alert not found' },
+        });
+      }
 
-    return sendSuccess(res, formattedNotifications, 'Notifications retrieved successfully', 200);
-  } catch (error) {
-    console.error('Get notifications error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to retrieve notifications', 500);
+      res.json({ success: true, data: alert });
+    } catch (error) {
+      logger.error('Failed to get alert', { error, alertId: req.params.id });
+      next(error);
+    }
   }
-});
+);
 
 /**
- * PUT /alerts/:id/notifications/:nId
+ * POST /api/alerts
+ * Create alert (admin/hr only)
+ */
+router.post(
+  '/',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  authMiddleware.requireRole('admin', 'hr'),
+  async (req: AuthRequest, res: Response, next) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'NOT_AUTHENTICATED', message: 'User not authenticated' },
+        });
+      }
+
+      const user = await userService.getUserById(req.user.userId);
+      if (!user || !user.organizationId) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'NO_ORGANIZATION', message: 'User is not part of an organization' },
+        });
+      }
+
+      const { title, description, severity, type, isDrill } = req.body;
+
+      if (!title || !description || !severity || !type) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_INPUT', message: 'Missing required fields' },
+        });
+      }
+
+      const validSeverities = ['low', 'medium', 'high', 'critical'];
+      if (!validSeverities.includes(severity)) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_SEVERITY', message: 'Invalid severity level' },
+        });
+      }
+
+      const alert = await alertService.createAlert({
+        organizationId: user.organizationId,
+        title,
+        description,
+        severity,
+        type,
+        createdBy: req.user.userId,
+        isDrill: isDrill ?? false,
+      });
+
+      logger.info('Alert created', { alertId: alert.id, createdBy: req.user.userId });
+
+      res.status(201).json({ success: true, data: alert });
+    } catch (error) {
+      logger.error('Failed to create alert', { error, userId: req.user?.userId });
+      next(error);
+    }
+  }
+);
+
+/**
+ * PUT /api/alerts/:id
+ * Update alert (admin/hr only)
+ */
+router.put(
+  '/:id',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  authMiddleware.requireRole('admin', 'hr'),
+  async (req: AuthRequest, res: Response, next) => {
+    try {
+      const { id } = req.params;
+      const { title, description, severity, type, isDrill, isActive } = req.body;
+
+      if (severity) {
+        const validSeverities = ['low', 'medium', 'high', 'critical'];
+        if (!validSeverities.includes(severity)) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'INVALID_SEVERITY', message: 'Invalid severity level' },
+          });
+        }
+      }
+
+      const alert = await alertService.updateAlert(id, {
+        title,
+        description,
+        severity,
+        type,
+        isDrill,
+        isActive,
+      });
+
+      if (!alert) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'ALERT_NOT_FOUND', message: 'Alert not found' },
+        });
+      }
+
+      logger.info('Alert updated', { alertId: id, updatedBy: req.user?.userId });
+
+      res.json({ success: true, data: alert });
+    } catch (error) {
+      logger.error('Failed to update alert', { error, alertId: req.params.id });
+      next(error);
+    }
+  }
+);
+
+/**
+ * DELETE /api/alerts/:id
+ * Delete alert (admin only)
+ */
+router.delete(
+  '/:id',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  authMiddleware.requireRole('admin'),
+  async (req: AuthRequest, res: Response, next) => {
+    try {
+      const { id } = req.params;
+
+      await alertService.deleteAlert(id);
+
+      logger.info('Alert deleted', { alertId: id, deletedBy: req.user?.userId });
+
+      res.json({ success: true, message: 'Alert deleted successfully' });
+    } catch (error) {
+      logger.error('Failed to delete alert', { error, alertId: req.params.id });
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/alerts/:id/acknowledge
+ * Acknowledge alert
+ */
+router.post(
+  '/:id/acknowledge',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response, next) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'NOT_AUTHENTICATED', message: 'User not authenticated' },
+        });
+      }
+
+      const { id } = req.params;
+
+      const acknowledgment = await alertService.acknowledgeAlert(id, req.user.userId);
+
+      logger.info('Alert acknowledged', { alertId: id, userId: req.user.userId });
+
+      res.json({ success: true, data: acknowledgment });
+    } catch (error) {
+      logger.error('Failed to acknowledge alert', { error, alertId: req.params.id });
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/alerts/:id/recipients
+ * Get alert recipients
+ */
+router.get(
+  '/:id/recipients',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  authMiddleware.requireRole('admin', 'hr'),
+  async (req: AuthRequest, res: Response, next) => {
+    try {
+      const { id } = req.params;
+
+      const recipients = await alertService.getAlertRecipients(id);
+
+      res.json({ success: true, data: recipients });
+    } catch (error) {
+      logger.error('Failed to get alert recipients', { error, alertId: req.params.id });
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/alerts/notifications
+ * Get user notifications
+ */
+router.get(
+  '/notifications',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response, next) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'NOT_AUTHENTICATED', message: 'User not authenticated' },
+        });
+      }
+
+      const page = parseInt(req.query.page as string) || 1;
+      const pageSize = parseInt(req.query.pageSize as string) || 20;
+      const unreadOnly = req.query.unreadOnly === 'true';
+
+      const { notifications, total } = await alertService.getUserNotifications(req.user.userId, {
+        page,
+        pageSize,
+        unreadOnly,
+      });
+
+      res.json({
+        success: true,
+        data: notifications,
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages: Math.ceil(total / pageSize),
+        },
+      });
+    } catch (error) {
+      logger.error('Failed to get notifications', { error, userId: req.user?.userId });
+      next(error);
+    }
+  }
+);
+
+/**
+ * PUT /api/alerts/notifications/:notificationId/read
  * Mark notification as read
  */
-router.put('/:id/notifications/:nId', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const { id, nId } = req.params;
+router.put(
+  '/notifications/:notificationId/read',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response, next) => {
+    try {
+      const { notificationId } = req.params;
 
-    const notification = await NotificationEntity.findById(nId);
+      await alertService.markNotificationAsRead(notificationId);
 
-    if (!notification) {
-      return sendError(res, 'NOTIFICATION_NOT_FOUND', 'Notification not found', 404);
+      logger.info('Notification marked as read', { notificationId });
+
+      res.json({ success: true, message: 'Notification marked as read' });
+    } catch (error) {
+      logger.error('Failed to mark notification as read', { error, notificationId: req.params.notificationId });
+      next(error);
     }
-
-    const updated = await NotificationEntity.markAsRead(nId);
-
-    return sendSuccess(res, updated, 'Notification marked as read', 200);
-  } catch (error) {
-    console.error('Mark notification error:', error);
-    return sendError(res, 'SERVER_ERROR', 'Failed to mark notification', 500);
   }
-});
+);
 
 export default router;
