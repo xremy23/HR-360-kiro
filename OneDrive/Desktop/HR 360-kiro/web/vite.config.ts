@@ -11,5 +11,14 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    rollupOptions: {
+      onwarn(warning, warn) {
+        // Suppress the "src/main.tsx" resolution warning
+        if (warning.code === 'UNRESOLVED_ENTRY' || warning.message?.includes('src/main.tsx')) {
+          return;
+        }
+        warn(warning);
+      },
+    },
   },
 })
