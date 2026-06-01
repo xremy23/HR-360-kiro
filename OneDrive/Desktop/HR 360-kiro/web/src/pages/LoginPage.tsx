@@ -248,30 +248,7 @@ const LoginPage: React.FC = () => {
           )}
         </div>
 
-        {/* Quick Login */}
-        <div className="pt-4 border-t border-stone-200 dark:border-neutral-800 space-y-3">
-          <span className="text-label2 font-bold text-stone-400 dark:text-neutral-500 uppercase tracking-widest block text-center">
-            Demo Profiles (SSO Bypass)
-          </span>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => handleSendMagicLink(new Event('submit') as any)}
-              disabled={isLoading}
-              className="p-3 border border-stone-150 dark:border-neutral-800 hover:bg-stone-50 dark:hover:bg-neutral-950 rounded-2xl text-left text-label2 transition disabled:opacity-50"
-            >
-              <span className="font-extrabold block text-neutral-850 dark:text-stone-200">Alice Vance</span>
-              <span className="text-body3 text-brand-teal-medium">Safety Admin</span>
-            </button>
-            <button
-              onClick={() => handleSendMagicLink(new Event('submit') as any)}
-              disabled={isLoading}
-              className="p-3 border border-stone-150 dark:border-neutral-800 hover:bg-stone-50 dark:hover:bg-neutral-950 rounded-2xl text-left text-label2 transition disabled:opacity-50"
-            >
-              <span className="font-extrabold block text-neutral-850 dark:text-stone-200">Carli Kim</span>
-              <span className="text-body3 text-stone-500">Employee</span>
-            </button>
-          </div>
-        </div>
+
       </div>
     </div>
   );
