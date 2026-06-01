@@ -2,7 +2,7 @@
 
 A modern, minimalistic Progressive Web App for emergency management and crisis response. Provides real-time communication, location tracking, incident management, and offline-first capabilities for organizations.
 
-**Status**: ✅ Phase 1 Complete - Build Pipeline Working  
+**Status**: 🚀 Phase 2 In Progress (35% Complete)  
 **Last Updated**: June 1, 2026
 
 ---
@@ -104,13 +104,14 @@ HR 360-kiro/
 - ✅ Protected routes and middleware
 - ✅ Error handling and logging
 
-### Phase 2 - Core Features (In Progress)
-- ⏳ Knowledge Base (KB) management
-- ⏳ Alert system and notifications
-- ⏳ Check-in functionality
-- ⏳ Incident management
-- ⏳ SOS and escalation
-- ⏳ Offline support (Service Workers, IndexedDB)
+### Phase 2 - Core Features (🚀 In Progress - 35%)
+- ✅ Knowledge Base (KB) management - Complete
+- ✅ Alert system and notifications - Complete
+- ✅ Check-in functionality - Complete
+- ✅ Incident management - Complete
+- ✅ SOS and escalation - Complete
+- ⏳ Offline support (Service Workers, IndexedDB) - Not started
+- ⏳ Frontend components - Not started
 
 ### Phase 3 - Advanced Features (Planned)
 - Mobile app (React Native)
@@ -227,6 +228,40 @@ gcloud run deploy hr360-web \
 - `PUT /api/org` - Update organization (admin)
 - `GET /api/org/stats` - Get organization stats
 
+### Knowledge Base (Phase 2)
+- `GET /api/kb/guides` - List guides
+- `POST /api/kb/guides` - Create guide (admin/hr)
+- `GET /api/kb/categories` - List categories
+- `POST /api/kb/categories` - Create category (admin/hr)
+- `POST /api/kb/guides/:id/acknowledge` - Acknowledge guide
+
+### Alerts (Phase 2)
+- `GET /api/alerts` - List alerts
+- `POST /api/alerts` - Create alert (admin/hr)
+- `POST /api/alerts/:id/acknowledge` - Acknowledge alert
+- `GET /api/alerts/:id/recipients` - Get recipients (admin/hr)
+- `GET /api/alerts/notifications` - Get user notifications
+
+### Check-ins (Phase 2)
+- `GET /api/check-ins` - List check-ins
+- `POST /api/check-ins` - Create check-in
+- `PUT /api/check-ins/:id` - Update check-in
+- `GET /api/check-ins/stats` - Get statistics (admin/hr)
+
+### Incidents (Phase 2)
+- `GET /api/incidents` - List incidents
+- `POST /api/incidents` - Create incident (admin/hr)
+- `POST /api/incidents/:id/updates` - Add incident update
+- `GET /api/incidents/:id/updates` - Get incident timeline
+- `GET /api/incidents/:id/stats` - Get check-in statistics
+
+### SOS & Escalation (Phase 2)
+- `POST /api/sos` - Trigger SOS
+- `GET /api/sos` - List SOS escalations (admin/hr)
+- `PUT /api/sos/:id` - Update SOS status (admin/hr)
+- `GET /api/sos/contacts` - List escalation contacts
+- `POST /api/sos/contacts` - Create contact (admin/hr)
+
 ---
 
 ## 🧪 Testing
@@ -298,13 +333,16 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🎯 Next Steps
 
-1. **Database Setup** - Run PostgreSQL migrations
-2. **Endpoint Testing** - Test auth and user management endpoints
-3. **Integration Testing** - Write unit and integration tests
-4. **Phase 2 Development** - Begin core features implementation
+1. **Database Configuration** - Update `.env` with PostgreSQL password (do not commit)
+2. **Run Migrations** - Execute `npm run migrate:run` to create database schema
+3. **Test Endpoints** - Verify all Phase 2 endpoints with Postman/curl
+4. **Frontend Components** - Build UI for KB, Alerts, Check-ins, Incidents, SOS
+5. **Offline Support** - Implement Service Worker and IndexedDB
+6. **Testing** - Write unit and integration tests
+7. **Phase 2 Completion** - Finalize and deploy
 
 ---
 
 **Last Updated**: June 1, 2026  
-**Status**: ✅ Phase 1 Complete - Ready for Phase 2
+**Status**: 🚀 Phase 2 In Progress (35% Complete) - Database setup required
 

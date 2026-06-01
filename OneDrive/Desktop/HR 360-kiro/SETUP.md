@@ -34,13 +34,10 @@ npm install
 # Create .env file
 cp .env.example .env
 
-# Configure environment variables
-# Edit .env with your settings:
-# - DATABASE_URL=postgresql://user:password@localhost:5432/hr360
-# - REDIS_URL=redis://localhost:6379
-# - JWT_SECRET=your-secret-key
-# - EMAIL_USER=your-email@gmail.com
-# - EMAIL_PASSWORD=your-app-password
+# ⚠️  IMPORTANT: Edit .env with your PostgreSQL password
+# DO NOT commit .env to version control
+# Add your actual password to DB_PASSWORD field
+nano .env  # or use your preferred editor
 ```
 
 ### 3. Frontend Setup
