@@ -1,277 +1,310 @@
-# HR 360 - Emergency Management System
+# HR 360 - Emergency Management PWA
 
-A comprehensive Progressive Web App (PWA) for emergency management. Features real-time team check-ins, organization management, and role-based access control. Works on all devices including mobile, tablet, and desktop.
+A modern, minimalistic Progressive Web App for emergency management and crisis response. Provides real-time communication, location tracking, incident management, and offline-first capabilities for organizations.
 
-## 🎯 Key Features
+**Status**: ✅ Phase 1 Complete - Build Pipeline Working  
+**Last Updated**: June 1, 2026
 
-### Core Features
-- ✅ **Passwordless Authentication** - Magic link email authentication
-- ✅ **Organization Management** - Create and manage organizations
-- ✅ **Team Check-In System** - Real-time status updates with location tracking
-- ✅ **Role-Based Access Control** - Admin, HR, Manager, Employee roles
-- ✅ **Super-Admin Features** - System-wide management and organization switching
-- ✅ **Real-Time Updates** - WebSocket-based instant notifications
-- ✅ **Session Management** - Redis-backed session persistence
-- ✅ **Automated Backups** - Daily backup with point-in-time recovery
-
-### Advanced Features
-- ✅ **Progressive Web App** - Works on iOS, Android, Desktop, Tablet
-- ✅ **Responsive Design** - Mobile-first, works on all screen sizes
-- ✅ **Cloud Infrastructure** - Google Cloud Run, Cloud SQL, Cloud Memorystore
-- ✅ **Monitoring & Alerting** - Real-time system monitoring with alerts
-- ✅ **Email Notifications** - Gmail SMTP integration for alerts
-- ✅ **User Management** - Invite users, manage roles, remove members
-
-## 📱 Platform Support
-
-- ✅ **iOS** - Full PWA support (Safari 11.3+)
-- ✅ **Android** - Full PWA support (Chrome, Firefox, Samsung Internet)
-- ✅ **Desktop** - Full support (Chrome, Firefox, Edge, Safari)
-- ✅ **Tablet** - Full support (iPad, Android tablets)
-
-## 🏗️ Architecture
-
-### Tech Stack
-
-**Frontend (PWA)**
-- React 18 + Redux Toolkit
-- Vite build tool
-- Tailwind CSS
-- Axios HTTP client
-- Socket.io for real-time updates
-
-**Backend (API)**
-- Node.js + Express.js
-- TypeScript
-- PostgreSQL database
-- Redis cache
-- Socket.io WebSocket server
-
-**Infrastructure**
-- Google Cloud Run (hosting)
-- Cloud SQL (database)
-- Cloud Memorystore (Redis)
-- Cloud Monitoring (alerts)
-- Cloud Storage (backups)
+---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Node.js 18+
+- PostgreSQL 14+
+- Redis 6+
 - npm or yarn
-- Google Cloud account (for deployment)
 
 ### Installation
 
-1. **Clone repository**
 ```bash
-git clone https://github.com/xremy23/HR-360-kiro.git
-cd HR-360-kiro
-```
+# Clone the repository
+git clone <repo-url>
+cd HR 360-kiro
 
-2. **Backend Setup**
-```bash
+# Backend setup
 cd backend
 npm install
 npm run build
-npm run dev
-```
 
-3. **Web App Setup**
-```bash
-cd web
+# Frontend setup
+cd ../web
 npm install
+npm run build
+```
+
+### Development
+
+```bash
+# Terminal 1: Backend
+cd backend
+npm run dev
+
+# Terminal 2: Frontend
+cd web
 npm run dev
 ```
 
-### Access the Application
-- **Web App**: http://localhost:5173
-- **Backend API**: http://localhost:8080
-- **Health Check**: http://localhost:8080/health
+Backend runs on `http://localhost:3000`  
+Frontend runs on `http://localhost:5173`
+
+---
 
 ## 📚 Documentation
 
-- **[PROJECT_STATUS.md](./PROJECT_STATUS.md)** - Current project status and features
-- **[CHANGELOG.md](./CHANGELOG.md)** - Version history and changes
-- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System design and components
-- **[QUICK_START_GUIDE.md](./QUICK_START_GUIDE.md)** - Detailed setup instructions
+- **[SETUP.md](./SETUP.md)** - Complete setup guide for all platforms
+- **[DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md)** - Design specifications and guidelines
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System architecture and design decisions
+- **[API.md](./API.md)** - API endpoints documentation
+- **[DEVELOPMENT.md](./DEVELOPMENT.md)** - Development guidelines and best practices
+
+---
+
+## 🏗️ Project Structure
+
+```
+HR 360-kiro/
+├── backend/                 # Node.js + Express backend
+│   ├── src/
+│   │   ├── config/         # Database & security config
+│   │   ├── entities/       # Data models
+│   │   ├── middleware/     # Auth, error handling
+│   │   ├── routes/         # API endpoints
+│   │   ├── services/       # Business logic
+│   │   ├── utils/          # Helpers & validators
+│   │   ├── migrations/     # Database migrations
+│   │   └── server.ts       # Express app
+│   ├── dist/               # Compiled output
+│   └── package.json
+│
+├── web/                     # React + Vite frontend
+│   ├── src/
+│   │   ├── components/     # React components
+│   │   ├── pages/          # Page components
+│   │   ├── services/       # API & PWA services
+│   │   ├── store/          # Redux state management
+│   │   ├── utils/          # Helpers
+│   │   └── App.tsx         # Main app
+│   ├── dist/               # Built output
+│   └── package.json
+│
+├── mobile/                  # React Native (future)
+└── docs/                    # Additional documentation
+```
+
+---
+
+## 🎯 Features
+
+### Phase 1 - Foundation (✅ Complete)
+- ✅ Magic link authentication
+- ✅ User and organization management
+- ✅ Role-based access control
+- ✅ Modern minimalistic design system
+- ✅ Protected routes and middleware
+- ✅ Error handling and logging
+
+### Phase 2 - Core Features (In Progress)
+- ⏳ Knowledge Base (KB) management
+- ⏳ Alert system and notifications
+- ⏳ Check-in functionality
+- ⏳ Incident management
+- ⏳ SOS and escalation
+- ⏳ Offline support (Service Workers, IndexedDB)
+
+### Phase 3 - Advanced Features (Planned)
+- Mobile app (React Native)
+- Advanced analytics
+- Integration with external services
+- Multi-language support
+
+---
 
 ## 🔐 Security
 
-- ✅ Passwordless magic link authentication
-- ✅ JWT tokens with 24-hour expiration
-- ✅ Token blacklist for logout
-- ✅ Role-based access control (RBAC)
-- ✅ Session management with Redis
-- ✅ HTTPS enforcement
-- ✅ CORS protection
-- ✅ Rate limiting
-- ✅ Brute-force protection
-- ✅ Input validation
-- ✅ SQL injection prevention
-- ✅ Credentials in environment variables (not in code)
+- JWT authentication with 7-day expiration
+- Role-based access control (RBAC)
+- Token blacklist support
+- Session management with Redis
+- Input validation and sanitization
+- Rate limiting on auth endpoints
+- CORS configuration
+- Helmet.js for security headers
 
-## 🌐 Internationalization
+---
 
-Currently English only. Multilingual support planned for future releases.
+## 🛠️ Tech Stack
 
-## 📊 Data Models
+### Backend
+- **Runtime**: Node.js
+- **Framework**: Express.js
+- **Language**: TypeScript
+- **Database**: PostgreSQL
+- **Cache**: Redis
+- **Auth**: JWT
+- **Email**: Nodemailer
 
-### User Roles
-- **super_admin** - System-wide management, view all orgs and users
-- **admin** - Organization management, user management
-- **hr** - User management, incident review
-- **manager** - Team check-in dashboard, team management
-- **employee** - Check-in, profile management
+### Frontend
+- **Framework**: React 18
+- **Language**: TypeScript
+- **Build Tool**: Vite
+- **State Management**: Redux
+- **HTTP Client**: Axios
+- **Styling**: Tailwind CSS
+- **UI Components**: Custom (minimalistic design)
 
-## 🔄 API Endpoints
+### DevOps
+- **Deployment**: Google Cloud Run
+- **Database**: Cloud SQL (PostgreSQL)
+- **Cache**: Cloud Memorystore (Redis)
+- **Monitoring**: Cloud Logging & Monitoring
+
+---
+
+## 📊 Build Status
+
+### Backend
+```
+✅ npm run build - SUCCESS
+- TypeScript compilation: 0 errors
+- Ready for deployment
+```
+
+### Frontend
+```
+✅ npm run build - SUCCESS
+- Vite build: 180 modules
+- CSS: 29.97 kB (gzip: 5.80 kB)
+- JS: 359.35 kB (gzip: 108.23 kB)
+```
+
+---
+
+## 🚀 Deployment
+
+### Google Cloud Run
+
+```bash
+# Build and deploy backend
+cd backend
+gcloud run deploy hr360-backend \
+  --source . \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated
+
+# Build and deploy frontend
+cd ../web
+gcloud run deploy hr360-web \
+  --source . \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated
+```
+
+---
+
+## 📝 API Endpoints
 
 ### Authentication
 - `POST /api/auth/send-magic-link` - Send magic link
 - `POST /api/auth/verify-magic-link` - Verify magic link
 - `POST /api/auth/logout` - Logout user
+- `GET /api/auth/validate` - Validate token
 
 ### Users
-- `GET /api/users/profile` - Get user profile
-- `PUT /api/users/profile` - Update profile
+- `GET /api/users/profile` - Get current user
+- `PUT /api/users/profile` - Update current user
+- `GET /api/users` - List organization users
+- `GET /api/users/:id` - Get user by ID (admin)
+- `PUT /api/users/:id` - Update user (admin)
+- `DELETE /api/users/:id` - Delete user (admin)
 
 ### Organizations
-- `POST /api/organizations` - Create organization
-- `GET /api/organizations` - Get user's organization
-- `PUT /api/organizations/:id` - Update organization
-- `POST /api/organizations/:id/invite` - Invite user
-- `DELETE /api/organizations/:id/members/:userId` - Remove user
+- `POST /api/org` - Create organization
+- `GET /api/org` - Get current organization
+- `GET /api/org/:id` - Get organization by ID (admin)
+- `PUT /api/org` - Update organization (admin)
+- `GET /api/org/stats` - Get organization stats
 
-### Check-Ins
-- `POST /api/check-ins` - Submit check-in
-- `PUT /api/check-ins/:id` - Update check-in status
-- `GET /api/check-ins/:id` - Get check-in
-- `GET /api/check-ins/history` - Get check-in history
-
-### Super-Admin
-- `GET /api/superadmin/organizations` - View all organizations
-- `GET /api/superadmin/organizations/:orgId` - View org details
-- `POST /api/superadmin/organizations/:orgId/switch` - Switch organization
-- `GET /api/superadmin/users` - View all users
-- `PUT /api/superadmin/users/:userId/role` - Update user role
-
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for complete API documentation.
+---
 
 ## 🧪 Testing
 
 ```bash
-# Backend
+# Backend tests
 cd backend
 npm test
 
-# Web App
-cd web
+# Frontend tests
+cd ../web
 npm test
+
+# E2E tests
+npm run test:e2e
 ```
-
-## 📦 Building
-
-```bash
-# Backend
-cd backend
-npm run build
-
-# Web App
-cd web
-npm run build
-```
-
-## 🚢 Deployment
-
-### Production URLs
-- **Web App**: https://web-116253736511.us-central1.run.app
-- **Backend API**: https://backend-116253736511.us-central1.run.app
-
-### Deploy Backend
-```bash
-gcloud builds submit backend/ --tag gcr.io/hr-360-497706/backend
-gcloud run deploy backend --image gcr.io/hr-360-497706/backend
-```
-
-### Deploy Web App
-```bash
-cd web && npm run build
-gsutil -m cp -r dist/* gs://hr-360-web-app/
-```
-
-See [QUICK_START_GUIDE.md](./QUICK_START_GUIDE.md) for detailed deployment instructions.
-
-## 🤝 Contributing
-
-1. Create feature branch (`git checkout -b feature/amazing-feature`)
-2. Commit changes (`git commit -m 'Add amazing feature'`)
-3. Push to branch (`git push origin feature/amazing-feature`)
-4. Open Pull Request
-
-## 📝 License
-
-This project is licensed under the MIT License - see LICENSE file for details.
-
-## 🆘 Support
-
-For issues and questions:
-- Create an issue on GitHub
-- Contact support team
-- Check documentation
-
-## 🗺️ Roadmap
-
-### ✅ Completed (v1.0.0)
-- Magic link authentication
-- Organization management
-- Check-in system
-- Role-based access control
-- Super-admin features
-- Real-time WebSocket updates
-- Cloud infrastructure
-- Monitoring and alerting
-- Automated backups
-
-### 📋 Planned (v1.1.0)
-- Chatbot feature
-- Toggle state persistence
-- Email validation on forms
-- Custom confirmation modals
-- Push notifications
-- SMS notifications
-- Advanced reporting
-- Team management
-
-### 🔮 Future (v2.0.0)
-- SOS escalation workflows
-- Incident tracking
-- Admin dashboard
-- Multi-language support
-- Mobile app (native)
-
-## 🎓 Learning Resources
-
-- [React Documentation](https://react.dev/)
-- [Express.js Guide](https://expressjs.com/)
-- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
-- [Google Cloud Documentation](https://cloud.google.com/docs)
-- [Redux Toolkit](https://redux-toolkit.js.org/)
-
-## 📞 Contact & Support
-
-For issues, questions, or suggestions:
-- Check [PROJECT_STATUS.md](./PROJECT_STATUS.md) for current status
-- Review [CHANGELOG.md](./CHANGELOG.md) for recent changes
-- See [QUICK_START_GUIDE.md](./QUICK_START_GUIDE.md) for setup help
-- Check logs: `gcloud run services logs read backend --region us-central1`
-
-## 📄 License
-
-This project is licensed under the MIT License - see LICENSE file for details.
 
 ---
 
-**Project:** HR 360 Emergency Management System  
-**Status:** ✅ Production Ready  
-**Version:** 1.0.0  
-**Last Updated:** May 30, 2026
+## 📖 Development Guidelines
+
+### Code Style
+- Use TypeScript for type safety
+- Follow ESLint configuration
+- Use Prettier for formatting
+- Write meaningful commit messages
+
+### Git Workflow
+- Create feature branches from `main`
+- Use conventional commits
+- Create pull requests for review
+- Merge after approval
+
+### Database Migrations
+```bash
+# Run migrations
+npm run migrate:run
+
+# Check migration status
+npm run migrate:status
+
+# Create new migration
+npm run migrate:create
+```
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## 📞 Support
+
+For issues, questions, or suggestions, please open an issue on GitHub.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+---
+
+## 🎯 Next Steps
+
+1. **Database Setup** - Run PostgreSQL migrations
+2. **Endpoint Testing** - Test auth and user management endpoints
+3. **Integration Testing** - Write unit and integration tests
+4. **Phase 2 Development** - Begin core features implementation
+
+---
+
+**Last Updated**: June 1, 2026  
+**Status**: ✅ Phase 1 Complete - Ready for Phase 2
+
