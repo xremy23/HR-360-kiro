@@ -1,81 +1,99 @@
-import { query } from '../config/database';
+/**
+ * Organization Entity
+ * Represents an organization in the system
+ */
 
 export interface Organization {
   id: string;
   name: string;
   emailDomain?: string;
-  inviteCode?: string;
-  logo?: string;
+  logoUrl?: string;
+  description?: string;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+  createdBy?: string;
 }
 
-export class OrganizationEntity {
-  static async create(data: Omit<Organization, 'id' | 'createdAt' | 'updatedAt'>): Promise<Organization> {
-    const result = await query(
-      `INSERT INTO organizations (name, email_domain, invite_code, logo)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, name, email_domain as "emailDomain", invite_code as "inviteCode", logo, created_at as "createdAt", updated_at as "updatedAt"`,
-      [data.name, data.emailDomain, data.inviteCode, data.logo]
-    );
-    return result.rows[0];
+export interface CreateOrganizationInput {
+  name: string;
+  emailDomain?: string;
+  logoUrl?: string;
+  description?: string;
+  createdBy?: string;
+}
+
+export interface UpdateOrganizationInput {
+  name?: string;
+  emailDomain?: string;
+  logoUrl?: string;
+  description?: string;
+  isActive?: boolean;
+}
+
+export class OrganizationEntity implements Organization {
+  id: string;
+  name: string;
+  emailDomain?: string;
+  logoUrl?: string;
+  description?: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy?: string;
+
+  constructor(data: Organization) {
+    this.id = data.id;
+    this.name = data.name;
+    this.emailDomain = data.emailDomain;
+    this.logoUrl = data.logoUrl;
+    this.description = data.description;
+    this.isActive = data.isActive;
+    this.createdAt = data.createdAt;
+    this.updatedAt = data.updatedAt;
+    this.createdBy = data.createdBy;
   }
 
-  static async findById(id: string): Promise<Organization | null> {
-    const result = await query(
-      `SELECT id, name, email_domain as "emailDomain", invite_code as "inviteCode", logo, created_at as "createdAt", updated_at as "updatedAt"
-       FROM organizations WHERE id = $1`,
-      [id]
-    );
-    return result.rows[0] || null;
+  /**
+   * Check if organization is active
+   */
+  isOrganizationActive(): boolean {
+    return this.isActive;
   }
 
-  static async findByInviteCode(inviteCode: string): Promise<Organization | null> {
-    const result = await query(
-      `SELECT id, name, email_domain as "emailDomain", invite_code as "inviteCode", logo, created_at as "createdAt", updated_at as "updatedAt"
-       FROM organizations WHERE invite_code = $1`,
-      [inviteCode]
-    );
-    return result.rows[0] || null;
+  /**
+   * Check if email domain is configured
+   */
+  hasEmailDomain(): boolean {
+    return !!this.emailDomain;
   }
 
-  static async update(id: string, data: Partial<Organization>): Promise<Organization | null> {
-    const updates: string[] = [];
-    const values: any[] = [];
-    let paramCount = 1;
-
-    if (data.name) {
-      updates.push(`name = $${paramCount++}`);
-      values.push(data.name);
+  /**
+   * Check if email matches organization domain
+   */
+  isEmailInDomain(email: string): boolean {
+    if (!this.emailDomain) {
+      return false;
     }
-    if (data.emailDomain) {
-      updates.push(`email_domain = $${paramCount++}`);
-      values.push(data.emailDomain);
-    }
-    if (data.logo) {
-      updates.push(`logo = $${paramCount++}`);
-      values.push(data.logo);
-    }
 
-    if (updates.length === 0) return this.findById(id);
-
-    updates.push(`updated_at = CURRENT_TIMESTAMP`);
-    values.push(id);
-
-    const result = await query(
-      `UPDATE organizations SET ${updates.join(', ')} WHERE id = $${paramCount}
-       RETURNING id, name, email_domain as "emailDomain", invite_code as "inviteCode", logo, created_at as "createdAt", updated_at as "updatedAt"`,
-      values
-    );
-    return result.rows[0] || null;
+    const emailDomain = email.split('@')[1];
+    return emailDomain === this.emailDomain;
   }
 
-  static async findAll(limit: number = 100, offset: number = 0): Promise<Organization[]> {
-    const result = await query(
-      `SELECT id, name, email_domain as "emailDomain", invite_code as "inviteCode", logo, created_at as "createdAt", updated_at as "updatedAt"
-       FROM organizations LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    );
-    return result.rows;
+  /**
+   * Convert to JSON
+   */
+  toJSON(): Organization {
+    return {
+      id: this.id,
+      name: this.name,
+      emailDomain: this.emailDomain,
+      logoUrl: this.logoUrl,
+      description: this.description,
+      isActive: this.isActive,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+      createdBy: this.createdBy,
+    };
   }
 }

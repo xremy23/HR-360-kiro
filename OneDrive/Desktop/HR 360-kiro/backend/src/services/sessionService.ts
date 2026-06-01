@@ -25,6 +25,10 @@ export interface SessionData {
 class SessionService {
   private client: RedisClientType | null = null;
   private isConnected = false;
+  private inMemoryStorage = new Map<string, string>();
+  private inMemoryVerificationCodes = new Map<string, VerificationCode>();
+  private inMemoryBlacklist = new Set<string>();
+  private inMemorySessions = new Map<string, SessionData>();
 
   /**
    * Initialize Redis connection with timeout
@@ -84,6 +88,48 @@ class SessionService {
   }
 
   /**
+   * Store a key-value pair with expiration
+   */
+  async set(key: string, value: string, expirationSeconds?: number): Promise<void> {
+    if (this.client && this.isConnected) {
+      if (expirationSeconds) {
+        await this.client.setEx(key, expirationSeconds, value);
+      } else {
+        await this.client.set(key, value);
+      }
+    } else {
+      // Fallback to in-memory storage
+      this.inMemoryStorage.set(key, value);
+      if (expirationSeconds) {
+        setTimeout(() => this.inMemoryStorage.delete(key), expirationSeconds * 1000);
+      }
+    }
+  }
+
+  /**
+   * Get a value by key
+   */
+  async get(key: string): Promise<string | null> {
+    if (this.client && this.isConnected) {
+      return await this.client.get(key);
+    } else {
+      // Fallback to in-memory storage
+      return this.inMemoryStorage.get(key) || null;
+    }
+  }
+
+  /**
+   * Delete a key
+   */
+  async delete(key: string): Promise<void> {
+    if (this.client && this.isConnected) {
+      await this.client.del(key);
+    } else {
+      this.inMemoryStorage.delete(key);
+    }
+  }
+
+  /**
    * Store verification code with expiration
    */
   async storeVerificationCode(email: string, code: string, expirationMinutes = 10): Promise<void> {
@@ -98,8 +144,8 @@ class SessionService {
       await this.client.setEx(key, expirationMinutes * 60, JSON.stringify(data));
     } else {
       // Fallback to in-memory storage
-      this.inMemoryStorage.set(key, data);
-      setTimeout(() => this.inMemoryStorage.delete(key), expirationMinutes * 60 * 1000);
+      this.inMemoryVerificationCodes.set(key, data);
+      setTimeout(() => this.inMemoryVerificationCodes.delete(key), expirationMinutes * 60 * 1000);
     }
   }
 
@@ -117,7 +163,7 @@ class SessionService {
         data = stored ? JSON.parse(stored) : null;
       } else {
         // Fallback to in-memory storage
-        data = this.inMemoryStorage.get(key) || null;
+        data = this.inMemoryVerificationCodes.get(key) || null;
       }
 
       if (!data) {
@@ -146,7 +192,7 @@ class SessionService {
         if (this.client && this.isConnected) {
           await this.client.setEx(key, 600, JSON.stringify(data)); // 10 minutes
         } else {
-          this.inMemoryStorage.set(key, data);
+          this.inMemoryVerificationCodes.set(key, data);
         }
         return false;
       }
@@ -165,7 +211,7 @@ class SessionService {
     if (this.client && this.isConnected) {
       await this.client.del(key);
     } else {
-      this.inMemoryStorage.delete(key);
+      this.inMemoryVerificationCodes.delete(key);
     }
   }
 
@@ -308,11 +354,6 @@ class SessionService {
       this.isConnected = false;
     }
   }
-
-  // Fallback in-memory storage (NOT PRODUCTION SAFE)
-  private inMemoryStorage = new Map<string, VerificationCode>();
-  private inMemoryBlacklist = new Set<string>();
-  private inMemorySessions = new Map<string, SessionData>();
 }
 
 // Export singleton instance

@@ -2,7 +2,20 @@
 
 ## Project Restart Complete ✅
 
-We've successfully planned a complete restart of the HR Crisis 360 project with a clean, focused architecture.
+We've successfully planned a complete restart of the HR Crisis 360 project with a clean, focused architecture featuring a **modern minimalistic design**.
+
+---
+
+## 🎨 Design Philosophy
+
+HR 360 features a **modern minimalistic design** emphasizing:
+- **Clarity** - Clear hierarchy and information architecture
+- **Simplicity** - Minimal visual elements, maximum functionality
+- **Efficiency** - Fast interactions, reduced cognitive load
+- **Accessibility** - WCAG 2.1 AA compliant across all interfaces
+- **Responsiveness** - Seamless experience on mobile, tablet, and desktop
+
+See **DESIGN_SYSTEM.md** for complete design specifications.
 
 ---
 
@@ -17,14 +30,22 @@ Read these documents in order:
    - Key features overview
    - Success criteria
 
-### 2. **PROJECT_RESTART.md**
+### 2. **DESIGN_SYSTEM.md**
+   - Modern minimalistic design philosophy
+   - Color palette and typography
+   - Component design principles
+   - Spacing and layout system
+   - Accessibility guidelines
+   - Implementation guidelines
+
+### 3. **PROJECT_RESTART.md**
    - Detailed architecture decisions
    - Project structure
    - Database schema
    - API endpoints
    - Implementation phases
 
-### 3. **IMPLEMENTATION_GUIDE.md**
+### 4. **IMPLEMENTATION_GUIDE.md**
    - Step-by-step development guide
    - How to set up development environment
    - Component structure
