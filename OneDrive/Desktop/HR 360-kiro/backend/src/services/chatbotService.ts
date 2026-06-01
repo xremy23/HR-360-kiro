@@ -151,36 +151,52 @@ class ChatbotService {
    * Generate context-aware response based on relevant guides
    */
   private generateResponse(userMessage: string, relevantGuides: { guide: any; score: number }[]): string {
-    if (relevantGuides.length === 0) {
-      return `I couldn't find specific information about "${userMessage}". Could you provide more details or rephrase your question? I'm here to help with emergency procedures, safety guidelines, and organizational policies.`;
-    }
+    const lowerMessage = userMessage.toLowerCase();
 
-    const topGuide = relevantGuides[0];
-    const confidence = topGuide.score;
+    // Default responses for common emergency questions
+    const defaultResponses: { [key: string]: string } = {
+      'tornado': 'During a tornado:\n1. Go to the lowest floor of a sturdy building\n2. Stay away from windows\n3. Go to the center of the room\n4. Cover yourself with a mattress or blankets\n5. Stay there until the warning is lifted',
+      'earthquake': 'During an earthquake:\n1. Drop, Cover, and Hold On\n2. Drop to hands and knees\n3. Take cover under a sturdy desk or table\n4. Hold on until shaking stops\n5. Stay away from windows and heavy objects',
+      'fire': 'In case of fire:\n1. Alert others immediately\n2. Evacuate using nearest safe exit\n3. Feel doors before opening\n4. Stay low to avoid smoke\n5. Meet at designated assembly point',
+      'evacuation': 'Evacuation procedures:\n1. Hear the alarm or announcement\n2. Leave immediately - do not use elevators\n3. Follow exit signs to nearest exit\n4. Move to designated assembly point\n5. Wait for further instructions',
+      'first aid': 'Basic first aid:\n1. Check for responsiveness\n2. Call emergency services\n3. Perform CPR if needed\n4. Control bleeding with pressure\n5. Keep the person warm and calm',
+      'sos': 'SOS/Emergency:\n1. Press the SOS button on your device\n2. Your location will be shared with emergency contacts\n3. Emergency services will be notified\n4. Stay calm and wait for help\n5. Provide your location if possible',
+    };
 
-    // Build response based on confidence level
-    let response = '';
-
-    if (confidence > 0.7) {
-      // High confidence - provide direct answer
-      response = `Based on your question, here's the relevant information:\n\n${topGuide.guide.content.substring(0, 300)}...`;
-    } else if (confidence > 0.4) {
-      // Medium confidence - provide answer with caveat
-      response = `I found some related information that might help:\n\n${topGuide.guide.content.substring(0, 300)}...`;
-    } else {
-      // Low confidence - suggest related topics
-      response = `I found some related information. Here's what I have:\n\n${topGuide.guide.content.substring(0, 200)}...`;
-    }
-
-    // Add suggestions for other relevant guides
-    if (relevantGuides.length > 1) {
-      response += '\n\nYou might also find these helpful:';
-      for (let i = 1; i < Math.min(3, relevantGuides.length); i++) {
-        response += `\n- ${relevantGuides[i].guide.title}`;
+    // Check if message matches any default response
+    for (const [keyword, response] of Object.entries(defaultResponses)) {
+      if (lowerMessage.includes(keyword)) {
+        return response;
       }
     }
 
-    return response;
+    // If we have relevant guides from KB, use them
+    if (relevantGuides.length > 0) {
+      const topGuide = relevantGuides[0];
+      const confidence = topGuide.score;
+
+      let response = '';
+
+      if (confidence > 0.7) {
+        response = `Based on your question, here's the relevant information:\n\n${topGuide.guide.content.substring(0, 300)}...`;
+      } else if (confidence > 0.4) {
+        response = `I found some related information that might help:\n\n${topGuide.guide.content.substring(0, 300)}...`;
+      } else {
+        response = `I found some related information. Here's what I have:\n\n${topGuide.guide.content.substring(0, 200)}...`;
+      }
+
+      if (relevantGuides.length > 1) {
+        response += '\n\nYou might also find these helpful:';
+        for (let i = 1; i < Math.min(3, relevantGuides.length); i++) {
+          response += `\n- ${relevantGuides[i].guide.title}`;
+        }
+      }
+
+      return response;
+    }
+
+    // Fallback response
+    return `I'm here to help with emergency procedures and safety guidelines. Try asking about:\n- Tornado safety\n- Earthquake procedures\n- Fire evacuation\n- First aid\n- SOS emergency\n\nHow can I assist you?`;
   }
 
   /**
@@ -191,11 +207,20 @@ class ChatbotService {
       // Extract keywords for context
       const keywords = this.extractKeywords(userMessage);
 
-      // Fetch organization's knowledge base guides
-      const guides = await KBGuideEntity.findByOrgId(orgId, undefined, undefined, 1000, 0);
+      let guides: any[] = [];
+      let relevantGuides: any[] = [];
 
-      // Find relevant guides
-      const relevantGuides = await this.findRelevantGuides(userMessage, guides);
+      try {
+        // Fetch organization's knowledge base guides
+        guides = await KBGuideEntity.findByOrgId(orgId, undefined, undefined, 1000, 0);
+        
+        // Find relevant guides
+        relevantGuides = await this.findRelevantGuides(userMessage, guides);
+      } catch (dbError) {
+        console.warn('Database unavailable for KB lookup, using empty guides:', dbError);
+        guides = [];
+        relevantGuides = [];
+      }
 
       // Calculate confidence
       const confidence = relevantGuides.length > 0 ? relevantGuides[0].score : 0;
@@ -219,14 +244,19 @@ class ChatbotService {
         matchType,
       };
 
-      // Save to database
-      await ChatMessageEntity.create({
-        userId,
-        orgId,
-        userMessage,
-        botResponse: message,
-        context,
-      });
+      // Save to database (non-blocking)
+      try {
+        await ChatMessageEntity.create({
+          userId,
+          orgId,
+          userMessage,
+          botResponse: message,
+          context,
+        });
+      } catch (saveError) {
+        console.warn('Failed to save chat message to database:', saveError);
+        // Continue anyway - message was processed
+      }
 
       return {
         message,

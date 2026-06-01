@@ -13,8 +13,8 @@ class PWAService {
     }
 
     try {
-      this.serviceWorkerRegistration = await navigator.serviceWorker.register('/service-worker.js', {
-        scope: '/',
+      this.serviceWorkerRegistration = await navigator.serviceWorker.register('./service-worker.js', {
+        scope: './',
       });
       console.log('Service Worker registered successfully');
 

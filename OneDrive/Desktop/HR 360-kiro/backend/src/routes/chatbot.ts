@@ -26,20 +26,41 @@ router.post('/messages', authMiddleware, async (req: AuthRequest, res: Response)
       return sendError(res, 'MESSAGE_TOO_LONG', 'Message must be 5000 characters or less', 400);
     }
 
-    // Process message with chatbot service
-    const response = await chatbotService.processMessage(message, req.user.orgId, req.user.id);
+    try {
+      // Process message with chatbot service
+      const response = await chatbotService.processMessage(message, req.user.orgId, req.user.id);
 
-    return sendSuccess(
-      res,
-      {
-        id: response.context.relatedGuideIds[0] || null, // Message ID would be returned from DB
-        message: response.message,
-        context: response.context,
-        suggestedGuides: response.suggestedGuides,
-      },
-      'Message processed successfully',
-      200
-    );
+      return sendSuccess(
+        res,
+        {
+          id: response.context.relatedGuideIds[0] || null, // Message ID would be returned from DB
+          message: response.message,
+          context: response.context,
+          suggestedGuides: response.suggestedGuides,
+        },
+        'Message processed successfully',
+        200
+      );
+    } catch (processError) {
+      console.error('Chatbot processing error:', processError);
+      // Return fallback response if processing fails
+      return sendSuccess(
+        res,
+        {
+          id: null,
+          message: `I'm here to help with emergency procedures and safety guidelines. Try asking about:\n- Tornado safety\n- Earthquake procedures\n- Fire evacuation\n- First aid\n- SOS emergency`,
+          context: {
+            relatedGuideIds: [],
+            confidence: 0,
+            keywords: [],
+            matchType: 'partial' as const,
+          },
+          suggestedGuides: [],
+        },
+        'Message processed (with fallback)',
+        200
+      );
+    }
   } catch (error) {
     console.error('Chatbot message error:', error);
     return sendError(res, 'SERVER_ERROR', 'Failed to process message', 500);
@@ -59,23 +80,42 @@ router.get('/messages', authMiddleware, async (req: AuthRequest, res: Response) 
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
     const offset = parseInt(req.query.offset as string) || 0;
 
-    const messages = await ChatMessageEntity.findByUserId(req.user.id, limit, offset);
-    const total = await ChatMessageEntity.countByUserId(req.user.id);
+    try {
+      const messages = await ChatMessageEntity.findByUserId(req.user.id, limit, offset);
+      const total = await ChatMessageEntity.countByUserId(req.user.id);
 
-    return sendSuccess(
-      res,
-      {
-        messages,
-        pagination: {
-          limit,
-          offset,
-          total,
-          hasMore: offset + limit < total,
+      return sendSuccess(
+        res,
+        {
+          messages,
+          pagination: {
+            limit,
+            offset,
+            total,
+            hasMore: offset + limit < total,
+          },
         },
-      },
-      'Conversation history retrieved successfully',
-      200
-    );
+        'Conversation history retrieved successfully',
+        200
+      );
+    } catch (dbError) {
+      console.error('Database error retrieving conversation history:', dbError);
+      // Return empty messages if database is unavailable
+      return sendSuccess(
+        res,
+        {
+          messages: [],
+          pagination: {
+            limit,
+            offset,
+            total: 0,
+            hasMore: false,
+          },
+        },
+        'Conversation history retrieved (DB unavailable)',
+        200
+      );
+    }
   } catch (error) {
     console.error('Get conversation history error:', error);
     return sendError(res, 'SERVER_ERROR', 'Failed to retrieve conversation history', 500);

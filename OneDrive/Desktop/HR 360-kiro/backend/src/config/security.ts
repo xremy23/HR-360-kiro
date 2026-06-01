@@ -86,13 +86,16 @@ export function generateSecureJWTSecret(): string {
 
 /**
  * Validates database configuration
+ * Returns true if valid, false if missing (allows graceful degradation)
  */
-export function validateDatabaseConfig(): void {
+export function validateDatabaseConfig(): boolean {
   const requiredVars = ['DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
   const missing = requiredVars.filter(varName => !process.env[varName]);
   
   if (missing.length > 0) {
-    throw new Error(`Missing required database environment variables: ${missing.join(', ')}`);
+    console.warn(`⚠️  Database environment variables not fully configured: ${missing.join(', ')}`);
+    console.warn('⚠️  Database features will be unavailable until configuration is complete');
+    return false;
   }
 
   // Check for default/insecure values in production
@@ -108,23 +111,31 @@ export function validateDatabaseConfig(): void {
       }
     });
   }
+  
+  return true;
 }
 
 /**
  * Security startup validation
  * Call this during application startup
+ * Database validation is optional to allow graceful degradation
  */
 export function validateSecurityConfiguration(): SecurityConfig {
   console.log('🔒 Validating security configuration...');
   
   try {
-    validateDatabaseConfig();
+    const dbConfigValid = validateDatabaseConfig();
     const securityConfig = getSecurityConfig();
     
     console.log('✅ Security configuration validated successfully');
     console.log(`🔐 JWT expiration: ${securityConfig.jwtExpiresIn}`);
     console.log(`🚦 Rate limit: ${securityConfig.rateLimitMax} requests per ${securityConfig.rateLimitWindow / 1000}s`);
     console.log(`🌐 CORS origins: ${securityConfig.corsOrigins.length} configured`);
+    if (dbConfigValid) {
+      console.log('✅ Database configuration validated');
+    } else {
+      console.log('⚠️  Database configuration incomplete - server will start but database features unavailable');
+    }
     
     return securityConfig;
   } catch (error) {

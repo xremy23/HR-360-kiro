@@ -239,7 +239,7 @@ const OrganizationSettings: React.FC = () => {
         </div>
 
         {/* Create Organization Form */}
-        {!organization && (showCreateOrg || !showCreateOrg) && (
+        {!organization && showCreateOrg && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
             <h3 className="text-xl font-semibold text-gray-900 mb-4">
               Create New Organization

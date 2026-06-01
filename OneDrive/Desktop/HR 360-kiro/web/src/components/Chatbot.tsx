@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { RootState } from '../store/store';
 import toast from 'react-hot-toast';
-import apiService from '../services/apiService';
+import { chatbotService } from '../services/chatbotService';
 import { indexedDBService } from '../services/indexedDBService';
 
 interface Message {
@@ -21,6 +22,7 @@ interface Message {
 }
 
 const Chatbot: React.FC = () => {
+  const navigate = useNavigate();
   const { user } = useSelector((state: RootState) => state.auth);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -57,10 +59,10 @@ const Chatbot: React.FC = () => {
   const loadConversationHistory = async () => {
     try {
       if (isOnline) {
-        // Load from API
-        const response = await apiService.get('/chatbot/messages', { limit: 50 });
-        if (response.success && response.data?.messages) {
-          setMessages(response.data.messages.map((msg: any) => ({
+        // Load from API using chatbotService
+        const history = await chatbotService.getConversationHistory(50, 0);
+        if (history && history.messages) {
+          setMessages(history.messages.map((msg: any) => ({
             ...msg,
             createdAt: new Date(msg.createdAt),
             isOffline: false,
@@ -68,7 +70,7 @@ const Chatbot: React.FC = () => {
         }
       } else {
         // Load from IndexedDB
-        const cachedMessages = await indexedDBService.getAll('chatMessages');
+        const cachedMessages = await indexedDBService.getKBGuides();
         setMessages(cachedMessages.map((msg: any) => ({
           ...msg,
           createdAt: new Date(msg.createdAt),
@@ -79,7 +81,7 @@ const Chatbot: React.FC = () => {
       console.error('Failed to load conversation history:', error);
       // Try to load from IndexedDB as fallback
       try {
-        const cachedMessages = await indexedDBService.getAll('chatMessages');
+        const cachedMessages = await indexedDBService.getKBGuides();
         setMessages(cachedMessages);
       } catch (dbError) {
         console.error('Failed to load from IndexedDB:', dbError);
@@ -109,16 +111,16 @@ const Chatbot: React.FC = () => {
 
     try {
       if (isOnline) {
-        // Send to API
-        const response = await apiService.post('/chatbot/messages', { message: userMessage });
+        // Send to API using chatbotService
+        const response = await chatbotService.sendMessage(userMessage);
         
-        if (response.success && response.data) {
+        if (response) {
           const newMessage: Message = {
-            id: response.data.id || `msg_${Date.now()}`,
+            id: response.context?.relatedGuideIds?.[0] || `msg_${Date.now()}`,
             userMessage,
-            botResponse: response.data.message,
-            context: response.data.context,
-            suggestedGuides: response.data.suggestedGuides,
+            botResponse: response.message,
+            context: response.context,
+            suggestedGuides: response.suggestedGuides,
             createdAt: new Date(),
             isOffline: false,
           };
@@ -126,7 +128,7 @@ const Chatbot: React.FC = () => {
           setMessages([...messages, newMessage]);
           
           // Cache message in IndexedDB
-          await indexedDBService.add('chatMessages', newMessage);
+          await indexedDBService.saveKBGuides([newMessage]);
           
           toast.success('Message sent');
         } else {
@@ -134,7 +136,7 @@ const Chatbot: React.FC = () => {
         }
       } else {
         // Offline mode - use local processing
-        const offlineResponse = await processMessageOffline(userMessage);
+        const offlineResponse = await chatbotService.processMessageOffline(userMessage);
         
         const newMessage: Message = {
           id: `msg_${Date.now()}`,
@@ -149,7 +151,7 @@ const Chatbot: React.FC = () => {
         setMessages([...messages, newMessage]);
         
         // Cache message in IndexedDB
-        await indexedDBService.add('chatMessages', newMessage);
+        await indexedDBService.saveKBGuides([newMessage]);
         
         toast.success('Message processed offline');
       }
@@ -162,107 +164,12 @@ const Chatbot: React.FC = () => {
   };
 
   /**
-   * Process message offline using cached knowledge base
-   */
-  const processMessageOffline = async (userMessage: string): Promise<any> => {
-    try {
-      // Get cached guides from IndexedDB
-      const cachedGuides = await indexedDBService.getAll('kbGuides');
-      
-      if (cachedGuides.length === 0) {
-        return {
-          message: 'You are currently offline and no cached knowledge base is available. Please go online to access the full chatbot.',
-          context: {
-            relatedGuideIds: [],
-            confidence: 0,
-            keywords: [],
-            matchType: 'partial',
-          },
-          suggestedGuides: [],
-        };
-      }
-
-      // Simple keyword matching for offline mode
-      const keywords = extractKeywords(userMessage);
-      const scored: { guide: any; score: number }[] = [];
-
-      for (const guide of cachedGuides) {
-        let score = 0;
-        const guideText = `${guide.title} ${guide.content}`.toLowerCase();
-        
-        // Keyword matching
-        const matchedKeywords = keywords.filter(kw => guideText.includes(kw)).length;
-        score = keywords.length > 0 ? matchedKeywords / keywords.length : 0;
-
-        if (score > 0.2) {
-          scored.push({ guide, score });
-        }
-      }
-
-      scored.sort((a, b) => b.score - a.score);
-
-      let message = '';
-      if (scored.length > 0) {
-        const topGuide = scored[0];
-        message = `(Offline) Based on your question, here's the relevant information:\n\n${topGuide.guide.content.substring(0, 300)}...`;
-      } else {
-        message = `(Offline) I couldn't find specific information about "${userMessage}". Please go online to access the full chatbot with better search capabilities.`;
-      }
-
-      return {
-        message,
-        context: {
-          relatedGuideIds: scored.slice(0, 3).map(s => s.guide.id),
-          confidence: scored.length > 0 ? Math.round(scored[0].score * 100) / 100 : 0,
-          keywords,
-          matchType: scored.length > 0 ? 'semantic' : 'partial',
-        },
-        suggestedGuides: scored.slice(0, 3).map(s => ({
-          id: s.guide.id,
-          title: s.guide.title,
-          category: s.guide.category,
-          score: Math.round(s.score * 100) / 100,
-        })),
-      };
-    } catch (error) {
-      console.error('Error processing offline message:', error);
-      return {
-        message: 'An error occurred while processing your message offline. Please try again.',
-        context: {
-          relatedGuideIds: [],
-          confidence: 0,
-          keywords: [],
-          matchType: 'partial',
-        },
-        suggestedGuides: [],
-      };
-    }
-  };
-
-  /**
-   * Extract keywords from message
-   */
-  const extractKeywords = (message: string): string[] => {
-    const stopWords = new Set([
-      'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
-      'of', 'with', 'by', 'from', 'is', 'are', 'was', 'were', 'be', 'been',
-    ]);
-
-    return message
-      .toLowerCase()
-      .split(/\s+/)
-      .filter(word => word.length > 2 && !stopWords.has(word))
-      .map(word => word.replace(/[^a-z0-9]/g, ''))
-      .filter((word, index, self) => self.indexOf(word) === index);
-  };
-
-  /**
    * Record feedback on message
    */
   const handleFeedback = async (messageId: string, isHelpful: boolean) => {
     try {
       if (isOnline) {
-        await apiService.post(`/chatbot/messages/${messageId}/feedback`, { isHelpful });
+        await chatbotService.recordFeedback(messageId, isHelpful);
         toast.success(isHelpful ? 'Thanks for the feedback!' : 'We\'ll improve');
       } else {
         toast.info('Feedback will be sent when you go online');
@@ -288,17 +195,24 @@ const Chatbot: React.FC = () => {
 
     try {
       if (isOnline) {
-        await apiService.delete('/chatbot/messages');
+        await chatbotService.clearConversationHistory();
       }
       
       // Clear from IndexedDB
-      await indexedDBService.clear('chatMessages');
+      await indexedDBService.saveKBGuides([]);
       setMessages([]);
       toast.success('Conversation history cleared');
     } catch (error) {
       console.error('Error clearing history:', error);
       toast.error('Failed to clear history');
     }
+  };
+
+  /**
+   * Navigate back to home screen
+   */
+  const handleGoBack = () => {
+    navigate('/');
   };
 
   return (
@@ -312,12 +226,20 @@ const Chatbot: React.FC = () => {
               {isOnline ? '🟢 Online' : '🔴 Offline Mode'}
             </p>
           </div>
-          <button
-            onClick={handleClearHistory}
-            className="px-3 py-2 bg-secondary-light hover:bg-secondary-medium text-primary-white rounded-lg font-sans text-label2 transition"
-          >
-            Clear History
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleClearHistory}
+              className="px-3 py-2 bg-secondary-light hover:bg-secondary-medium text-primary-white rounded-lg font-sans text-label2 transition"
+            >
+              Clear History
+            </button>
+            <button
+              onClick={handleGoBack}
+              className="px-3 py-2 bg-secondary-light hover:bg-secondary-medium text-primary-white rounded-lg font-sans text-label2 transition"
+            >
+              ← Back
+            </button>
+          </div>
         </div>
       </div>
 

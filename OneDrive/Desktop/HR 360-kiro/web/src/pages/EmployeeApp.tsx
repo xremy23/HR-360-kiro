@@ -10,6 +10,7 @@ import MobileCheckIn from './MobileCheckIn';
 import MobileAlerts from './MobileAlerts';
 import MobileKB from './MobileKB';
 import MobileSettings from './MobileSettings';
+import EditProfile from './EditProfile';
 import OrganizationSettings from './OrganizationSettings';
 import Chatbot from '../components/Chatbot';
 import { chatbotService } from '../services/chatbotService';
@@ -102,6 +103,7 @@ const EmployeeApp: React.FC = () => {
       <Route path="/contacts" element={<div className="p-4">Contacts coming soon</div>} />
       <Route path="/chatbot" element={<Chatbot />} />
       <Route path="/settings" element={<MobileSettings />} />
+      <Route path="/edit-profile" element={<EditProfile />} />
       <Route path="/org-settings" element={<OrganizationSettings />} />
     </Routes>
   );

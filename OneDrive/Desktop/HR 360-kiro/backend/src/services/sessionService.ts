@@ -27,7 +27,8 @@ class SessionService {
   private isConnected = false;
 
   /**
-   * Initialize Redis connection
+   * Initialize Redis connection with timeout
+   * Falls back to in-memory storage if Redis is unavailable
    */
   async initialize(): Promise<void> {
     try {
@@ -37,6 +38,14 @@ class SessionService {
         socket: {
           host: config.redisConfig.host,
           port: config.redisConfig.port,
+          connectTimeout: 5000, // 5 second timeout
+          reconnectStrategy: (retries) => {
+            if (retries > 3) {
+              console.warn('⚠️  Redis reconnection attempts exceeded, using in-memory storage');
+              return new Error('Redis reconnection failed');
+            }
+            return Math.min(retries * 50, 500);
+          },
         },
         password: config.redisConfig.password,
       });
@@ -51,11 +60,26 @@ class SessionService {
         this.isConnected = true;
       });
 
-      await this.client.connect();
+      // Try to connect with a timeout
+      const connectPromise = this.client.connect();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Redis connection timeout')), 5000)
+      );
+
+      try {
+        await Promise.race([connectPromise, timeoutPromise]);
+      } catch (error) {
+        console.warn('⚠️  Redis connection failed or timed out:', error);
+        console.warn('⚠️  Falling back to in-memory session storage (NOT PRODUCTION SAFE)');
+        this.client = null;
+        this.isConnected = false;
+      }
     } catch (error) {
       console.error('❌ Failed to initialize Redis:', error);
       // Fallback to in-memory storage for development
       console.warn('⚠️  Falling back to in-memory session storage (NOT PRODUCTION SAFE)');
+      this.client = null;
+      this.isConnected = false;
     }
   }
 

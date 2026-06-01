@@ -113,7 +113,8 @@ class ApiService {
     }
 
     try {
-      const token = localStorage.getItem('authToken');
+      // Check both 'token' and 'authToken' keys for compatibility
+      const token = localStorage.getItem('token') || localStorage.getItem('authToken');
       if (token) {
         this.token = token;
       }
@@ -130,7 +131,8 @@ class ApiService {
   setToken(token: string): void {
     this.token = token;
     try {
-      localStorage.setItem('authToken', token);
+      localStorage.setItem('token', token);
+      localStorage.setItem('authToken', token); // Store in both keys for compatibility
     } catch (error) {
       console.error('Error setting token:', error);
     }
@@ -142,6 +144,7 @@ class ApiService {
   clearToken(): void {
     this.token = null;
     try {
+      localStorage.removeItem('token');
       localStorage.removeItem('authToken');
     } catch (error) {
       console.error('Error clearing token:', error);

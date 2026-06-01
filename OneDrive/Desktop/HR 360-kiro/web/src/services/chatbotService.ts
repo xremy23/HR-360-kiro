@@ -177,7 +177,8 @@ class ChatbotService {
       }
       
       const user = JSON.parse(userStr);
-      const orgId = user.orgId;
+      // Frontend stores it as 'organizationId', not 'orgId'
+      const orgId = user.organizationId || user.orgId;
       
       if (!orgId) {
         throw new Error('Organization ID not found in user data');

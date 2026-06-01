@@ -11,14 +11,14 @@ import {
   setLoading as setKBLoading,
   setError as setKBError,
   setItems as setKBItems,
-  addItem as addKBItem,
-  deleteItem as deleteKBItem,
+  addGuide as addKBItem,
+  deleteGuide as deleteKBItem,
 } from '../store/slices/kbSlice';
 import {
   setLoading as setUserLoading,
   setError as setUserError,
   setItems as setUserItems,
-  deleteItem as deleteUserItem,
+  deleteUser as deleteUserItem,
 } from '../store/slices/userSlice';
 import {
   setLoading as setAlertLoading,
