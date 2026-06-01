@@ -12,6 +12,7 @@ const MobileSettings: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [notifications, setNotifications] = useState(true);
   const [location, setLocation] = useState(false);
+  const [camera, setCamera] = useState(false);
   const [hasOrganization, setHasOrganization] = useState<boolean | null>(null);
   const [loadingOrgStatus, setLoadingOrgStatus] = useState(true);
 
@@ -20,10 +21,16 @@ const MobileSettings: React.FC = () => {
   }, []);
 
   const checkOrganizationStatus = async () => {
+    setLoadingOrgStatus(true);
     try {
       const response = await apiService.getOrganization();
-      setHasOrganization(response.success && !!response.data);
+      // Check if response has data (organization exists) or is null (no organization)
+      const hasOrg = response.success && response.data !== null && response.data !== undefined;
+      setHasOrganization(hasOrg);
+      console.log('Organization status:', hasOrg, 'Response:', response);
     } catch (error) {
+      console.error('Failed to check org status:', error);
+      // Default to showing create org button if check fails
       setHasOrganization(false);
     } finally {
       setLoadingOrgStatus(false);
@@ -45,9 +52,58 @@ const MobileSettings: React.FC = () => {
     );
   };
 
-  const handleLocationToggle = () => {
-    setLocation(!location);
-    toast.success(!location ? 'Location enabled' : 'Location disabled');
+  const handleLocationToggle = async () => {
+    try {
+      if (!location) {
+        // Request location permission
+        const response = await apiService.post('/users/location/enable');
+        if (response.success) {
+          setLocation(true);
+          toast.success('Location tracking enabled');
+        } else {
+          toast.error('Failed to enable location tracking');
+        }
+      } else {
+        // Disable location tracking
+        const response = await apiService.post('/users/location/disable');
+        if (response.success) {
+          setLocation(false);
+          toast.success('Location tracking disabled');
+        } else {
+          toast.error('Failed to disable location tracking');
+        }
+      }
+    } catch (error) {
+      console.error('Location toggle error:', error);
+      toast.error('Failed to update location settings');
+    }
+  };
+
+  const handleCameraToggle = async () => {
+    try {
+      if (!camera) {
+        // Request camera permission
+        const response = await apiService.post('/users/camera/enable');
+        if (response.success) {
+          setCamera(true);
+          toast.success('Camera access enabled');
+        } else {
+          toast.error('Failed to enable camera access');
+        }
+      } else {
+        // Disable camera access
+        const response = await apiService.post('/users/camera/disable');
+        if (response.success) {
+          setCamera(false);
+          toast.success('Camera access disabled');
+        } else {
+          toast.error('Failed to disable camera access');
+        }
+      }
+    } catch (error) {
+      console.error('Camera toggle error:', error);
+      toast.error('Failed to update camera settings');
+    }
   };
 
   return (
@@ -86,7 +142,9 @@ const MobileSettings: React.FC = () => {
               </p>
             </div>
           </div>
-          <button className="w-full px-4 py-2 border-2 border-primary-teal text-primary-teal rounded-lg font-sans text-label1 font-semibold hover:bg-primary-teal hover:text-primary-white transition">
+          <button 
+            onClick={() => navigate('/edit-profile')}
+            className="w-full px-4 py-2 border-2 border-primary-teal text-primary-teal rounded-lg font-sans text-label1 font-semibold hover:bg-primary-teal hover:text-primary-white transition">
             Edit Profile
           </button>
         </div>
@@ -177,21 +235,34 @@ const MobileSettings: React.FC = () => {
                 Allow camera access
               </p>
             </div>
-            <button className="w-12 h-7 rounded-full bg-neutral-300 transition">
-              <div className="w-6 h-6 rounded-full bg-primary-white transition transform translate-x-0"></div>
+            <button
+              onClick={handleCameraToggle}
+              className={`w-12 h-7 rounded-full transition ${
+                camera ? 'bg-primary-teal' : 'bg-neutral-300'
+              }`}
+            >
+              <div
+                className={`w-6 h-6 rounded-full bg-primary-white transition transform ${
+                  camera ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              ></div>
             </button>
           </div>
         </div>
 
         {/* Organization Section */}
-        {!loadingOrgStatus && (
-          <div className="mb-6">
-            <h3 className="font-sans text-h5 text-primary-black font-semibold mb-4">
-              Organization
-            </h3>
+        <div className="mb-6">
+          <h3 className="font-sans text-h5 text-primary-black font-semibold mb-4">
+            Organization
+          </h3>
 
-            {!hasOrganization ? (
-              // Show create org button when user has no organization
+          {loadingOrgStatus ? (
+            <div className="bg-primary-white rounded-xl shadow-md p-4 text-center">
+              <p className="font-sans text-body2 text-neutral-600">Loading...</p>
+            </div>
+          ) : !hasOrganization ? (
+            // Show create org and join org buttons when user has no organization
+            <div className="space-y-3">
               <button
                 onClick={() => navigate('/org-settings')}
                 className="w-full bg-primary-white rounded-xl shadow-md p-4 text-left hover:shadow-lg transition"
@@ -203,22 +274,34 @@ const MobileSettings: React.FC = () => {
                   Set up your organization to manage your team
                 </p>
               </button>
-            ) : (
-              // Show organization settings button when user is part of org
+
               <button
-                onClick={() => navigate('/org-settings')}
+                onClick={() => navigate('/join-org')}
                 className="w-full bg-primary-white rounded-xl shadow-md p-4 text-left hover:shadow-lg transition"
               >
                 <h4 className="font-sans text-label1 text-primary-black font-semibold">
-                  🏢 Organization Settings
+                  🔗 Join Organization
                 </h4>
                 <p className="font-sans text-body3 text-neutral-600 mt-1">
-                  Manage organization and team members
+                  Join an existing organization with an invite code
                 </p>
               </button>
-            )}
-          </div>
-        )}
+            </div>
+          ) : (
+            // Show organization settings button when user is part of org
+            <button
+              onClick={() => navigate('/org-settings')}
+              className="w-full bg-primary-white rounded-xl shadow-md p-4 text-left hover:shadow-lg transition"
+            >
+              <h4 className="font-sans text-label1 text-primary-black font-semibold">
+                🏢 Organization Settings
+              </h4>
+              <p className="font-sans text-body3 text-neutral-600 mt-1">
+                Manage organization and team members
+              </p>
+            </button>
+          )}
+        </div>
 
         {/* App Section */}
         <div className="mb-6">

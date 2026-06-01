@@ -5,7 +5,7 @@ export interface User {
   email: string;
   firstName: string;
   lastName: string;
-  role: 'admin' | 'hr' | 'manager' | 'employee';
+  role: 'super_admin' | 'admin' | 'hr' | 'manager' | 'employee';
   orgId: string;
   teamId?: string;
   departmentId?: string;
@@ -104,6 +104,14 @@ export class UserEntity {
       updates.push(`biometric_enabled = $${paramCount++}`);
       values.push(data.biometricEnabled);
     }
+    if (data.orgId) {
+      updates.push(`org_id = $${paramCount++}`);
+      values.push(data.orgId);
+    }
+    if (data.role) {
+      updates.push(`role = $${paramCount++}`);
+      values.push(data.role);
+    }
 
     if (updates.length === 0) return this.findById(id);
 
@@ -126,5 +134,16 @@ export class UserEntity {
       [orgId]
     );
     return parseInt(result.rows[0].count);
+  }
+
+  static async findAll(limit: number = 100, offset: number = 0): Promise<User[]> {
+    const result = await query(
+      `SELECT id, email, first_name as "firstName", last_name as "lastName", role, org_id as "orgId", team_id as "teamId",
+              department_id as "departmentId", address, latitude, longitude, biometric_enabled as "biometricEnabled",
+              created_at as "createdAt", updated_at as "updatedAt"
+       FROM users LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    return result.rows;
   }
 }

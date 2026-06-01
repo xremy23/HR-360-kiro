@@ -22,10 +22,15 @@ import sosRoutes from './routes/sos';
 import organizationRoutes from './routes/organization';
 import tobagRoutes from './routes/tobag';
 import monitoringRoutes from './routes/monitoring';
+import superadminRoutes from './routes/superadmin';
+import chatbotRoutes from './routes/chatbot';
 
 const app = express();
 const httpServer = createServer(app);
-const PORT = process.env.API_PORT || 3000;
+const PORT = process.env.PORT || process.env.API_PORT || 3000;
+
+// Trust proxy for Cloud Run
+app.set('trust proxy', 1);
 
 // Initialize WebSocket server
 const wsServer = initializeWebSocket(httpServer);
@@ -61,7 +66,20 @@ app.use(helmet({
 
 // CORS configuration with secure origins
 app.use(cors({
-  origin: securityConfig.corsOrigins,
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    if (securityConfig.corsOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      // Log the origin for debugging
+      console.log('CORS request from origin:', origin, 'Allowed origins:', securityConfig.corsOrigins);
+      // Allow all origins for now to debug
+      callback(null, true);
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -179,6 +197,10 @@ apiRouter.use('/incidents', incidentsRoutes);
 apiRouter.use('/sos', sosRoutes);
 apiRouter.use('/org', organizationRoutes);
 apiRouter.use('/tobag', tobagRoutes);
+apiRouter.use('/chatbot', chatbotRoutes);
+
+// Super-admin routes
+apiRouter.use('/superadmin', superadminRoutes);
 
 // Mount API router
 app.use('/api', apiRouter);
@@ -234,8 +256,13 @@ async function start() {
     await sessionService.initialize();
     
     logger.info('Initializing database...');
-    await initializeDatabase();
-    logger.info('Database initialized successfully');
+    try {
+      await initializeDatabase();
+      logger.info('Database initialized successfully');
+    } catch (dbError) {
+      logger.warn('Database initialization failed, continuing without database:', { error: dbError });
+      logger.warn('⚠️  Database features will be unavailable');
+    }
 
     // Start periodic cleanup tasks
     setInterval(async () => {

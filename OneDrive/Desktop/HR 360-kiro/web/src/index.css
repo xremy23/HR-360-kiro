@@ -1,23 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Font Face Declarations */
-@font-face {
-  font-family: 'Funnel Display';
-  src: url('https://fonts.googleapis.com/css2?family=Funnel+Display:wght@400;500;600;700&display=swap');
-  font-weight: 400 700;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Funnel Sans';
-  src: url('https://fonts.googleapis.com/css2?family=Funnel+Sans:wght@400;500;600;700&display=swap');
-  font-weight: 400 700;
-  font-display: swap;
-}
 
 * {
   margin: 0;
@@ -28,12 +15,17 @@
 html,
 body {
   height: 100%;
-  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #F9FAFB;
+  background-color: #f2f7f7;
+  color: #024645;
+}
+
+html.dark,
+html.dark body {
+  background-color: #080d0d;
+  color: #f0f0f0;
 }
 
 #root {
@@ -41,13 +33,23 @@ body {
 }
 
 /* Scrollbar styling */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(3, 143, 141, 0.2);
+  border-radius: 99px;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: #f2f7f7;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -56,7 +58,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #024F45;
+  background: #024645;
 }
 
 /* Smooth transitions */
@@ -67,49 +69,88 @@ textarea {
   transition: all 0.2s ease;
 }
 
-/* Loading animation */
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+/* Bento Card Hover Effect */
+.bento-card-hover {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.animate-spin {
-  animation: spin 1s linear infinite;
+.bento-card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px -10px rgba(2, 70, 69, 0.12);
 }
 
-/* Fade in animation */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.3s ease-in;
+.dark .bento-card-hover:hover {
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.6);
 }
 
 /* Typography */
 .font-display {
-  font-family: 'Funnel Display', serif;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 900;
+  letter-spacing: -0.02em;
 }
 
 .font-sans {
-  font-family: 'Funnel Sans', 'DM Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Heading Styles */
+h1, .h1 {
+  @apply font-display text-h1 tracking-tight;
+}
+
+h2, .h2 {
+  @apply font-display text-h2 tracking-tight;
+}
+
+h3, .h3 {
+  @apply font-display text-h3 tracking-tight;
+}
+
+h4, .h4 {
+  @apply font-display text-h4 tracking-tight;
+}
+
+h5, .h5 {
+  @apply font-display text-h5 tracking-tight;
+}
+
+/* Body Text */
+.body1 {
+  @apply font-sans text-body1;
+}
+
+.body2 {
+  @apply font-sans text-body2;
+}
+
+.body3 {
+  @apply font-sans text-body3;
+}
+
+/* Label Text */
+.label1 {
+  @apply font-sans text-label1 font-semibold;
+}
+
+.label2 {
+  @apply font-sans text-label2 font-semibold;
 }
 
 /* Responsive text sizes */
 @media (max-width: 640px) {
-  .text-display1 {
-    @apply text-3xl;
-  }
-  .text-display2 {
+  .text-h1 {
     @apply text-2xl;
   }
-  .text-display3 {
+  .text-h2 {
     @apply text-xl;
   }
+  .text-h3 {
+    @apply text-lg;
+  }
 }
+

@@ -32,36 +32,75 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   
   const isOffline = useSelector((state: RootState) => state.offline.isOnline === false);
 
-  // Fetch data on mount
+  // Fetch data on mount and set up polling for real-time updates
   useEffect(() => {
+    // Fetch immediately on mount
     fetchHomeData();
-  }, []);
+    
+    // Poll for updates every 10 seconds to reflect status changes
+    const pollInterval = setInterval(() => {
+      console.log('Polling for check-in updates...');
+      fetchHomeData();
+    }, 10000);
+    
+    // Cleanup interval on unmount
+    return () => {
+      console.log('Clearing poll interval');
+      clearInterval(pollInterval);
+    };
+  }, [dispatch]);
 
   // Fetch data from backend
   const fetchHomeData = async () => {
     try {
       // Fetch check-ins
       dispatch(setCheckInLoading(true));
-      const checkInsResponse = await apiService.getCheckInHistory({ pageSize: 10 });
-      if (checkInsResponse.success && checkInsResponse.data) {
-        dispatch(setCheckInItems(checkInsResponse.data));
-      } else {
-        dispatch(setCheckInError('Failed to load check-ins'));
+      dispatch(setCheckInError(null));
+      try {
+        const checkInsResponse = await apiService.getCheckInHistory({ pageSize: 10 });
+        console.log('Check-ins response:', checkInsResponse);
+        if (checkInsResponse.success && checkInsResponse.data) {
+          console.log('Dispatching check-in items:', checkInsResponse.data);
+          dispatch(setCheckInItems(checkInsResponse.data));
+        } else {
+          console.warn('Check-ins response not successful or no data:', checkInsResponse);
+          dispatch(setCheckInError('Failed to load check-ins'));
+        }
+      } catch (err) {
+        const apiError = err as ApiError;
+        console.error('Check-ins fetch error:', apiError);
+        dispatch(setCheckInError(apiError.message || 'Failed to load check-ins'));
+      } finally {
+        dispatch(setCheckInLoading(false));
       }
 
       // Fetch alerts
       dispatch(setAlertLoading(true));
-      const alertsResponse = await apiService.getAlerts({ pageSize: 5 });
-      if (alertsResponse.success && alertsResponse.data) {
-        dispatch(setAlertItems(alertsResponse.data));
-      } else {
-        dispatch(setAlertError('Failed to load alerts'));
+      dispatch(setAlertError(null));
+      try {
+        const alertsResponse = await apiService.getAlerts({ pageSize: 5 });
+        console.log('Alerts response:', alertsResponse);
+        if (alertsResponse.success && alertsResponse.data) {
+          console.log('Dispatching alert items:', alertsResponse.data);
+          dispatch(setAlertItems(alertsResponse.data));
+        } else {
+          console.warn('Alerts response not successful or no data:', alertsResponse);
+          dispatch(setAlertError('Failed to load alerts'));
+        }
+      } catch (err) {
+        const apiError = err as ApiError;
+        console.error('Alerts fetch error:', apiError);
+        dispatch(setAlertError(apiError.message || 'Failed to load alerts'));
+      } finally {
+        dispatch(setAlertLoading(false));
       }
     } catch (err) {
       const apiError = err as ApiError;
       console.error('Error fetching home data:', err);
       dispatch(setCheckInError(apiError.message || 'Failed to load data'));
       dispatch(setAlertError(apiError.message || 'Failed to load data'));
+      dispatch(setCheckInLoading(false));
+      dispatch(setAlertLoading(false));
     }
   };
 
@@ -236,15 +275,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           />
         </View>
       </View>
-
-      {/* Offline Notice */}
-      <View style={styles.section}>
-        <View style={[styles.card, { backgroundColor: colors.neutral[50] }]}>
-          <Text style={styles.offlineText}>
-            📡 This app works offline. Your data will sync when you're back online.
-          </Text>
-        </View>
-      </View>
     </ScrollView>
   );
 };
@@ -281,8 +311,10 @@ const ResourceCard: React.FC<ResourceCardProps> = ({ title, description, icon, o
   </TouchableOpacity>
 );
 
-const getStatusColor = (status: string): string => {
-  switch (status) {
+const getStatusColor = (status: string | undefined): string => {
+  if (!status) return colors.neutral[300];
+  
+  switch (status.toLowerCase()) {
     case 'safe':
       return colors.success;
     case 'need_help':

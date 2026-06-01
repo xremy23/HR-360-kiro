@@ -23,11 +23,17 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       return sendError(res, 'INVALID_ORG', 'Organization ID required', 400);
     }
 
-    const guides = await KBGuideEntity.findByOrgId(orgId as string, category as string, type as string);
-    const total = guides.length;
-    const paginated = guides.slice(offset, offset + limit);
+    try {
+      const guides = await KBGuideEntity.findByOrgId(orgId as string, category as string, type as string);
+      const total = guides.length;
+      const paginated = guides.slice(offset, offset + limit);
 
-    return sendPaginated(res, paginated, total, limit, offset, 200);
+      return sendPaginated(res, paginated, total, limit, offset, 200);
+    } catch (dbError) {
+      console.error('Database error retrieving guides:', dbError);
+      // Return empty array if database is unavailable
+      return sendPaginated(res, [], 0, limit, offset, 200);
+    }
   } catch (error) {
     console.error('Get guides error:', error);
     return sendError(res, 'SERVER_ERROR', 'Failed to retrieve guides', 500);

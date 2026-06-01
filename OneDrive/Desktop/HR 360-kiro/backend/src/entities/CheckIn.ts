@@ -97,4 +97,40 @@ export class CheckInEntity {
     );
     return result.rows[0];
   }
+
+  static async update(id: string, data: Partial<Omit<CheckIn, 'id' | 'timestamp'>>): Promise<CheckIn> {
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramCount = 1;
+
+    if (data.status !== undefined) {
+      updates.push(`status = $${paramCount++}`);
+      params.push(data.status);
+    }
+    if (data.notes !== undefined) {
+      updates.push(`notes = $${paramCount++}`);
+      params.push(data.notes);
+    }
+    if (data.latitude !== undefined) {
+      updates.push(`latitude = $${paramCount++}`);
+      params.push(data.latitude);
+    }
+    if (data.longitude !== undefined) {
+      updates.push(`longitude = $${paramCount++}`);
+      params.push(data.longitude);
+    }
+
+    if (updates.length === 0) {
+      // No updates, return existing record
+      return this.findById(id) as Promise<CheckIn>;
+    }
+
+    params.push(id);
+    const sql = `UPDATE check_ins SET ${updates.join(', ')} WHERE id = $${paramCount} 
+                 RETURNING id, user_id as "userId", team_id as "teamId", status, notes, latitude, longitude,
+                           timestamp, incident_id as "incidentId", is_drill as "isDrill"`;
+
+    const result = await query(sql, params);
+    return result.rows[0];
+  }
 }

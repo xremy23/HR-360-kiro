@@ -1,0 +1,25 @@
+{
+  "displayName": "Cloud SQL - High Memory Usage",
+  "conditions": [
+    {
+      "displayName": "Memory usage > 85%",
+      "conditionThreshold": {
+        "filter": "resource.type=\"cloudsql_database\" resource.labels.database_id=\"hr-360-497706:hr-360-postgres\" metric.type=\"cloudsql.googleapis.com/database/memory/utilization\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 0.85,
+        "duration": "300s",
+        "aggregations": [
+          {
+            "alignmentPeriod": "60s",
+            "perSeriesAligner": "ALIGN_MEAN"
+          }
+        ]
+      }
+    }
+  ],
+  "combiner": "OR",
+  "notificationChannels": [],
+  "alertStrategy": {
+    "autoClose": "1800s"
+  }
+}

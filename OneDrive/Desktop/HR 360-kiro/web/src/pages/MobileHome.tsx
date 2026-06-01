@@ -5,11 +5,15 @@ import { RootState } from '../store/store';
 import { logout } from '../store/slices/authSlice';
 import { AppDispatch } from '../store/store';
 
-const MobileHome: React.FC = () => {
+interface MobileHomeProps {
+  onMenuClick?: () => void;
+  showMenu?: boolean;
+}
+
+const MobileHome: React.FC<MobileHomeProps> = ({ onMenuClick, showMenu }) => {
   const { user } = useSelector((state: RootState) => state.auth);
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
-  const [showMenu, setShowMenu] = useState(false);
 
   const handleLogout = () => {
     dispatch(logout());
@@ -44,12 +48,12 @@ const MobileHome: React.FC = () => {
       path: '/kb',
     },
     {
-      id: 'contacts',
-      icon: '👥',
-      label: 'Contacts',
-      description: 'Emergency contacts',
-      color: 'bg-secondary-light',
-      path: '/contacts',
+      id: 'chatbot',
+      icon: '💬',
+      label: 'Assistant',
+      description: 'Ask questions',
+      color: 'bg-success',
+      path: '/chatbot',
     },
   ];
 
@@ -71,45 +75,27 @@ const MobileHome: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-neutral-50">
-      {/* Header */}
-      <header className="bg-gradient-to-r from-primary-teal to-secondary-medium sticky top-0 z-40 shadow-md">
-        <div className="px-4 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="font-display text-h2 text-primary-white">HR 360</h1>
-            <p className="font-sans text-body3 text-secondary-light">
-              Welcome, {user?.name?.split(' ')[0]}
-            </p>
-          </div>
+    <div className="w-full">
+      {/* Mobile Menu */}
+      {showMenu && (
+        <div className="bg-secondary-dark border-b border-secondary-light border-opacity-20 px-4 py-3 space-y-2">
           <button
-            onClick={() => setShowMenu(!showMenu)}
-            className="relative w-10 h-10 flex items-center justify-center rounded-full bg-secondary-light bg-opacity-20 hover:bg-opacity-30 transition"
+            onClick={() => navigate('/settings')}
+            className="w-full text-left px-3 py-2 rounded-lg hover:bg-secondary-light hover:bg-opacity-10 text-primary-white font-sans text-body2 transition"
           >
-            <span className="text-primary-white text-xl">☰</span>
+            ⚙️ Settings
+          </button>
+          <button
+            onClick={handleLogout}
+            className="w-full text-left px-3 py-2 rounded-lg hover:bg-error hover:bg-opacity-10 text-error font-sans text-body2 transition"
+          >
+            🚪 Logout
           </button>
         </div>
-
-        {/* Mobile Menu */}
-        {showMenu && (
-          <div className="bg-secondary-dark border-t border-secondary-light border-opacity-20 px-4 py-3 space-y-2">
-            <button
-              onClick={() => navigate('/settings')}
-              className="w-full text-left px-3 py-2 rounded-lg hover:bg-secondary-light hover:bg-opacity-10 text-primary-white font-sans text-body2 transition"
-            >
-              ⚙️ Settings
-            </button>
-            <button
-              onClick={handleLogout}
-              className="w-full text-left px-3 py-2 rounded-lg hover:bg-error hover:bg-opacity-10 text-error font-sans text-body2 transition"
-            >
-              🚪 Logout
-            </button>
-          </div>
-        )}
-      </header>
+      )}
 
       {/* Main Content */}
-      <main className="px-4 py-6 pb-24">
+      <div className="px-4 py-6">
         {/* Status Card */}
         <div className="bg-primary-white rounded-2xl shadow-md p-6 mb-6 border-l-4 border-primary-teal">
           <div className="flex items-center justify-between mb-4">
@@ -176,29 +162,7 @@ const MobileHome: React.FC = () => {
             ))}
           </div>
         </div>
-      </main>
-
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-primary-white border-t border-neutral-200 shadow-lg">
-        <div className="flex items-center justify-around">
-          {[
-            { icon: '🏠', label: 'Home', path: '/' },
-            { icon: '✓', label: 'Check In', path: '/checkin' },
-            { icon: '📚', label: 'KB', path: '/kb' },
-            { icon: '🔔', label: 'Alerts', path: '/alerts' },
-            { icon: '⚙️', label: 'Settings', path: '/settings' },
-          ].map((item) => (
-            <button
-              key={item.path}
-              onClick={() => navigate(item.path)}
-              className="flex-1 flex flex-col items-center justify-center py-3 text-neutral-600 hover:text-primary-teal transition"
-            >
-              <span className="text-xl mb-1">{item.icon}</span>
-              <span className="font-sans text-caption">{item.label}</span>
-            </button>
-          ))}
-        </div>
-      </nav>
+      </div>
     </div>
   );
 };

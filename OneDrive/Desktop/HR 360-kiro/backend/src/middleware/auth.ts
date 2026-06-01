@@ -7,9 +7,12 @@ export interface AuthRequest extends Request {
   user?: {
     id: string;
     email: string;
+    firstName?: string;
+    lastName?: string;
     role: string;
     orgId: string;
     teamId?: string;
+    biometricEnabled?: boolean;
   };
 }
 
@@ -81,7 +84,7 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
 };
 
 export const adminMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
-  if (req.user?.role !== 'admin' && req.user?.role !== 'hr') {
+  if (!['super_admin', 'admin', 'hr'].includes(req.user?.role || '')) {
     return res.status(403).json({
       success: false,
       error: {
@@ -94,8 +97,22 @@ export const adminMiddleware = (req: AuthRequest, res: Response, next: NextFunct
   next();
 };
 
+export const superAdminMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (req.user?.role !== 'super_admin') {
+    return res.status(403).json({
+      success: false,
+      error: {
+        code: 'FORBIDDEN',
+        message: 'Super admin access required',
+      },
+      statusCode: 403,
+    });
+  }
+  next();
+};
+
 export const managerMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
-  if (!['admin', 'hr', 'manager'].includes(req.user?.role || '')) {
+  if (!['super_admin', 'admin', 'hr', 'manager'].includes(req.user?.role || '')) {
     return res.status(403).json({
       success: false,
       error: {

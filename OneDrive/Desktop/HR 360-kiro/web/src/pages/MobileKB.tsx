@@ -7,6 +7,7 @@ const MobileKB: React.FC = () => {
   const navigate = useNavigate();
   const { guides } = useSelector((state: RootState) => state.kb);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedGuide, setSelectedGuide] = useState<string | null>(null);
 
   // Mock guides for demo
@@ -71,12 +72,16 @@ const MobileKB: React.FC = () => {
 
   const allGuides = guides.length > 0 ? guides : mockGuides;
 
-  const filteredGuides = allGuides.filter(
-    (guide) =>
+  const filteredGuides = allGuides.filter((guide) => {
+    const matchesSearch =
       guide.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       guide.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      guide.tags?.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+      guide.tags?.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    const matchesCategory = !selectedCategory || guide.category === selectedCategory;
+
+    return matchesSearch && matchesCategory;
+  });
 
   const categories = Array.from(new Set(allGuides.map((g) => g.category)));
 
@@ -176,10 +181,25 @@ const MobileKB: React.FC = () => {
             Categories
           </h3>
           <div className="flex gap-2 overflow-x-auto pb-2">
+            <button
+              onClick={() => setSelectedCategory(null)}
+              className={`px-4 py-2 rounded-full font-sans text-label2 font-semibold whitespace-nowrap transition ${
+                selectedCategory === null
+                  ? 'bg-primary-teal text-primary-white'
+                  : 'bg-primary-white border-2 border-neutral-200 hover:border-primary-teal'
+              }`}
+            >
+              All
+            </button>
             {categories.map((category) => (
               <button
                 key={category}
-                className="px-4 py-2 rounded-full font-sans text-label2 font-semibold whitespace-nowrap bg-primary-white border-2 border-neutral-200 hover:border-primary-teal transition"
+                onClick={() => setSelectedCategory(category)}
+                className={`px-4 py-2 rounded-full font-sans text-label2 font-semibold whitespace-nowrap transition ${
+                  selectedCategory === category
+                    ? 'bg-primary-teal text-primary-white'
+                    : 'bg-primary-white border-2 border-neutral-200 hover:border-primary-teal'
+                }`}
               >
                 {category}
               </button>

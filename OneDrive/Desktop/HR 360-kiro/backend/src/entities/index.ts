@@ -12,3 +12,5 @@ export { NotificationEntity, type Notification } from './Notification';
 export { GuideAcknowledgmentEntity, type GuideAcknowledgment } from './GuideAcknowledgment';
 export { PushNotificationEntity, type PushNotification } from './PushNotification';
 export { DeviceTokenEntity, type DeviceToken } from './DeviceToken';
+export { MagicLinkTokenEntity, type MagicLinkToken } from './MagicLinkToken';
+export { ChatMessageEntity, type ChatMessage } from './ChatMessage';

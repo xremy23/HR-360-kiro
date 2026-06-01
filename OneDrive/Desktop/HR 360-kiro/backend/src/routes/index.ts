@@ -9,3 +9,5 @@ export { default as incidentsRoutes } from './incidents';
 export { default as sosRoutes } from './sos';
 export { default as organizationRoutes } from './organization';
 export { default as tobagRoutes } from './tobag';
+export { default as superadminRoutes } from './superadmin';
+export { default as chatbotRoutes } from './chatbot';

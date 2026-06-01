@@ -1,326 +1,205 @@
-# Emergency Management Mobile App
+# HR 360 - Emergency Management System
 
-A comprehensive, offline-capable emergency management platform for organizations. Features real-time team check-ins, knowledge base management, alert broadcasting, and SOS escalation.
+A comprehensive Progressive Web App (PWA) for emergency management. Features real-time team check-ins, organization management, and role-based access control. Works on all devices including mobile, tablet, and desktop.
 
 ## 🎯 Key Features
 
 ### Core Features
-- **Email-based Authentication** - Secure sign-in with email verification
-- **Offline-First Architecture** - All critical functions work without internet
-- **Team Check-In System** - Safe/Need Help/SOS status with location tracking
-- **Knowledge Base** - General and org-specific emergency guides with version history
-- **Contact Management** - Personal, hotline, and location-aware emergency contacts
-- **To-Go Bag Checklist** - Customizable emergency preparedness checklist
-- **Alert Broadcasting** - Real-time emergency alerts with severity levels
-- **Incident Logging** - Complete audit trail of all incidents and responses
+- ✅ **Passwordless Authentication** - Magic link email authentication
+- ✅ **Organization Management** - Create and manage organizations
+- ✅ **Team Check-In System** - Real-time status updates with location tracking
+- ✅ **Role-Based Access Control** - Admin, HR, Manager, Employee roles
+- ✅ **Super-Admin Features** - System-wide management and organization switching
+- ✅ **Real-Time Updates** - WebSocket-based instant notifications
+- ✅ **Session Management** - Redis-backed session persistence
+- ✅ **Automated Backups** - Daily backup with point-in-time recovery
 
 ### Advanced Features
-- **SOS Escalation** - Automatic notification chain (manager → contacts → team)
-- **Drill Mode** - Practice drills with separate logging
-- **Location-Aware Contacts** - Auto-populate nearby hospitals, fire stations, police
-- **Biometric Security** - Face ID/fingerprint for sensitive data
-- **Multilingual Support** - English and Filipino (Tagalog)
-- **Admin Dashboard** - Web console for KB, org, and user management
-- **Manager Dashboard** - Mobile check-in status for team members
-- **Guide Acknowledgment** - Track required reading compliance
-- **Offline Maps** - Cached evacuation maps and building layouts
-- **Media in Guides** - Images and videos cached for offline access
+- ✅ **Progressive Web App** - Works on iOS, Android, Desktop, Tablet
+- ✅ **Responsive Design** - Mobile-first, works on all screen sizes
+- ✅ **Cloud Infrastructure** - Google Cloud Run, Cloud SQL, Cloud Memorystore
+- ✅ **Monitoring & Alerting** - Real-time system monitoring with alerts
+- ✅ **Email Notifications** - Gmail SMTP integration for alerts
+- ✅ **User Management** - Invite users, manage roles, remove members
 
 ## 📱 Platform Support
 
-- **Android** - Primary platform (Expo)
-- **iOS** - Full support (Expo)
-- **Web** - Admin/HR console (React + Vite)
+- ✅ **iOS** - Full PWA support (Safari 11.3+)
+- ✅ **Android** - Full PWA support (Chrome, Firefox, Samsung Internet)
+- ✅ **Desktop** - Full support (Chrome, Firefox, Edge, Safari)
+- ✅ **Tablet** - Full support (iPad, Android tablets)
 
 ## 🏗️ Architecture
 
-### Three-Tier System
+### Tech Stack
 
-```
-Mobile App (React Native)
-    ↓
-Backend API (Node.js/Express)
-    ↓
-Web Console (React)
-```
+**Frontend (PWA)**
+- React 18 + Redux Toolkit
+- Vite build tool
+- Tailwind CSS
+- Axios HTTP client
+- Socket.io for real-time updates
 
-### Offline-First Design
-- SQLite for local data storage
-- Automatic sync queue
-- Conflict resolution
-- Network status monitoring
+**Backend (API)**
+- Node.js + Express.js
+- TypeScript
+- PostgreSQL database
+- Redis cache
+- Socket.io WebSocket server
+
+**Infrastructure**
+- Google Cloud Run (hosting)
+- Cloud SQL (database)
+- Cloud Memorystore (Redis)
+- Cloud Monitoring (alerts)
+- Cloud Storage (backups)
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Node.js 18+
-- PostgreSQL 12+
-- Expo CLI (for mobile)
+- npm or yarn
+- Google Cloud account (for deployment)
 
 ### Installation
 
 1. **Clone repository**
 ```bash
-git clone <repo-url>
-cd emergency-app
+git clone https://github.com/xremy23/HR-360-kiro.git
+cd HR-360-kiro
 ```
 
 2. **Backend Setup**
 ```bash
 cd backend
 npm install
-cp .env.example .env
-npm run migrate
+npm run build
 npm run dev
 ```
 
-3. **Mobile Setup**
-```bash
-cd mobile
-npm install
-npm start
-```
-
-4. **Web Console Setup**
+3. **Web App Setup**
 ```bash
 cd web
 npm install
 npm run dev
 ```
 
+### Access the Application
+- **Web App**: http://localhost:5173
+- **Backend API**: http://localhost:8080
+- **Health Check**: http://localhost:8080/health
+
 ## 📚 Documentation
 
+- **[PROJECT_STATUS.md](./PROJECT_STATUS.md)** - Current project status and features
+- **[CHANGELOG.md](./CHANGELOG.md)** - Version history and changes
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System design and components
-- **[OFFLINE_STRATEGY.md](./OFFLINE_STRATEGY.md)** - Offline-first implementation
-- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Production deployment guide
-- **[API.md](./docs/API.md)** - API endpoint documentation
+- **[QUICK_START_GUIDE.md](./QUICK_START_GUIDE.md)** - Detailed setup instructions
 
 ## 🔐 Security
 
-- Email verification for authentication
-- JWT tokens with refresh rotation
-- Role-based access control (Admin, HR, Employee, Manager)
-- Biometric re-authentication
-- Encrypted sensitive data
-- HTTPS enforcement
-- Rate limiting
-- CORS protection
+- ✅ Passwordless magic link authentication
+- ✅ JWT tokens with 24-hour expiration
+- ✅ Token blacklist for logout
+- ✅ Role-based access control (RBAC)
+- ✅ Session management with Redis
+- ✅ HTTPS enforcement
+- ✅ CORS protection
+- ✅ Rate limiting
+- ✅ Brute-force protection
+- ✅ Input validation
+- ✅ SQL injection prevention
+- ✅ Credentials in environment variables (not in code)
 
 ## 🌐 Internationalization
 
-- **English** - Default language
-- **Filipino (Tagalog)** - Full translation
-
-Add more languages by creating translation files in `mobile/src/i18n/`
+Currently English only. Multilingual support planned for future releases.
 
 ## 📊 Data Models
 
 ### User Roles
-- **Admin** - Full system access, KB management, org management
-- **HR** - User management, incident review, compliance tracking
-- **Manager** - Team check-in dashboard, team management
-- **Employee** - Check-in, KB access, personal contacts
+- **super_admin** - System-wide management, view all orgs and users
+- **admin** - Organization management, user management
+- **hr** - User management, incident review
+- **manager** - Team check-in dashboard, team management
+- **employee** - Check-in, profile management
 
-### Emergency Types
-- Typhoon
-- Earthquake
-- Volcanic Eruption
-- Flash Floods
-- Fire
-- Tornado
-- Data Breach
-- Intruder
-- Active Threat
-- Workplace Violence
-
-### Check-In Status
-- **Safe** - User is safe
-- **Need Help** - User needs assistance
-- **SOS** - Critical emergency, triggers escalation
-
-### Alert Severity
-- **Advisory** - Informational
-- **Watch** - Heightened awareness
-- **Emergency** - Immediate action required
-
-## 🔄 Sync Strategy
-
-### Automatic Sync
-- On app launch
-- When connection restored
-- Every 30 seconds when online
-- Background sync (if supported)
-
-### Manual Sync
-- Pull-to-refresh
-- Sync button in settings
-- Force sync on demand
-
-### Sync Priority
-1. SOS escalations (immediate)
-2. Check-ins (high)
-3. Contacts (medium)
-4. To-go bag items (low)
-
-## 📱 Mobile Features
-
-### Screens
-- **Auth** - Login, verification, org onboarding
-- **Home** - Quick actions, recent alerts, team status
-- **Check-In** - Status submission, location, notes
-- **Knowledge Base** - Search, browse, read guides
-- **Contacts** - Personal, hotlines, location-based
-- **To-Go Bag** - Checklist management
-- **Alerts** - View and manage alerts
-- **Settings** - Profile, language, biometric, notifications
-- **Admin** - KB management, org management, alerts, drills, incidents
-
-### Offline Capabilities
-- ✅ View KB guides
-- ✅ Submit check-in
-- ✅ Trigger SOS
-- ✅ Manage contacts
-- ✅ Manage to-go bag
-- ✅ View check-in history
-- ✅ View offline maps
-- ✅ Read cached alerts
-
-## 🌐 Web Console Features
-
-### Admin Functions
-- KB guide management (create, edit, delete, version history)
-- Organization structure (teams, departments)
-- User management (roles, permissions)
-- Alert broadcasting
-- Drill mode management
-- Incident logging and review
-
-### HR Functions
-- User profile management
-- Team management
-- Incident review
-- Compliance tracking
-- Guide acknowledgment tracking
-
-### Manager Functions
-- Team check-in dashboard
-- Team member status
-- Incident history
-- Team management
-
-## 🗄️ Database
-
-### PostgreSQL Tables
-- users
-- organizations
-- teams
-- departments
-- kb_guides
-- kb_guide_versions
-- check_ins
-- alerts
-- alert_notifications
-- contacts
-- tobag_items
-- incidents
-- sos_escalations
-- offline_maps
-- guide_acknowledgments
-
-## 🔌 API Endpoints
+## 🔄 API Endpoints
 
 ### Authentication
-- `POST /api/auth/send-verification` - Send verification email
-- `POST /api/auth/verify-email` - Verify and create session
-- `POST /api/auth/join-org` - Join organization
-- `POST /api/auth/refresh-token` - Refresh JWT
+- `POST /api/auth/send-magic-link` - Send magic link
+- `POST /api/auth/verify-magic-link` - Verify magic link
+- `POST /api/auth/logout` - Logout user
+
+### Users
+- `GET /api/users/profile` - Get user profile
+- `PUT /api/users/profile` - Update profile
+
+### Organizations
+- `POST /api/organizations` - Create organization
+- `GET /api/organizations` - Get user's organization
+- `PUT /api/organizations/:id` - Update organization
+- `POST /api/organizations/:id/invite` - Invite user
+- `DELETE /api/organizations/:id/members/:userId` - Remove user
 
 ### Check-Ins
 - `POST /api/check-ins` - Submit check-in
-- `GET /api/check-ins/team/:teamId` - Get team check-ins
-- `GET /api/check-ins/history` - Get user history
+- `PUT /api/check-ins/:id` - Update check-in status
+- `GET /api/check-ins/:id` - Get check-in
+- `GET /api/check-ins/history` - Get check-in history
 
-### Knowledge Base
-- `GET /api/kb/guides` - Get guides
-- `POST /api/kb/guides` - Create guide (admin)
-- `PUT /api/kb/guides/:id` - Update guide (admin)
-- `DELETE /api/kb/guides/:id` - Delete guide (admin)
+### Super-Admin
+- `GET /api/superadmin/organizations` - View all organizations
+- `GET /api/superadmin/organizations/:orgId` - View org details
+- `POST /api/superadmin/organizations/:orgId/switch` - Switch organization
+- `GET /api/superadmin/users` - View all users
+- `PUT /api/superadmin/users/:userId/role` - Update user role
 
-### Alerts
-- `GET /api/alerts` - Get alerts
-- `POST /api/alerts/broadcast` - Broadcast alert (admin)
-- `PUT /api/alerts/:id/notifications/:nId` - Mark as read
-
-### SOS
-- `POST /api/sos` - Trigger SOS
-- `GET /api/sos/escalations` - Get escalations (admin)
-
-See [API.md](./docs/API.md) for complete documentation.
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for complete API documentation.
 
 ## 🧪 Testing
 
-### Mobile
 ```bash
-cd mobile
-npm test
-```
-
-### Backend
-```bash
+# Backend
 cd backend
 npm test
-```
 
-### Web
-```bash
+# Web App
 cd web
 npm test
 ```
 
 ## 📦 Building
 
-### Mobile APK
 ```bash
-cd mobile
-eas build --platform android --type apk
-```
-
-### Mobile iOS
-```bash
-cd mobile
-eas build --platform ios
-```
-
-### Web
-```bash
-cd web
-npm run build
-```
-
-### Backend
-```bash
+# Backend
 cd backend
+npm run build
+
+# Web App
+cd web
 npm run build
 ```
 
 ## 🚢 Deployment
 
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions.
+### Production URLs
+- **Web App**: https://web-116253736511.us-central1.run.app
+- **Backend API**: https://backend-116253736511.us-central1.run.app
 
-### Quick Deploy
+### Deploy Backend
 ```bash
-# Backend
-docker build -t emergency-app-backend backend/
-docker run -d -p 3000:3000 emergency-app-backend
-
-# Web
-cd web && npm run build
-# Deploy dist/ to CDN
-
-# Mobile
-eas build --platform android
-eas submit --platform android
+gcloud builds submit backend/ --tag gcr.io/hr-360-497706/backend
+gcloud run deploy backend --image gcr.io/hr-360-497706/backend
 ```
+
+### Deploy Web App
+```bash
+cd web && npm run build
+gsutil -m cp -r dist/* gs://hr-360-web-app/
+```
+
+See [QUICK_START_GUIDE.md](./QUICK_START_GUIDE.md) for detailed deployment instructions.
 
 ## 🤝 Contributing
 
@@ -342,52 +221,57 @@ For issues and questions:
 
 ## 🗺️ Roadmap
 
-### Phase 1 (Current)
-- ✅ Core authentication
-- ✅ Offline-first architecture
-- ✅ Basic KB and check-in
-- ✅ Contact management
-- ✅ To-go bag
+### ✅ Completed (v1.0.0)
+- Magic link authentication
+- Organization management
+- Check-in system
+- Role-based access control
+- Super-admin features
+- Real-time WebSocket updates
+- Cloud infrastructure
+- Monitoring and alerting
+- Automated backups
 
-### Phase 2
-- 🔄 Alert broadcasting
-- 🔄 Admin console
-- 🔄 Drill mode
-- 🔄 Incident logging
+### 📋 Planned (v1.1.0)
+- Chatbot feature
+- Toggle state persistence
+- Email validation on forms
+- Custom confirmation modals
+- Push notifications
+- SMS notifications
+- Advanced reporting
+- Team management
 
-### Phase 3
-- 📋 SOS escalation
-- 📋 Location-aware contacts
-- 📋 Biometric security
-- 📋 Multilingual support
-
-### Phase 4
-- 📋 Manager dashboard
-- 📋 Guide acknowledgment
-- 📋 Offline maps
-- 📋 Media in guides
-
-### Phase 5
-- 📋 Advanced analytics
-- 📋 Compliance reporting
-- 📋 Integration APIs
-- 📋 Mobile web version
+### 🔮 Future (v2.0.0)
+- SOS escalation workflows
+- Incident tracking
+- Admin dashboard
+- Multi-language support
+- Mobile app (native)
 
 ## 🎓 Learning Resources
 
-- [React Native Documentation](https://reactnative.dev/)
-- [Expo Documentation](https://docs.expo.dev/)
+- [React Documentation](https://react.dev/)
 - [Express.js Guide](https://expressjs.com/)
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/)
+- [Google Cloud Documentation](https://cloud.google.com/docs)
 - [Redux Toolkit](https://redux-toolkit.js.org/)
 
-## 📞 Contact
+## 📞 Contact & Support
 
-- **Project Lead**: [Your Name]
-- **Email**: support@emergencyapp.com
-- **Website**: https://emergencyapp.com
+For issues, questions, or suggestions:
+- Check [PROJECT_STATUS.md](./PROJECT_STATUS.md) for current status
+- Review [CHANGELOG.md](./CHANGELOG.md) for recent changes
+- See [QUICK_START_GUIDE.md](./QUICK_START_GUIDE.md) for setup help
+- Check logs: `gcloud run services logs read backend --region us-central1`
+
+## 📄 License
+
+This project is licensed under the MIT License - see LICENSE file for details.
 
 ---
 
-**Last Updated**: May 2026
-**Version**: 1.0.0
+**Project:** HR 360 Emergency Management System  
+**Status:** ✅ Production Ready  
+**Version:** 1.0.0  
+**Last Updated:** May 30, 2026
