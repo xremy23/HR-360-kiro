@@ -8,8 +8,8 @@ import { execSync } from 'child_process';
 console.log('Starting Vite build...');
 
 try {
-  // Use node to run vite directly from node_modules
-  execSync('node ./node_modules/vite/bin/vite.js build', {
+  // Use vite directly
+  execSync('vite build', {
     stdio: 'inherit',
     shell: true,
   });
