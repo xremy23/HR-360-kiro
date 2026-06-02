@@ -4,6 +4,7 @@ import kbReducer from './slices/kbSlice';
 import checkinReducer from './slices/checkinSlice';
 import alertsReducer from './slices/alertsSlice';
 import offlineReducer from './slices/offlineSlice';
+import websocketReducer from './slices/websocketSlice';
 
 export const store = configureStore({
   reducer: {
@@ -11,7 +12,8 @@ export const store = configureStore({
     kb: kbReducer,
     checkin: checkinReducer,
     alerts: alertsReducer,
-    offline: offlineReducer
+    offline: offlineReducer,
+    websocket: websocketReducer
   }
 });
 

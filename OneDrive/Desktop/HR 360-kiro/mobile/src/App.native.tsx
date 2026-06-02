@@ -215,10 +215,10 @@ const TabIcon: React.FC<TabIconProps> = ({ icon, color }) => (
  */
 const RootNavigator = () => {
   useEffect(() => {
-    // Initialize network monitoring and sync service
-    const initializeOfflineSupport = async () => {
+    // Initialize network monitoring, sync service, and WebSocket
+    const initializeApp = async () => {
       try {
-        console.log('[App] Initializing offline support...');
+        console.log('[App] Initializing app services...');
         
         // Initialize sync service with store
         enhancedSyncService.initialize(store);
@@ -229,18 +229,34 @@ const RootNavigator = () => {
         // Start periodic sync
         enhancedSyncService.startPeriodicSync();
         
-        console.log('[App] Offline support initialized successfully');
+        // Initialize WebSocket for real-time updates
+        const state = store.getState();
+        if (state.auth?.token) {
+          // Import here to avoid circular dependencies
+          const websocketService = require('./services/websocketService').default;
+          await websocketService.connect();
+          websocketService.subscribeToAlerts();
+          websocketService.subscribeToIncidents();
+          websocketService.subscribeToCheckIns();
+          console.log('[App] WebSocket initialized for real-time updates');
+        }
+        
+        console.log('[App] App services initialized successfully');
       } catch (error) {
-        console.error('[App] Error initializing offline support:', error);
+        console.error('[App] Error initializing app services:', error);
       }
     };
 
-    initializeOfflineSupport();
+    initializeApp();
 
     // Cleanup on unmount
     return () => {
       networkStatusService.stopMonitoring();
       enhancedSyncService.stopPeriodicSync();
+      
+      // Disconnect WebSocket
+      const websocketService = require('./services/websocketService').default;
+      websocketService.disconnect();
     };
   }, []);
 
