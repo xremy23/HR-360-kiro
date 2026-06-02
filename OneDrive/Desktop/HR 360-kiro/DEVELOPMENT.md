@@ -1,640 +1,541 @@
-# Development Guide - HR 360 Emergency Management PWA
+# Development Guide - HR 360 Emergency Management App
 
-Guidelines, best practices, and development workflows.
+Complete guide for developing the HR 360 app.
 
----
-
-## Code Style & Standards
-
-### TypeScript
-
-- Use strict mode
-- Avoid `any` types
-- Use interfaces for object shapes
-- Use enums for constants
-- Use generics for reusable code
-
-```typescript
-// ✅ Good
-interface User {
-  id: string;
-  email: string;
-  role: 'admin' | 'hr' | 'employee' | 'guest';
-}
-
-function getUser<T extends User>(id: string): Promise<T> {
-  // implementation
-}
-
-// ❌ Bad
-function getUser(id: string): any {
-  // implementation
-}
-```
-
-### React Components
-
-- Use functional components with hooks
-- Use TypeScript for props
-- Keep components small and focused
-- Use custom hooks for logic reuse
-
-```typescript
-// ✅ Good
-interface ButtonProps {
-  label: string;
-  onClick: () => void;
-  variant?: 'primary' | 'secondary';
-}
-
-const Button: React.FC<ButtonProps> = ({ label, onClick, variant = 'primary' }) => {
-  return (
-    <button className={`btn btn-${variant}`} onClick={onClick}>
-      {label}
-    </button>
-  );
-};
-
-// ❌ Bad
-const Button = ({ label, onClick, variant }) => {
-  return <button onClick={onClick}>{label}</button>;
-};
-```
-
-### Express Routes
-
-- Use async/await
-- Handle errors properly
-- Validate input
-- Use middleware for cross-cutting concerns
-
-```typescript
-// ✅ Good
-router.post('/users', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const { email, firstName } = req.body;
-    
-    // Validate input
-    if (!email || !firstName) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
-    
-    // Business logic
-    const user = await userService.createUser({ email, firstName });
-    
-    res.json({ success: true, data: user });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// ❌ Bad
-router.post('/users', (req, res) => {
-  const user = userService.createUser(req.body);
-  res.json(user);
-});
-```
-
-### Naming Conventions
-
-- **Files**: kebab-case (user-service.ts)
-- **Classes**: PascalCase (UserService)
-- **Functions**: camelCase (getUserById)
-- **Constants**: UPPER_SNAKE_CASE (MAX_RETRIES)
-- **Interfaces**: PascalCase with I prefix (IUser) or without (User)
-- **Enums**: PascalCase (UserRole)
-
----
-
-## Git Workflow
-
-### Branch Naming
+## 🏗️ Architecture Overview
 
 ```
-feature/description          # New feature
-bugfix/description           # Bug fix
-hotfix/description           # Production hotfix
-refactor/description         # Code refactoring
-docs/description             # Documentation
-chore/description            # Maintenance tasks
+┌─────────────────────────────────────────┐
+│  Frontend (React + Vite)                │
+│  Mobile (React Native + Expo)           │
+└─────────────────────────────────────────┘
+              ↓ HTTP/REST
+┌─────────────────────────────────────────┐
+│  Backend (Express + Node.js)            │
+│  - 14 Services                          │
+│  - 13 API Routes                        │
+│  - WebSocket Server                     │
+└─────────────────────────────────────────┘
+    ↓ SQL      ↓ Redis      ↓ SMTP
+┌────────┐  ┌────────┐  ┌──────────┐
+│PostgreSQL│ │ Redis  │  │Nodemailer│
+└────────┘  └────────┘  └──────────┘
 ```
 
-### Commit Messages
+## 🚀 Getting Started
 
-Follow conventional commits:
+### Prerequisites
+- Node.js 18+
+- PostgreSQL 12+
+- Redis 6+
+- npm 8+
 
-```
-type(scope): subject
+### Initial Setup
 
-body
+```bash
+# 1. Clone repository
+git clone <repo-url>
+cd HR\ 360-kiro
 
-footer
-```
+# 2. Backend setup
+cd backend
+npm install
+cp .env.example .env
+# Edit .env with your database credentials
 
-**Types**:
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation
-- `style`: Code style changes
-- `refactor`: Code refactoring
-- `perf`: Performance improvements
-- `test`: Test additions/changes
-- `chore`: Build, dependencies, etc.
+# 3. Frontend setup
+cd ../web
+npm install
 
-**Examples**:
-```
-feat(auth): add magic link authentication
-fix(users): prevent self-deletion
-docs(setup): add PostgreSQL installation guide
-refactor(services): extract common logic
-```
-
-### Pull Request Process
-
-1. Create feature branch from `develop`
-2. Make changes and commit
-3. Push to remote
-4. Create pull request
-5. Request review
-6. Address feedback
-7. Merge after approval
-
----
-
-## Testing
-
-### Unit Tests
-
-Test individual functions and services:
-
-```typescript
-// userService.test.ts
-describe('UserService', () => {
-  describe('getUserById', () => {
-    it('should return user when found', async () => {
-      const userId = 'test-id';
-      const mockUser = { id: userId, email: 'test@example.com' };
-      
-      jest.spyOn(userService, 'getUserById').mockResolvedValue(mockUser);
-      
-      const result = await userService.getUserById(userId);
-      
-      expect(result).toEqual(mockUser);
-    });
-
-    it('should return null when user not found', async () => {
-      jest.spyOn(userService, 'getUserById').mockResolvedValue(null);
-      
-      const result = await userService.getUserById('nonexistent');
-      
-      expect(result).toBeNull();
-    });
-  });
-});
+# 4. Mobile setup
+cd ../mobile
+npm install
 ```
 
-### Integration Tests
+## 🔧 Development Workflow
 
-Test API endpoints:
+### Backend Development
 
-```typescript
-// auth.test.ts
-describe('POST /api/auth/send-magic-link', () => {
-  it('should send magic link email', async () => {
-    const response = await request(app)
-      .post('/api/auth/send-magic-link')
-      .send({ email: 'test@example.com' });
+```bash
+cd backend
 
-    expect(response.status).toBe(200);
-    expect(response.body.success).toBe(true);
-  });
+# Start development server with hot reload
+npm run dev
 
-  it('should return error for invalid email', async () => {
-    const response = await request(app)
-      .post('/api/auth/send-magic-link')
-      .send({ email: 'invalid-email' });
+# Run tests
+npm test
 
-    expect(response.status).toBe(400);
-    expect(response.body.success).toBe(false);
-  });
-});
+# Run specific test
+npm test -- --testPathPattern="User.test"
+
+# Run with coverage
+npm test -- --coverage
+
+# Lint code
+npm run lint
+
+# Build for production
+npm run build
+
+# Database migrations
+npm run migrate
+npm run migrate:status
+npm run migrate:create
 ```
+
+### Frontend (PWA) Development
+
+```bash
+cd web
+
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Preview production build
+npm run preview
+
+# Lint code
+npm run lint
+```
+
+## 📁 Project Structure
+
+### Backend
+```
+backend/
+├── src/
+│   ├── config/          # Database, security config
+│   ├── entities/        # Data models (15 entities)
+│   ├── middleware/      # Auth, error handling
+│   ├── routes/          # API endpoints (13 modules)
+│   ├── services/        # Business logic (14 services)
+│   ├── migrations/      # Database migrations
+│   ├── websocket/       # WebSocket server
+│   └── server.ts        # Main entry point
+├── package.json
+├── jest.config.js
+├── tsconfig.json
+└── .env
+```
+
+### Frontend
+```
+web/
+├── src/
+│   ├── components/      # React components
+│   ├── pages/           # Page components
+│   ├── services/        # API, WebSocket, IndexedDB
+│   ├── store/           # Redux store
+│   ├── styles/          # Design system
+│   ├── utils/           # Utilities
+│   ├── hooks/           # Custom hooks
+│   ├── App.tsx
+│   └── main.tsx
+├── public/              # Static assets
+├── index.html
+├── vite.config.ts
+├── tsconfig.json
+└── package.json
+```
+
+## 🧪 Testing
 
 ### Running Tests
 
 ```bash
+cd backend
+
 # Run all tests
 npm test
 
 # Run specific test file
-npm test -- userService.test.ts
+npm test -- --testPathPattern="User.test"
 
 # Run with coverage
 npm test -- --coverage
+
+# Run performance tests
+npm test -- --testNamePattern="Performance"
 
 # Watch mode
 npm test -- --watch
 ```
 
----
+### Test Structure
 
-## Database Migrations
+- `src/entities/__tests__/` - Entity tests (13 files)
+- `src/routes/__tests__/` - Route tests (13 files)
+- `src/services/__tests__/` - Service tests (3 files)
+- `src/__tests__/` - Integration & performance tests
 
-### Creating Migrations
+### Current Test Status
 
-```bash
-npm run migrate:create
-```
+- **Total Tests**: 602
+- **Passing**: 571 (94.8%)
+- **Failing**: 31 (5.2%)
 
-This creates a new migration file in `src/migrations/`.
+### Fixing Failing Tests
 
-### Migration Template
+The 31 failing tests are mostly KB route tests due to auth middleware mocking issues.
 
-```typescript
-// src/migrations/003_add_user_phone.ts
-export async function up(db: Database): Promise<void> {
-  await db.query(`
-    ALTER TABLE users
-    ADD COLUMN phone VARCHAR(20);
-  `);
-}
+**To fix**:
+1. Mock JWT verification
+2. Mock session service
+3. Update test setup
 
-export async function down(db: Database): Promise<void> {
-  await db.query(`
-    ALTER TABLE users
-    DROP COLUMN phone;
-  `);
-}
-```
+See [TEST_FIXES.md](TEST_FIXES.md) for details.
 
-### Running Migrations
+## 🔐 Security
 
-```bash
-# Run all pending migrations
-npm run migrate:run
+### Authentication Flow
 
-# Check migration status
-npm run migrate:status
+1. User enters email
+2. Backend sends magic link
+3. User clicks link
+4. Backend generates JWT token
+5. Frontend stores JWT in localStorage
+6. All requests include JWT in Authorization header
 
-# Rollback last migration
-npm run migrate:rollback
-```
+### Security Features
 
----
+- ✅ JWT authentication (7-day expiration)
+- ✅ Rate limiting (100 req/15min general, 5 req/15min auth)
+- ✅ CORS configuration
+- ✅ Helmet security headers
+- ✅ Input validation
+- ✅ SQL injection prevention (parameterized queries)
+- ✅ XSS prevention (input sanitization)
+- ✅ Token blacklist (Redis-backed)
+- ✅ Session management
+- ✅ Error message sanitization
 
-## API Development
-
-### Creating New Endpoints
-
-1. **Create Service Method**
+### Adding Security to New Routes
 
 ```typescript
-// userService.ts
-async getUsersByDepartment(departmentId: string): Promise<User[]> {
-  const query = `
-    SELECT * FROM users
-    WHERE department_id = $1 AND is_active = true
-    ORDER BY first_name, last_name
-  `;
-  const result = await db.query(query, [departmentId]);
-  return result.rows;
-}
-```
+import { authMiddleware } from '../middleware/authMiddleware';
 
-2. **Create Route Handler**
-
-```typescript
-// routes/users.ts
 router.get(
-  '/department/:departmentId',
+  '/protected',
   authMiddleware.verifyToken.bind(authMiddleware),
-  authMiddleware.requireRole('admin', 'hr'),
   async (req: AuthRequest, res: Response) => {
-    try {
-      const { departmentId } = req.params;
-      const users = await userService.getUsersByDepartment(departmentId);
-      
-      res.json({ success: true, data: users });
-    } catch (error) {
-      next(error);
-    }
+    // req.user is now available
+    const userId = req.user.userId;
+    // ...
+  }
+);
+
+// For admin-only routes
+router.post(
+  '/admin-only',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  authMiddleware.requireRole('admin'),
+  async (req: AuthRequest, res: Response) => {
+    // Only admins can access
+    // ...
   }
 );
 ```
 
-3. **Add Tests**
+## 📊 Database
+
+### Schema
+
+The database has 15 entities:
+- User, Organization, Department, Team
+- Alert, Incident, CheckIn, Contact
+- KBGuide, GuideAcknowledgment
+- Notification, PushNotification
+- ChatMessage, DeviceToken
+- SOSEscalation, ToBagItem, MagicLinkToken
+
+### Migrations
+
+```bash
+cd backend
+
+# Run all pending migrations
+npm run migrate
+
+# Check migration status
+npm run migrate:status
+
+# Create new migration
+npm run migrate:create
+```
+
+### Adding New Entity
+
+1. Create entity file in `src/entities/`
+2. Create migration in `src/migrations/`
+3. Create service in `src/services/`
+4. Create routes in `src/routes/`
+5. Add tests
+
+## 🔄 API Development
+
+### Creating New Route
 
 ```typescript
-// routes/__tests__/users.test.ts
-describe('GET /api/users/department/:departmentId', () => {
-  it('should return users in department', async () => {
-    const response = await request(app)
-      .get('/api/users/department/dept-123')
-      .set('Authorization', `Bearer ${token}`);
+// src/routes/example.ts
+import express, { Response } from 'express';
+import { authMiddleware, AuthRequest } from '../middleware/authMiddleware';
+import { exampleService } from '../services/exampleService';
+import { logger } from '../services/monitoringService';
 
-    expect(response.status).toBe(200);
-    expect(response.body.success).toBe(true);
-    expect(Array.isArray(response.body.data)).toBe(true);
-  });
-});
+const router = express.Router();
+
+/**
+ * GET /api/example
+ * Get all examples
+ */
+router.get(
+  '/',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response, next) => {
+    try {
+      const examples = await exampleService.getAll();
+      res.json({ success: true, data: examples });
+    } catch (error) {
+      logger.error('Failed to get examples', { error });
+      next(error);
+    }
+  }
+);
+
+export default router;
 ```
 
-### API Response Format
-
-**Success Response**:
-```json
-{
-  "success": true,
-  "data": { /* response data */ },
-  "pagination": { /* optional */ }
-}
-```
-
-**Error Response**:
-```json
-{
-  "success": false,
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "Error message"
-  },
-  "statusCode": 400
-}
-```
-
----
-
-## Frontend Development
-
-### Creating New Pages
-
-1. **Create Page Component**
+### Creating New Service
 
 ```typescript
-// pages/IncidentsPage.tsx
-import React, { useEffect, useState } from 'react';
-import { useSelector } from 'react-redux';
+// src/services/exampleService.ts
+import { query } from '../config/database';
+import { logger } from './monitoringService';
+
+class ExampleService {
+  async getAll() {
+    try {
+      const result = await query('SELECT * FROM examples');
+      return result.rows;
+    } catch (error) {
+      logger.error('Failed to get examples', { error });
+      throw error;
+    }
+  }
+}
+
+export const exampleService = new ExampleService();
+```
+
+## 🎨 Frontend Development
+
+### Component Structure
+
+```typescript
+// src/components/Example.tsx
+import React from 'react';
+import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store/store';
-import { apiService } from '../services/apiService';
 
-const IncidentsPage: React.FC = () => {
-  const { user } = useSelector((state: RootState) => state.auth);
-  const [incidents, setIncidents] = useState([]);
-  const [loading, setLoading] = useState(true);
+interface ExampleProps {
+  title: string;
+}
 
-  useEffect(() => {
-    const fetchIncidents = async () => {
-      try {
-        const response = await apiService.get('/incidents');
-        setIncidents(response.data);
-      } catch (error) {
-        console.error('Failed to fetch incidents', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchIncidents();
-  }, []);
-
-  if (loading) return <div>Loading...</div>;
+const Example: React.FC<ExampleProps> = ({ title }) => {
+  const dispatch = useDispatch();
+  const data = useSelector((state: RootState) => state.example.data);
 
   return (
-    <div className="incidents-page">
-      <h1>Incidents</h1>
-      {/* Page content */}
+    <div>
+      <h1>{title}</h1>
+      {/* Component content */}
     </div>
   );
 };
 
-export default IncidentsPage;
+export default Example;
 ```
 
-2. **Add Route**
+### Redux Integration
 
 ```typescript
-// AppRouter.tsx
-<Route path="/incidents" element={<IncidentsPage />} />
-```
+// src/store/slices/exampleSlice.ts
+import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
-3. **Add Tests**
+interface ExampleState {
+  data: any[];
+  loading: boolean;
+  error: string | null;
+}
 
-```typescript
-// pages/__tests__/IncidentsPage.test.tsx
-describe('IncidentsPage', () => {
-  it('should render incidents list', async () => {
-    const { getByText } = render(<IncidentsPage />);
-    
-    await waitFor(() => {
-      expect(getByText('Incidents')).toBeInTheDocument();
-    });
-  });
+const initialState: ExampleState = {
+  data: [],
+  loading: false,
+  error: null,
+};
+
+const exampleSlice = createSlice({
+  name: 'example',
+  initialState,
+  reducers: {
+    setData: (state, action: PayloadAction<any[]>) => {
+      state.data = action.payload;
+    },
+    setLoading: (state, action: PayloadAction<boolean>) => {
+      state.loading = action.payload;
+    },
+    setError: (state, action: PayloadAction<string | null>) => {
+      state.error = action.payload;
+    },
+  },
 });
+
+export const { setData, setLoading, setError } = exampleSlice.actions;
+export default exampleSlice.reducer;
 ```
 
-### Creating Custom Hooks
+## 🚢 Deployment
 
-```typescript
-// hooks/useIncidents.ts
-import { useState, useEffect } from 'react';
-import { apiService } from '../services/apiService';
+### Backend Deployment
 
-interface Incident {
-  id: string;
-  title: string;
-  status: string;
-}
+```bash
+# Build
+npm run build
 
-export function useIncidents() {
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchIncidents = async () => {
-      try {
-        const response = await apiService.get('/incidents');
-        setIncidents(response.data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchIncidents();
-  }, []);
-
-  return { incidents, loading, error };
-}
+# Deploy to Google Cloud Run
+gcloud builds submit --tag gcr.io/PROJECT_ID/hr360-backend
+gcloud run deploy hr360-backend --image gcr.io/PROJECT_ID/hr360-backend
 ```
 
----
+### Frontend (PWA) Deployment
 
-## Performance Optimization
+```bash
+# Build
+npm run build
 
-### Backend
-
-- Use database indexes for frequently queried columns
-- Implement pagination for large datasets
-- Cache frequently accessed data in Redis
-- Use connection pooling for database
-- Optimize database queries
-
-### Frontend
-
-- Code splitting with React.lazy()
-- Image optimization
-- Lazy load components
-- Memoize expensive computations
-- Use production builds
-
-```typescript
-// Code splitting
-const AdminConsole = React.lazy(() => import('./pages/AdminConsole'));
-
-// Memoization
-const MemoizedComponent = React.memo(MyComponent);
-
-// useMemo
-const expensiveValue = useMemo(() => {
-  return computeExpensiveValue(a, b);
-}, [a, b]);
+# Deploy to Cloud Storage
+gsutil -m cp -r dist/* gs://PROJECT_ID-frontend/
 ```
 
----
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed instructions.
 
-## Debugging
+## 🐛 Debugging
 
 ### Backend Debugging
 
 ```bash
-# Run with debugging
-node --inspect-brk dist/server.js
+# Enable debug logging
+DEBUG=* npm run dev
 
-# Or use VS Code debugger
-# Add to .vscode/launch.json
-{
-  "type": "node",
-  "request": "launch",
-  "program": "${workspaceFolder}/backend/dist/server.js",
-  "restart": true,
-  "console": "integratedTerminal"
-}
-```
-
-### Frontend Debugging
-
-- Use React DevTools browser extension
-- Use Redux DevTools for state debugging
-- Use browser DevTools for network debugging
-- Use console.log for quick debugging
-
-### Logging
-
-```typescript
-// Backend
-logger.info('User created', { userId, email });
-logger.error('Database error', { error, query });
-
-// Frontend
-console.log('State updated', state);
-console.error('API error', error);
-```
-
----
-
-## Common Tasks
-
-### Adding a New Feature
-
-1. Create feature branch
-2. Create database migration if needed
-3. Create service methods
-4. Create API routes
-5. Create frontend components
-6. Add tests
-7. Create pull request
-8. Merge after review
-
-### Fixing a Bug
-
-1. Create bugfix branch
-2. Write test that reproduces bug
-3. Fix the bug
-4. Verify test passes
-5. Create pull request
-6. Merge after review
-
-### Updating Dependencies
-
-```bash
-# Check for updates
-npm outdated
-
-# Update specific package
-npm update package-name
-
-# Update all packages
-npm update
-
-# Install new package
-npm install package-name
-
-# Remove package
-npm uninstall package-name
-```
-
----
-
-## Troubleshooting
-
-### Build Errors
-
-```bash
-# Clear build cache
-rm -rf dist/
-npm run build
-
-# Check TypeScript errors
-npx tsc --noEmit
-```
-
-### Runtime Errors
-
-```bash
-# Check logs
-npm run dev 2>&1 | tee debug.log
-
-# Use debugger
+# Use Node debugger
 node --inspect-brk dist/server.js
 ```
 
-### Database Issues
+### Frontend (PWA) Debugging
 
 ```bash
-# Check connection
-psql -U hr360_user -d hr360 -c "SELECT 1"
+# Use browser DevTools
+npm run dev
 
-# Check migrations
-npm run migrate:status
-
-# Rollback and retry
-npm run migrate:rollback
-npm run migrate:run
+# Check Redux state
+# Install Redux DevTools browser extension
 ```
 
+## 📝 Code Style
+
+### TypeScript
+
+- Use strict mode
+- Define interfaces for all data structures
+- Use async/await instead of promises
+- Add JSDoc comments for public functions
+
+### React
+
+- Use functional components with hooks
+- Use Redux for state management
+- Keep components small and focused
+- Use TypeScript for prop types
+
+### Express
+
+- Use async/await for route handlers
+- Use middleware for cross-cutting concerns
+- Validate input on all routes
+- Return consistent response format
+
+## 🔄 Git Workflow
+
+```bash
+# Create feature branch
+git checkout -b feature/my-feature
+
+# Make changes and commit
+git add .
+git commit -m "feat: add my feature"
+
+# Push to remote
+git push origin feature/my-feature
+
+# Create pull request
+# Review and merge
+
+# Delete branch
+git branch -d feature/my-feature
+```
+
+## 📚 Documentation
+
+- [README.md](README.md) - Project overview
+- [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture
+- [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) - Directory structure
+- [docs/API.md](docs/API.md) - API documentation
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - Deployment guide
+
+## 🆘 Troubleshooting
+
+### Backend won't start
+```bash
+# Check if port is in use
+lsof -i :3000
+
+# Check database connection
+psql -h localhost -U postgres -d hr360
+
+# Check Redis connection
+redis-cli ping
+```
+
+### Tests failing
+```bash
+# Clear Jest cache
+npm test -- --clearCache
+
+# Run specific test
+npm test -- --testPathPattern="User.test"
+```
+
+### Frontend won't start
+```bash
+# Clear node_modules
+rm -rf node_modules
+npm install
+
+# Clear Vite cache
+rm -rf .vite
+npm run dev
+```
+
+## 📞 Getting Help
+
+1. Check the relevant documentation
+2. Review existing code for examples
+3. Check test files for usage patterns
+4. Ask in team chat
+
 ---
 
-## Resources
-
-- [TypeScript Handbook](https://www.typescriptlang.org/docs/)
-- [React Documentation](https://react.dev/)
-- [Express.js Guide](https://expressjs.com/)
-- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
-- [Redux Documentation](https://redux.js.org/)
-
----
-
-**Last Updated**: June 1, 2026
-
+**Ready to develop?** Pick a task and start coding!

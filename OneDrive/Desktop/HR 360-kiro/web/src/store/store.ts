@@ -5,6 +5,7 @@ import checkinReducer from './slices/checkinSlice';
 import alertReducer from './slices/alertSlice';
 import incidentReducer from './slices/incidentSlice';
 import userReducer from './slices/userSlice';
+import chatbotReducer from './slices/chatbotSlice';
 
 const store = configureStore({
   reducer: {
@@ -14,6 +15,7 @@ const store = configureStore({
     alert: alertReducer,
     incident: incidentReducer,
     user: userReducer,
+    chatbot: chatbotReducer,
   },
 });
 

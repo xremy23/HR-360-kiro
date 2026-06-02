@@ -1,225 +1,171 @@
 /**
- * Incident Management Page
- * Manage emergency incidents and responses
+ * KB Guide Management Page
+ * Manage knowledge base guides and help content
  */
 
 import React, { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '../store/store';
-import { setLoading, setError, setItems, addIncident, updateIncident, deleteIncident } from '../store/slices/incidentSlice';
+import { setLoading, setError, setItems, addGuide, updateGuide, deleteGuide } from '../store/slices/kbSlice';
 import { colors, typography, spacing, borderRadius, shadows } from '../styles/designSystem';
-import websocketService from '../services/websocketService';
 import apiService, { ApiError } from '../services/apiService';
 
-interface IncidentFormData {
+interface GuideFormData {
   title: string;
-  description: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  status: 'active' | 'resolved';
-  location?: string;
-  affectedTeams: string[];
-  isDrill: boolean;
+  content: string;
+  category: string;
+  description?: string;
+  tags?: string[];
 }
 
-interface IncidentStats {
+interface GuideStats {
   total: number;
-  active: number;
-  resolved: number;
-  critical: number;
+  byCategory: { [key: string]: number };
 }
 
-const IncidentManagement: React.FC = () => {
+const KBManagement: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const { items: incidents, loading, error } = useSelector((state: RootState) => state.incident);
-  
+  const { items: guides, loading, error } = useSelector((state: RootState) => state.kb);
+
   const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [stats, setStats] = useState<IncidentStats>({
+  const [editingId, setEditingId] = useState<string | number | null>(null);
+  const [stats, setStats] = useState<GuideStats>({
     total: 0,
-    active: 0,
-    resolved: 0,
-    critical: 0,
+    byCategory: {},
   });
-  const [formData, setFormData] = useState<IncidentFormData>({
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [formData, setFormData] = useState<GuideFormData>({
     title: '',
+    content: '',
+    category: 'General',
     description: '',
-    severity: 'high',
-    status: 'active',
-    location: '',
-    affectedTeams: [],
-    isDrill: false,
+    tags: [],
   });
 
-  // Fetch incidents on mount
+  // Fetch guides on mount
   useEffect(() => {
-    const fetchIncidents = async () => {
+    const fetchGuides = async () => {
       dispatch(setLoading(true));
       try {
-        const response = await apiService.getIncidents({ pageSize: 100 });
+        const response = await apiService.getGuides({ pageSize: 100 });
         if (response.success && response.data) {
           dispatch(setItems(response.data));
           calculateStats(response.data);
         } else {
-          dispatch(setError('Failed to load incidents'));
+          dispatch(setError('Failed to load guides'));
         }
       } catch (err) {
         const apiError = err as ApiError;
-        dispatch(setError(apiError.message || 'Failed to load incidents'));
+        dispatch(setError(apiError.message || 'Failed to load guides'));
       } finally {
         dispatch(setLoading(false));
       }
     };
 
-    fetchIncidents();
+    fetchGuides();
   }, [dispatch]);
 
-  // Subscribe to real-time incident updates
-  useEffect(() => {
-    const unsubscribeCreated = websocketService.on('incident:created', (data) => {
-      dispatch(addIncident(data));
-      calculateStats([...incidents, data]);
+  const calculateStats = (guideList: any[]) => {
+    const categories: { [key: string]: number } = {};
+    guideList.forEach((guide) => {
+      const cat = guide.category || 'General';
+      categories[cat] = (categories[cat] || 0) + 1;
     });
 
-    const unsubscribeUpdated = websocketService.on('incident:updated', (data) => {
-      dispatch(updateIncident(data));
-      const updated = incidents.map(i => i.id === data.id ? data : i);
-      calculateStats(updated);
-    });
-
-    return () => {
-      unsubscribeCreated();
-      unsubscribeUpdated();
-    };
-  }, [incidents, dispatch]);
-
-  const calculateStats = (incidentList: any[]) => {
     setStats({
-      total: incidentList.length,
-      active: incidentList.filter(i => i.status === 'active').length,
-      resolved: incidentList.filter(i => i.status === 'resolved').length,
-      critical: incidentList.filter(i => i.severity === 'critical').length,
+      total: guideList.length,
+      byCategory: categories,
     });
   };
 
-  const handleCreateOrUpdateIncident = async (e: React.FormEvent) => {
+  const handleCreateOrUpdateGuide = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.title || !formData.description) {
+    if (!formData.title || !formData.content || !formData.category) {
       alert('Please fill in all required fields');
       return;
     }
 
     try {
       dispatch(setLoading(true));
-      
+
       let response;
       if (editingId) {
-        response = await apiService.updateIncident(editingId, formData);
+        response = await apiService.updateGuide(editingId as string, formData);
         if (response.success && response.data) {
-          dispatch(updateIncident(response.data));
-          websocketService.send({
-            type: 'incident',
-            action: 'updated',
-            data: response.data,
-            timestamp: new Date().toISOString(),
-          });
+          dispatch(updateGuide(response.data));
         }
       } else {
-        response = await apiService.createIncident(formData);
+        response = await apiService.createGuide(formData);
         if (response.success && response.data) {
-          dispatch(addIncident(response.data));
-          websocketService.send({
-            type: 'incident',
-            action: 'created',
-            data: response.data,
-            timestamp: new Date().toISOString(),
-          });
+          dispatch(addGuide(response.data));
         }
       }
 
       if (response.success) {
         setFormData({
           title: '',
+          content: '',
+          category: 'General',
           description: '',
-          severity: 'high',
-          status: 'active',
-          location: '',
-          affectedTeams: [],
-          isDrill: false,
+          tags: [],
         });
         setEditingId(null);
         setShowForm(false);
-        alert(editingId ? 'Incident updated successfully!' : 'Incident created successfully!');
+        alert(editingId ? 'Guide updated successfully!' : 'Guide created successfully!');
       } else {
-        dispatch(setError('Failed to save incident'));
+        dispatch(setError('Failed to save guide'));
       }
     } catch (err) {
       const apiError = err as ApiError;
-      dispatch(setError(apiError.message || 'Failed to save incident'));
-      alert(apiError.message || 'Failed to save incident');
+      dispatch(setError(apiError.message || 'Failed to save guide'));
+      alert(apiError.message || 'Failed to save guide');
     } finally {
       dispatch(setLoading(false));
     }
   };
 
-  const handleDeleteIncident = async (id: string) => {
-    if (confirm('Are you sure you want to delete this incident?')) {
+  const handleDeleteGuide = async (id: string | number) => {
+    if (confirm('Are you sure you want to delete this guide?')) {
       try {
         dispatch(setLoading(true));
-        const response = await apiService.deleteIncident(id);
+        const response = await apiService.deleteGuide(id as string);
         if (response.success) {
-          dispatch(deleteIncident(id));
-          const updated = incidents.filter(i => i.id !== id);
+          dispatch(deleteGuide(id));
+          const updated = guides.filter((g) => g.id !== id);
           calculateStats(updated);
         }
       } catch (err) {
         const apiError = err as ApiError;
-        dispatch(setError(apiError.message || 'Failed to delete incident'));
+        dispatch(setError(apiError.message || 'Failed to delete guide'));
       } finally {
         dispatch(setLoading(false));
       }
     }
   };
 
-  const handleEditIncident = (incident: any) => {
+  const handleEditGuide = (guide: any) => {
     setFormData({
-      title: incident.title || '',
-      description: incident.description || '',
-      severity: incident.severity || 'high',
-      status: incident.status || 'active',
-      location: incident.location || '',
-      affectedTeams: incident.affectedTeams || [],
-      isDrill: incident.isDrill || false,
+      title: guide.title || '',
+      content: guide.content || '',
+      category: guide.category || 'General',
+      description: guide.description || '',
+      tags: guide.tags || [],
     });
-    setEditingId(incident.id);
+    setEditingId(guide.id);
     setShowForm(true);
   };
 
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'critical':
-        return colors.error;
-      case 'high':
-        return colors.warning;
-      case 'medium':
-        return colors.info;
-      case 'low':
-        return colors.success;
-      default:
-        return colors.neutral[400];
-    }
-  };
+  const filteredGuides = guides.filter((guide) => {
+    const matchesSearch =
+      guide.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      guide.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = !selectedCategory || guide.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active':
-        return colors.error;
-      case 'resolved':
-        return colors.success;
-      default:
-        return colors.neutral[400];
-    }
-  };
+  const categories = Object.keys(stats.byCategory);
 
   return (
     <div
@@ -247,19 +193,17 @@ const IncidentManagement: React.FC = () => {
               margin: 0,
             }}
           >
-            Incident Management
+            Knowledge Base
           </h1>
         </div>
         <button
           onClick={() => {
             setFormData({
               title: '',
+              content: '',
+              category: 'General',
               description: '',
-              severity: 'high',
-              status: 'active',
-              location: '',
-              affectedTeams: [],
-              isDrill: false,
+              tags: [],
             });
             setEditingId(null);
             setShowForm(!showForm);
@@ -277,7 +221,7 @@ const IncidentManagement: React.FC = () => {
             transition: 'all 200ms ease-in-out',
           }}
         >
-          {showForm ? 'Cancel' : 'Create Incident'}
+          {showForm ? 'Cancel' : 'Create Guide'}
         </button>
       </div>
 
@@ -290,10 +234,61 @@ const IncidentManagement: React.FC = () => {
           marginBottom: spacing.xxl,
         }}
       >
-        <StatCard label="Total" value={stats.total} color={colors.neutral[400]} />
-        <StatCard label="Active" value={stats.active} color={colors.error} />
-        <StatCard label="Resolved" value={stats.resolved} color={colors.success} />
-        <StatCard label="Critical" value={stats.critical} color={colors.warning} />
+        <StatCard label="Total Guides" value={stats.total} color={colors.neutral[400]} />
+        {categories.map((cat) => (
+          <StatCard
+            key={cat}
+            label={cat}
+            value={stats.byCategory[cat]}
+            color={colors.secondary.mediumTeal}
+          />
+        ))}
+      </div>
+
+      {/* Search and Filter */}
+      <div
+        style={{
+          display: 'flex',
+          gap: spacing.lg,
+          marginBottom: spacing.xl,
+          flexWrap: 'wrap',
+        }}
+      >
+        <input
+          type="text"
+          placeholder="Search guides..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{
+            flex: 1,
+            minWidth: '200px',
+            padding: spacing.md,
+            fontSize: typography.fontSize.body1.size,
+            border: `1px solid ${colors.neutral[300]}`,
+            borderRadius: borderRadius.md,
+            boxSizing: 'border-box',
+          }}
+        />
+        <select
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          style={{
+            padding: spacing.md,
+            fontSize: typography.fontSize.body1.size,
+            border: `1px solid ${colors.neutral[300]}`,
+            borderRadius: borderRadius.md,
+            backgroundColor: colors.primary.white,
+            cursor: 'pointer',
+            minWidth: '150px',
+          }}
+        >
+          <option value="">All Categories</option>
+          {categories.map((cat) => (
+            <option key={cat} value={cat}>
+              {cat}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Form */}
@@ -316,42 +311,30 @@ const IncidentManagement: React.FC = () => {
               marginBottom: spacing.lg,
             }}
           >
-            {editingId ? 'Edit Incident' : 'Create New Incident'}
+            {editingId ? 'Edit Guide' : 'Create New Guide'}
           </h2>
 
-          <form onSubmit={handleCreateOrUpdateIncident}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: spacing.lg, marginBottom: spacing.lg }}>
-              <div>
-                <label style={labelStyle}>Title</label>
-                <input
-                  type="text"
-                  placeholder="Incident title..."
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  style={inputStyle}
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>Location</label>
-                <input
-                  type="text"
-                  placeholder="Location..."
-                  value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  style={inputStyle}
-                />
-              </div>
+          <form onSubmit={handleCreateOrUpdateGuide}>
+            <div style={{ marginBottom: spacing.lg }}>
+              <label style={labelStyle}>Title *</label>
+              <input
+                type="text"
+                placeholder="Guide title..."
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                style={inputStyle}
+              />
             </div>
 
             <div style={{ marginBottom: spacing.lg }}>
               <label style={labelStyle}>Description</label>
               <textarea
-                placeholder="Describe the incident..."
+                placeholder="Short description..."
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 style={{
                   ...inputStyle,
-                  minHeight: '100px',
+                  minHeight: '60px',
                   resize: 'vertical',
                   fontFamily: 'inherit',
                 } as React.CSSProperties}
@@ -360,41 +343,52 @@ const IncidentManagement: React.FC = () => {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: spacing.lg, marginBottom: spacing.lg }}>
               <div>
-                <label style={labelStyle}>Severity</label>
+                <label style={labelStyle}>Category *</label>
                 <select
-                  value={formData.severity}
-                  onChange={(e) => setFormData({ ...formData, severity: e.target.value as any })}
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   style={inputStyle}
                 >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="critical">Critical</option>
+                  <option value="General">General</option>
+                  <option value="Emergency Procedures">Emergency Procedures</option>
+                  <option value="Contact Information">Contact Information</option>
+                  <option value="Safety Guidelines">Safety Guidelines</option>
+                  <option value="Evacuation">Evacuation</option>
+                  <option value="Health & Wellness">Health & Wellness</option>
+                  <option value="Communication">Communication</option>
                 </select>
               </div>
+
               <div>
-                <label style={labelStyle}>Status</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                <label style={labelStyle}>Tags (comma-separated)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. emergency, safety, important"
+                  value={formData.tags?.join(', ') || ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      tags: e.target.value.split(',').map((t) => t.trim()),
+                    })
+                  }
                   style={inputStyle}
-                >
-                  <option value="active">Active</option>
-                  <option value="resolved">Resolved</option>
-                </select>
+                />
               </div>
             </div>
 
             <div style={{ marginBottom: spacing.lg }}>
-              <label style={labelCheckbox}>
-                <input
-                  type="checkbox"
-                  checked={formData.isDrill}
-                  onChange={(e) => setFormData({ ...formData, isDrill: e.target.checked })}
-                  style={{ cursor: 'pointer' }}
-                />
-                This is a drill
-              </label>
+              <label style={labelStyle}>Content *</label>
+              <textarea
+                placeholder="Guide content in markdown format..."
+                value={formData.content}
+                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                style={{
+                  ...inputStyle,
+                  minHeight: '200px',
+                  resize: 'vertical',
+                  fontFamily: 'monospace',
+                } as React.CSSProperties}
+              />
             </div>
 
             <button
@@ -411,13 +405,13 @@ const IncidentManagement: React.FC = () => {
                 boxShadow: shadows.md,
               }}
             >
-              {editingId ? 'Update Incident' : 'Create Incident'}
+              {editingId ? 'Update Guide' : 'Create Guide'}
             </button>
           </form>
         </div>
       )}
 
-      {/* Incidents List */}
+      {/* Guides List */}
       <div>
         <h2
           style={{
@@ -427,24 +421,24 @@ const IncidentManagement: React.FC = () => {
             marginBottom: spacing.lg,
           }}
         >
-          All Incidents
+          Guides ({filteredGuides.length})
         </h2>
 
         {loading ? (
-          <div style={emptyStateStyle}>Loading incidents...</div>
+          <div style={emptyStateStyle}>Loading guides...</div>
         ) : error ? (
           <div style={{ ...emptyStateStyle, backgroundColor: colors.error, color: colors.primary.white }}>
             {error}
           </div>
-        ) : incidents.length > 0 ? (
+        ) : filteredGuides.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}>
-            {incidents.map((incident) => (
+            {filteredGuides.map((guide) => (
               <div
-                key={incident.id}
+                key={guide.id}
                 style={{
                   padding: spacing.lg,
                   backgroundColor: colors.primary.white,
-                  border: `2px solid ${getStatusColor(incident.status)}`,
+                  border: `2px solid ${colors.primary.teal}`,
                   borderRadius: borderRadius.md,
                   boxShadow: shadows.md,
                 }}
@@ -460,58 +454,49 @@ const IncidentManagement: React.FC = () => {
                         marginBottom: spacing.sm,
                       }}
                     >
-                      {incident.title}
+                      {guide.title}
                     </h3>
-                    <p
-                      style={{
-                        fontSize: typography.fontSize.body2.size,
-                        color: colors.neutral[600],
-                        margin: 0,
-                        marginBottom: spacing.sm,
-                        lineHeight: '1.5',
-                      }}
-                    >
-                      {incident.description}
-                    </p>
-                    {incident.location && (
+                    {guide.description && (
                       <p
                         style={{
-                          fontSize: typography.fontSize.body3.size,
-                          color: colors.neutral[500],
+                          fontSize: typography.fontSize.body2.size,
+                          color: colors.neutral[600],
                           margin: 0,
+                          marginBottom: spacing.sm,
+                          lineHeight: '1.5',
                         }}
                       >
-                        📍 {incident.location}
+                        {guide.description}
                       </p>
                     )}
-                  </div>
-                  <div style={{ display: 'flex', gap: spacing.md, marginLeft: spacing.lg }}>
-                    <span
-                      style={{
-                        padding: `${spacing.xs} ${spacing.sm}`,
-                        backgroundColor: getSeverityColor(incident.severity),
-                        color: colors.primary.white,
-                        borderRadius: borderRadius.sm,
-                        fontSize: typography.fontSize.label2.size,
-                        fontWeight: typography.fontSize.label2.weight,
-                        textTransform: 'capitalize',
-                      }}
-                    >
-                      {incident.severity}
-                    </span>
-                    <span
-                      style={{
-                        padding: `${spacing.xs} ${spacing.sm}`,
-                        backgroundColor: getStatusColor(incident.status),
-                        color: colors.primary.white,
-                        borderRadius: borderRadius.sm,
-                        fontSize: typography.fontSize.label2.size,
-                        fontWeight: typography.fontSize.label2.weight,
-                        textTransform: 'uppercase',
-                      }}
-                    >
-                      {incident.status}
-                    </span>
+                    <div style={{ display: 'flex', gap: spacing.md, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span
+                        style={{
+                          padding: `${spacing.xs} ${spacing.sm}`,
+                          backgroundColor: colors.secondary.mediumTeal,
+                          color: colors.primary.white,
+                          borderRadius: borderRadius.sm,
+                          fontSize: typography.fontSize.label2.size,
+                          fontWeight: typography.fontSize.label2.weight,
+                        }}
+                      >
+                        {guide.category}
+                      </span>
+                      {guide.tags?.map((tag) => (
+                        <span
+                          key={tag}
+                          style={{
+                            padding: `${spacing.xs} ${spacing.sm}`,
+                            backgroundColor: colors.neutral[200],
+                            color: colors.neutral[700],
+                            borderRadius: borderRadius.sm,
+                            fontSize: typography.fontSize.body3.size,
+                          }}
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -523,11 +508,11 @@ const IncidentManagement: React.FC = () => {
                       margin: 0,
                     }}
                   >
-                    {new Date(incident.createdAt).toLocaleString()}
+                    {guide.createdAt && new Date(guide.createdAt).toLocaleString()}
                   </p>
                   <div style={{ display: 'flex', gap: spacing.md }}>
                     <button
-                      onClick={() => handleEditIncident(incident)}
+                      onClick={() => handleEditGuide(guide)}
                       style={{
                         padding: `${spacing.xs} ${spacing.sm}`,
                         backgroundColor: colors.primary.teal,
@@ -548,7 +533,7 @@ const IncidentManagement: React.FC = () => {
                       Edit
                     </button>
                     <button
-                      onClick={() => handleDeleteIncident(incident.id)}
+                      onClick={() => handleDeleteGuide(guide.id)}
                       style={{
                         padding: `${spacing.xs} ${spacing.sm}`,
                         backgroundColor: colors.error,
@@ -574,7 +559,9 @@ const IncidentManagement: React.FC = () => {
             ))}
           </div>
         ) : (
-          <div style={emptyStateStyle}>No incidents yet</div>
+          <div style={emptyStateStyle}>
+            {searchQuery || selectedCategory ? 'No guides match your search' : 'No guides yet'}
+          </div>
         )}
       </div>
     </div>
@@ -630,16 +617,6 @@ const labelStyle: React.CSSProperties = {
   marginBottom: spacing.sm,
 };
 
-const labelCheckbox: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: spacing.md,
-  fontSize: typography.fontSize.label1.size,
-  fontWeight: typography.fontSize.label1.weight,
-  color: colors.primary.black,
-  cursor: 'pointer',
-};
-
 const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: spacing.md,
@@ -657,4 +634,4 @@ const emptyStateStyle: React.CSSProperties = {
   color: colors.neutral[500],
 };
 
-export default IncidentManagement;
+export default KBManagement;

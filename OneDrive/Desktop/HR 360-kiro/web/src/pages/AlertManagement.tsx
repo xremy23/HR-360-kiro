@@ -101,6 +101,27 @@ const AlertManagement: React.FC = () => {
     }
   };
 
+  const handleDeleteAlert = async (id: string) => {
+    if (confirm('Are you sure you want to delete this alert?')) {
+      try {
+        dispatch(setLoading(true));
+        const response = await apiService.deleteAlert(id);
+        if (response.success) {
+          dispatch(deleteAlert(id));
+          alert('Alert deleted successfully!');
+        } else {
+          dispatch(setError('Failed to delete alert'));
+        }
+      } catch (err) {
+        const apiError = err as ApiError;
+        dispatch(setError(apiError.message || 'Failed to delete alert'));
+        alert(apiError.message || 'Failed to delete alert');
+      } finally {
+        dispatch(setLoading(false));
+      }
+    }
+  };
+
   const getSeverityColor = (severity: string) => {
     switch (severity) {
       case 'emergency':
@@ -426,19 +447,42 @@ const AlertManagement: React.FC = () => {
                   >
                     {new Date(alert.createdAt).toLocaleString()}
                   </p>
-                  <span
-                    style={{
-                      padding: `${spacing.xs} ${spacing.sm}`,
-                      backgroundColor: getSeverityColor(alert.severity),
-                      color: colors.primary.white,
-                      borderRadius: borderRadius.sm,
-                      fontSize: typography.fontSize.label2.size,
-                      fontWeight: typography.fontSize.label2.weight,
-                      textTransform: 'capitalize',
-                    }}
-                  >
-                    {alert.severity}
-                  </span>
+                  <div style={{ display: 'flex', gap: spacing.md, alignItems: 'center' }}>
+                    <span
+                      style={{
+                        padding: `${spacing.xs} ${spacing.sm}`,
+                        backgroundColor: getSeverityColor(alert.severity),
+                        color: colors.primary.white,
+                        borderRadius: borderRadius.sm,
+                        fontSize: typography.fontSize.label2.size,
+                        fontWeight: typography.fontSize.label2.weight,
+                        textTransform: 'capitalize',
+                      }}
+                    >
+                      {alert.severity}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteAlert(alert.id)}
+                      style={{
+                        padding: `${spacing.xs} ${spacing.sm}`,
+                        backgroundColor: colors.error,
+                        color: colors.primary.white,
+                        border: 'none',
+                        borderRadius: borderRadius.sm,
+                        fontSize: typography.fontSize.label2.size,
+                        cursor: 'pointer',
+                        transition: 'all 200ms',
+                      }}
+                      onMouseOver={(e) => {
+                        (e.target as HTMLButtonElement).style.opacity = '0.8';
+                      }}
+                      onMouseOut={(e) => {
+                        (e.target as HTMLButtonElement).style.opacity = '1';
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

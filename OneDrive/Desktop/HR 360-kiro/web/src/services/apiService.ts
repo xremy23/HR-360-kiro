@@ -537,6 +537,10 @@ class ApiService {
     return this.get(`/incidents/${id}/summary`);
   }
 
+  async deleteIncident(id: string): Promise<ApiResponse> {
+    return this.delete(`/incidents/${id}`);
+  }
+
   // ============================================================================
   // SOS ENDPOINTS
   // ============================================================================
@@ -672,6 +676,81 @@ class ApiService {
 
   async getSystemStats(): Promise<ApiResponse<any>> {
     return this.get('/monitoring/stats');
+  }
+
+  // ============================================================================
+  // CHATBOT ENDPOINTS
+  // ============================================================================
+
+  async saveChatMessage(data: {
+    userQuestion: string;
+    botResponse: string;
+    context?: Record<string, any>;
+  }): Promise<ApiResponse<any>> {
+    return this.post('/chatbot/messages', data);
+  }
+
+  async submitChatFeedback(messageId: string, data: {
+    isHelpful: boolean;
+    feedbackText?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.post(`/chatbot/messages/${messageId}/feedback`, data);
+  }
+
+  async getChatHistory(params?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<ApiResponse<any>> {
+    return this.get('/chatbot/history', params);
+  }
+
+  async getChatbotFeedbackQueue(params?: {
+    status?: string;
+    priority?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ApiResponse<any>> {
+    return this.get('/chatbot/admin/feedback-queue', params);
+  }
+
+  async getChatbotFeedbackItem(id: string): Promise<ApiResponse<any>> {
+    return this.get(`/chatbot/admin/feedback-queue/${id}`);
+  }
+
+  async updateChatbotFeedback(id: string, data: {
+    status?: string;
+    adminAction?: string;
+    assignedTo?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.put(`/chatbot/admin/feedback-queue/${id}`, data);
+  }
+
+  async resolveChatbotFeedback(id: string, data: {
+    adminAction: string;
+    updatedResponseId?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.post(`/chatbot/admin/feedback-queue/${id}/resolve`, data);
+  }
+
+  async createChatbotResponse(data: {
+    questionPattern: string;
+    response: string;
+    category?: string;
+    priority?: number;
+  }): Promise<ApiResponse<any>> {
+    return this.post('/chatbot/admin/responses', data);
+  }
+
+  async getChatbotResponses(params?: {
+    category?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ApiResponse<any>> {
+    return this.get('/chatbot/admin/responses', params);
+  }
+
+  async getChatbotStats(): Promise<ApiResponse<any>> {
+    return this.get('/chatbot/admin/stats');
   }
 }
 
