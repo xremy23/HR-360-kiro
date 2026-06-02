@@ -4,7 +4,7 @@
  * UPDATED: Redux integration with real-time updates
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { colors, typography, spacing, borderRadius, shadows } from '../styles/designSystem';
@@ -12,6 +12,7 @@ import { RootState, AppDispatch } from '../store/store';
 import { setItems as setCheckInItems, setLoading as setCheckInLoading, setError as setCheckInError } from '../store/slices/checkinSlice';
 import { setItems as setAlertItems, setLoading as setAlertLoading, setError as setAlertError } from '../store/slices/alertsSlice';
 import apiService, { ApiError } from '../services/apiService';
+import OfflineIndicator from '../components/OfflineIndicator';
 
 interface HomeScreenProps {
   navigation: any;
@@ -19,6 +20,7 @@ interface HomeScreenProps {
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const dispatch = useDispatch<AppDispatch>();
+  const [showQueueDetails, setShowQueueDetails] = useState(false);
   
   // Redux selectors
   const user = useSelector((state: RootState) => state.auth.user);
@@ -31,6 +33,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const alertsError = useSelector((state: RootState) => state.alerts.error);
   
   const isOffline = useSelector((state: RootState) => state.offline.isOnline === false);
+  const queueSize = useSelector((state: RootState) => state.offline.queueSize);
+  const isSyncing = useSelector((state: RootState) => state.offline.isSyncing);
 
   // Fetch data on mount and set up polling for real-time updates
   useEffect(() => {
@@ -131,6 +135,24 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Offline Indicator Banner */}
+      <OfflineIndicator 
+        onPress={() => setShowQueueDetails(!showQueueDetails)}
+      />
+
+      {/* Queue Details (when offline or syncing) */}
+      {showQueueDetails && (queueSize > 0 || isSyncing) && (
+        <View style={styles.queueDetails}>
+          <Text style={styles.queueDetailsTitle}>Sync Status</Text>
+          <Text style={styles.queueDetailsText}>
+            {isSyncing ? '↻ Syncing operations...' : `⏱ ${queueSize} operation${queueSize !== 1 ? 's' : ''} pending`}
+          </Text>
+          <Text style={styles.queueDetailsSubtext}>
+            Data will sync automatically when online
+          </Text>
+        </View>
+      )}
+
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.greeting}>
@@ -507,6 +529,30 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.body2.size,
     color: colors.neutral[500],
     textAlign: 'center',
+  },
+  queueDetails: {
+    backgroundColor: colors.warning,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+  queueDetailsTitle: {
+    fontSize: typography.fontSize.label1.size,
+    fontWeight: '600',
+    color: colors.primary.white,
+    marginBottom: spacing.xs,
+  },
+  queueDetailsText: {
+    fontSize: typography.fontSize.body2.size,
+    color: colors.primary.white,
+    marginBottom: spacing.xs,
+  },
+  queueDetailsSubtext: {
+    fontSize: typography.fontSize.caption.size,
+    color: colors.primary.white,
+    opacity: 0.9,
   },
 });
 

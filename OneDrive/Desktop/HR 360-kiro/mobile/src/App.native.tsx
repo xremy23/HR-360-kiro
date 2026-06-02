@@ -1,17 +1,20 @@
 /**
  * Main App Component
  * Sets up navigation and Redux store
+ * Initializes network monitoring and offline sync
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Text } from 'react-native';
-import { Provider } from 'react-redux';
+import { Provider, useSelector } from 'react-redux';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { colors } from './styles/designSystem';
-import store from './store';
+import store, { RootState } from './store';
 import DeviceRedirect from './DeviceRedirect';
+import networkStatusService from './services/networkStatusService';
+import enhancedSyncService from './services/enhancedSyncService';
 
 // Screens
 import HomeScreen from './screens/HomeScreen';
@@ -208,20 +211,52 @@ const TabIcon: React.FC<TabIconProps> = ({ icon, color }) => (
 );
 
 /**
- * Root Navigator
+ * Root Navigator with Initialization
  */
-const RootNavigator = () => (
-  <NavigationContainer>
-    <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-        cardStyle: { backgroundColor: colors.primary.white },
-      }}
-    >
-      <Stack.Screen name="MainApp" component={TabNavigator} />
-    </Stack.Navigator>
-  </NavigationContainer>
-);
+const RootNavigator = () => {
+  useEffect(() => {
+    // Initialize network monitoring and sync service
+    const initializeOfflineSupport = async () => {
+      try {
+        console.log('[App] Initializing offline support...');
+        
+        // Initialize sync service with store
+        enhancedSyncService.initialize(store);
+        
+        // Initialize network status monitoring
+        await networkStatusService.initialize(store);
+        
+        // Start periodic sync
+        enhancedSyncService.startPeriodicSync();
+        
+        console.log('[App] Offline support initialized successfully');
+      } catch (error) {
+        console.error('[App] Error initializing offline support:', error);
+      }
+    };
+
+    initializeOfflineSupport();
+
+    // Cleanup on unmount
+    return () => {
+      networkStatusService.stopMonitoring();
+      enhancedSyncService.stopPeriodicSync();
+    };
+  }, []);
+
+  return (
+    <NavigationContainer>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+          cardStyle: { backgroundColor: colors.primary.white },
+        }}
+      >
+        <Stack.Screen name="MainApp" component={TabNavigator} />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+};
 
 /**
  * Main App Component

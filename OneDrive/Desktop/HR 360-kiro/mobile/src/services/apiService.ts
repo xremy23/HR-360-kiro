@@ -1,10 +1,15 @@
 /**
  * API Service - Centralized API communication layer
  * Handles all HTTP requests to the backend
+ * With offline-first support: queues operations when offline
  */
 
 import axios, { AxiosInstance, AxiosError, AxiosResponse } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import offlineDbService from './offlineDbService';
+import enhancedSyncService from './enhancedSyncService';
+import store from '../store/store';
+import { setQueueSize } from '../store/slices/offlineSlice';
 
 // API Configuration
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
@@ -18,6 +23,7 @@ export interface ApiResponse<T = any> {
     code: string;
     message: string;
   };
+  message?: string;
   statusCode: number;
 }
 
@@ -207,6 +213,30 @@ class ApiService {
   }
 
   /**
+   * Check if currently online
+   */
+  private async isOnline(): Promise<boolean> {
+    try {
+      const state = store.getState();
+      return state.offline.isOnline;
+    } catch {
+      return true; // Assume online if store unavailable
+    }
+  }
+
+  /**
+   * Update queue size in Redux
+   */
+  private async updateQueueSize(): Promise<void> {
+    try {
+      const size = await offlineDbService.getQueueSize();
+      store.dispatch(setQueueSize(size));
+    } catch (error) {
+      console.error('[ApiService] Error updating queue size:', error);
+    }
+  }
+
+  /**
    * POST request
    */
   async post<T = any>(
@@ -217,6 +247,21 @@ class ApiService {
       const response = await this.client.post<ApiResponse<T>>(url, data);
       return response.data;
     } catch (error) {
+      // If offline, queue the operation instead
+      if (!await this.isOnline()) {
+        console.log(`[ApiService] Offline - queuing POST ${url}`);
+        await offlineDbService.queueOperation(url, 'POST', data || {});
+        await this.updateQueueSize();
+
+        // Return success response to allow optimistic updates
+        return {
+          success: true,
+          data: {} as T,
+          statusCode: 202, // Accepted (queued for processing)
+          message: 'Operation queued for sync',
+        };
+      }
+
       throw this.handleError(error);
     }
   }
@@ -232,6 +277,21 @@ class ApiService {
       const response = await this.client.put<ApiResponse<T>>(url, data);
       return response.data;
     } catch (error) {
+      // If offline, queue the operation instead
+      if (!await this.isOnline()) {
+        console.log(`[ApiService] Offline - queuing PUT ${url}`);
+        await offlineDbService.queueOperation(url, 'PUT', data || {});
+        await this.updateQueueSize();
+
+        // Return success response to allow optimistic updates
+        return {
+          success: true,
+          data: {} as T,
+          statusCode: 202, // Accepted (queued for processing)
+          message: 'Operation queued for sync',
+        };
+      }
+
       throw this.handleError(error);
     }
   }
@@ -244,6 +304,21 @@ class ApiService {
       const response = await this.client.delete<ApiResponse<T>>(url);
       return response.data;
     } catch (error) {
+      // If offline, queue the operation instead
+      if (!await this.isOnline()) {
+        console.log(`[ApiService] Offline - queuing DELETE ${url}`);
+        await offlineDbService.queueOperation(url, 'DELETE', {});
+        await this.updateQueueSize();
+
+        // Return success response to allow optimistic updates
+        return {
+          success: true,
+          data: {} as T,
+          statusCode: 202, // Accepted (queued for processing)
+          message: 'Operation queued for sync',
+        };
+      }
+
       throw this.handleError(error);
     }
   }
