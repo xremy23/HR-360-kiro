@@ -160,7 +160,7 @@ const LoginPage: React.FC = () => {
             <span className="text-2xl">🚨</span>
           </div>
           <h1 className="font-display text-h2 text-brand-teal-deep mb-2 uppercase">
-            Enterprise Safety SSO
+            HR 360
           </h1>
           <p className="font-sans text-body3 text-stone-500">
             Activate disaster coordination, survival kit logs, and employee status boards.
@@ -212,6 +212,38 @@ const LoginPage: React.FC = () => {
                   className="w-full bg-brand-teal-medium hover:bg-brand-teal-deep disabled:bg-stone-300 text-white font-display font-extrabold text-label1 py-3.5 rounded-2xl shadow transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? '⏳ Sending...' : '🔑 Initialize Secure Authorization'}
+                </button>
+
+                {/* Demo Login Button (Development Only) */}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsLoadingLocal(true);
+                    try {
+                      const response = await apiService.post('/auth/demo-login', {});
+                      if (response.success && response.data) {
+                        const jwtToken = response.data.token;
+                        const user = response.data.user;
+
+                        dispatch(loginSuccess({ user, token: jwtToken }));
+                        localStorage.setItem('token', jwtToken);
+                        localStorage.setItem('user', JSON.stringify(user));
+
+                        toast.success('Demo login successful!');
+                        setTimeout(() => {
+                          navigate('/', { replace: true });
+                        }, 100);
+                      }
+                    } catch (error: any) {
+                      toast.error('Demo login failed');
+                    } finally {
+                      setIsLoadingLocal(false);
+                    }
+                  }}
+                  disabled={isLoading}
+                  className="w-full bg-stone-500 hover:bg-stone-600 disabled:bg-stone-300 text-white font-sans font-semibold text-label2 py-3 rounded-2xl shadow transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? '⏳ Loading...' : '👤 Demo Login (Testing)'}
                 </button>
               </form>
             </>
