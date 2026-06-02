@@ -114,7 +114,7 @@ const NotificationPermissionModal: React.FC<{ onClose?: () => void }> = ({ onClo
     >
       <div
         style={{
-          backgroundColor: colors.white,
+          backgroundColor: colors.primary.white,
           borderRadius: borderRadius.lg,
           padding: spacing.lg,
           maxWidth: '400px',
@@ -123,15 +123,15 @@ const NotificationPermissionModal: React.FC<{ onClose?: () => void }> = ({ onClo
           animation: 'slideUp 0.3s ease-out',
         }}
       >
-        <h2 style={{ margin: `0 0 ${spacing.sm} 0`, color: colors.text, fontSize: typography.sizes.lg }}>
+        <h2 style={{ margin: `0 0 ${spacing.sm} 0`, color: colors.primary.black, fontSize: typography.fontSize.h5.size }}>
           🔔 Stay Updated
         </h2>
 
         <p
           style={{
             margin: `0 0 ${spacing.md} 0`,
-            color: colors.textSecondary,
-            fontSize: typography.sizes.sm,
+            color: colors.neutral[600],
+            fontSize: typography.fontSize.body3.size,
             lineHeight: '1.6',
           }}
         >
@@ -145,18 +145,18 @@ const NotificationPermissionModal: React.FC<{ onClose?: () => void }> = ({ onClo
             disabled={isLoading}
             style={{
               padding: `${spacing.sm} ${spacing.md}`,
-              border: `2px solid ${colors.borderLight}`,
+              border: `2px solid ${colors.neutral[300]}`,
               borderRadius: borderRadius.md,
-              backgroundColor: colors.white,
-              color: colors.textSecondary,
+              backgroundColor: colors.primary.white,
+              color: colors.neutral[600],
               cursor: isLoading ? 'not-allowed' : 'pointer',
-              fontSize: typography.sizes.sm,
+              fontSize: typography.fontSize.label2.size,
               fontWeight: 'bold',
               transition: 'all 0.2s',
               opacity: isLoading ? 0.6 : 1,
             }}
-            onMouseOver={e => !isLoading && (e.currentTarget.style.backgroundColor = colors.greyLight)}
-            onMouseOut={e => (e.currentTarget.style.backgroundColor = colors.white)}
+            onMouseOver={e => !isLoading && (e.currentTarget.style.backgroundColor = colors.neutral[100])}
+            onMouseOut={e => (e.currentTarget.style.backgroundColor = colors.primary.white)}
           >
             Not Now
           </button>
@@ -168,22 +168,22 @@ const NotificationPermissionModal: React.FC<{ onClose?: () => void }> = ({ onClo
               padding: `${spacing.sm} ${spacing.md}`,
               border: 'none',
               borderRadius: borderRadius.md,
-              backgroundColor: colors.primary,
-              color: colors.white,
+              backgroundColor: colors.primary.teal,
+              color: colors.primary.white,
               cursor: isLoading ? 'not-allowed' : 'pointer',
-              fontSize: typography.sizes.sm,
+              fontSize: typography.fontSize.label2.size,
               fontWeight: 'bold',
               transition: 'all 0.2s',
               opacity: isLoading ? 0.8 : 1,
             }}
-            onMouseOver={e => !isLoading && (e.currentTarget.style.backgroundColor = colors.primaryDark)}
-            onMouseOut={e => (e.currentTarget.style.backgroundColor = colors.primary)}
+            onMouseOver={e => !isLoading && (e.currentTarget.style.backgroundColor = colors.secondary.darkTeal)}
+            onMouseOut={e => (e.currentTarget.style.backgroundColor = colors.primary.teal)}
           >
             {isLoading ? 'Enabling...' : 'Enable'}
           </button>
         </div>
 
-        <p style={{ margin: 0, fontSize: typography.sizes.xs, color: colors.textTertiary, textAlign: 'center' }}>
+        <p style={{ margin: 0, fontSize: typography.fontSize.caption.size, color: colors.neutral[500], textAlign: 'center' }}>
           You can change this in settings anytime.
         </p>
       </div>
