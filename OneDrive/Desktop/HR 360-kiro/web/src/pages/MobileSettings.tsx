@@ -201,6 +201,32 @@ const MobileSettings: React.FC = () => {
             Privacy & Permissions
           </h3>
 
+          {/* Biometric Authentication */}
+          <button
+            onClick={() => navigate('/biometric-settings')}
+            className="w-full bg-primary-white rounded-xl shadow-md p-4 mb-3 text-left hover:shadow-lg transition"
+          >
+            <h4 className="font-sans text-label1 text-primary-black font-semibold">
+              🔐 Biometric Authentication
+            </h4>
+            <p className="font-sans text-body3 text-neutral-600 mt-1">
+              Manage fingerprint and face recognition
+            </p>
+          </button>
+
+          {/* Location Sharing */}
+          <button
+            onClick={() => navigate('/location-sharing')}
+            className="w-full bg-primary-white rounded-xl shadow-md p-4 mb-3 text-left hover:shadow-lg transition"
+          >
+            <h4 className="font-sans text-label1 text-primary-black font-semibold">
+              🗺️ Location Sharing
+            </h4>
+            <p className="font-sans text-body3 text-neutral-600 mt-1">
+              Track and share your location with team
+            </p>
+          </button>
+
           {/* Location */}
           <div className="bg-primary-white rounded-xl shadow-md p-4 mb-3 flex items-center justify-between">
             <div>

@@ -1,5 +1,8 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState, AppDispatch } from '../store/store';
+import { setShowCenter } from '../store/slices/notificationSlice';
 
 interface MobileLayoutProps {
   children: React.ReactNode;
@@ -18,6 +21,8 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const dispatch = useDispatch<AppDispatch>();
+  const { unreadCount } = useSelector((state: RootState) => state.notification);
 
   const navItems = [
     { icon: '🏠', label: 'Home', path: '/' },
@@ -38,14 +43,30 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
             <div>
               <h1 className="font-display text-h2 text-primary-white">{headerTitle}</h1>
             </div>
-            {onMenuClick && (
+            <div className="flex items-center gap-3">
+              {/* Notification Bell */}
               <button
-                onClick={onMenuClick}
+                onClick={() => dispatch(setShowCenter(true))}
                 className="relative w-10 h-10 flex items-center justify-center rounded-full bg-secondary-light bg-opacity-20 hover:bg-opacity-30 transition"
+                title="Notifications"
               >
-                <span className="text-primary-white text-xl">☰</span>
+                <span className="text-primary-white text-xl">🔔</span>
+                {unreadCount > 0 && (
+                  <span className="absolute top-0 right-0 bg-red-500 text-primary-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
               </button>
-            )}
+              
+              {onMenuClick && (
+                <button
+                  onClick={onMenuClick}
+                  className="relative w-10 h-10 flex items-center justify-center rounded-full bg-secondary-light bg-opacity-20 hover:bg-opacity-30 transition"
+                >
+                  <span className="text-primary-white text-xl">☰</span>
+                </button>
+              )}
+            </div>
           </div>
         </header>
       )}
