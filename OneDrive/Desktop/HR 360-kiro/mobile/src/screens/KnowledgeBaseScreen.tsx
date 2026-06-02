@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, FlatList, ActivityIndicator, Modal } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { colors, typography, spacing, borderRadius, shadows } from '../styles/designSystem';
 import { RootState, AppDispatch } from '../store/store';
@@ -22,6 +22,7 @@ const KnowledgeBaseScreen: React.FC<KnowledgeBaseScreenProps> = ({ navigation })
   const [filteredGuides, setFilteredGuides] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
+  const [selectedGuide, setSelectedGuide] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   // Redux selectors
@@ -38,33 +39,43 @@ const KnowledgeBaseScreen: React.FC<KnowledgeBaseScreenProps> = ({ navigation })
   useEffect(() => {
     let filtered = guides;
 
-    if (searchQuery) {
+    // Filter by search query
+    if (searchQuery.trim()) {
       filtered = filtered.filter(
         (guide: any) =>
           guide.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          guide.description.toLowerCase().includes(searchQuery.toLowerCase())
+          guide.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          guide.content?.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
+    // Filter by category
     if (selectedCategory) {
-      filtered = filtered.filter((guide: any) => guide.category === selectedCategory);
+      filtered = filtered.filter((guide: any) => {
+        const tags = Array.isArray(guide.tags) ? guide.tags : [];
+        return tags.includes(selectedCategory);
+      });
     }
 
     setFilteredGuides(filtered);
-  }, [searchQuery, selectedCategory, guides]);
 
-  // Extract unique categories from guides
-  useEffect(() => {
-    const uniqueCategories = Array.from(new Set(guides.map((g: any) => g.category)));
-    setCategories(uniqueCategories as string[]);
-  }, [guides]);
+    // Extract unique categories
+    const allCategories = new Set<string>();
+    guides.forEach((guide: any) => {
+      if (Array.isArray(guide.tags)) {
+        guide.tags.forEach((tag: string) => allCategories.add(tag));
+      }
+    });
+    setCategories(Array.from(allCategories).sort());
+  }, [searchQuery, selectedCategory, guides]);
 
   // Fetch guides from backend
   const fetchGuides = async () => {
     try {
       dispatch(setLoading(true));
+      dispatch(setError(null));
 
-      const response = await apiService.getGuides({ pageSize: 100 });
+      const response = await apiService.getKBGuides({ pageSize: 100 });
 
       if (response.success && response.data) {
         dispatch(setItems(response.data));
@@ -77,6 +88,7 @@ const KnowledgeBaseScreen: React.FC<KnowledgeBaseScreenProps> = ({ navigation })
       console.error('Error fetching guides:', err);
     } finally {
       setRefreshing(false);
+      dispatch(setLoading(false));
     }
   };
 
@@ -86,16 +98,14 @@ const KnowledgeBaseScreen: React.FC<KnowledgeBaseScreenProps> = ({ navigation })
     fetchGuides();
   };
 
-  const handleGuidePress = (guide: any) => {
-    navigation.navigate('GuideDetail', { guide });
-  };
-
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Emergency Guides</Text>
-        <Text style={styles.headerSubtitle}>Learn how to respond to emergencies</Text>
+        <Text style={styles.headerSubtitle}>
+          {filteredGuides.length} guide{filteredGuides.length !== 1 ? 's' : ''}
+        </Text>
       </View>
 
       {/* Error Banner */}
@@ -108,101 +118,155 @@ const KnowledgeBaseScreen: React.FC<KnowledgeBaseScreenProps> = ({ navigation })
         </View>
       )}
 
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search guides..."
+          placeholderTextColor={colors.neutral[400]}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+      </View>
+
+      {/* Category Filter */}
+      {categories.length > 0 && (
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoriesScroll}
+        >
+          <View style={styles.categories}>
+            <TouchableOpacity
+              style={[
+                styles.categoryTag,
+                selectedCategory === null && styles.categoryTagActive,
+              ]}
+              onPress={() => setSelectedCategory(null)}
+            >
+              <Text
+                style={[
+                  styles.categoryTagText,
+                  selectedCategory === null && styles.categoryTagTextActive,
+                ]}
+              >
+                All
+              </Text>
+            </TouchableOpacity>
+
+            {categories.map((category) => (
+              <TouchableOpacity
+                key={category}
+                style={[
+                  styles.categoryTag,
+                  selectedCategory === category && styles.categoryTagActive,
+                ]}
+                onPress={() => setSelectedCategory(category)}
+              >
+                <Text
+                  style={[
+                    styles.categoryTagText,
+                    selectedCategory === category && styles.categoryTagTextActive,
+                  ]}
+                >
+                  {category}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      )}
+
       {/* Loading State */}
-      {loading ? (
+      {loading && !refreshing ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary.teal} />
           <Text style={styles.loadingText}>Loading guides...</Text>
         </View>
       ) : (
-        <>
-          {/* Search Bar */}
-          <View style={styles.searchSection}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search guides..."
-              placeholderTextColor={colors.neutral[400]}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
+        <FlatList
+          data={filteredGuides}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <GuideCard
+              guide={item}
+              onPress={() => setSelectedGuide(item)}
             />
-          </View>
+          )}
+          contentContainerStyle={styles.guidesList}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateIcon}>📚</Text>
+              <Text style={styles.emptyStateTitle}>No guides found</Text>
+              <Text style={styles.emptyStateText}>
+                {searchQuery.trim() || selectedCategory
+                  ? 'Try adjusting your search or filters'
+                  : 'No guides available at this time'}
+              </Text>
+            </View>
+          }
+        />
+      )}
 
-          {/* Categories */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.categoriesScroll}
-            contentContainerStyle={styles.categoriesContainer}
-          >
-            <CategoryButton
-              label="All"
-              isSelected={selectedCategory === null}
-              onPress={() => setSelectedCategory(null)}
-            />
-            {categories.map((category) => (
-              <CategoryButton
-                key={category}
-                label={category}
-                isSelected={selectedCategory === category}
-                onPress={() => setSelectedCategory(category)}
-              />
-            ))}
-          </ScrollView>
+      {/* Guide Detail Modal */}
+      {selectedGuide && (
+        <Modal
+          visible={true}
+          animationType="slide"
+          transparent={false}
+          onRequestClose={() => setSelectedGuide(null)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity
+                style={styles.modalBackButton}
+                onPress={() => setSelectedGuide(null)}
+              >
+                <Text style={styles.modalBackText}>← Back</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Guide Details</Text>
+              <View style={{ width: 60 }} />
+            </View>
 
-          {/* Guides List */}
-          <FlatList
-            data={filteredGuides}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <GuideCard guide={item} onPress={() => handleGuidePress(item)} />
-            )}
-            contentContainerStyle={styles.guidesList}
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyStateIcon}>📚</Text>
-                <Text style={styles.emptyStateTitle}>No guides found</Text>
-                <Text style={styles.emptyStateText}>
-                  Try adjusting your search or filters
+            <ScrollView style={styles.modalContent}>
+              <View style={styles.modalGuideContent}>
+                <Text style={styles.modalGuideTitle}>{selectedGuide.title}</Text>
+                <Text style={styles.modalGuideDescription}>
+                  {selectedGuide.description}
                 </Text>
+
+                {Array.isArray(selectedGuide.tags) && selectedGuide.tags.length > 0 && (
+                  <View style={styles.tagsContainer}>
+                    {selectedGuide.tags.map((tag: string) => (
+                      <View key={tag} style={styles.tag}>
+                        <Text style={styles.tagText}>{tag}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                <View style={styles.contentSection}>
+                  <Text style={styles.contentLabel}>Content</Text>
+                  <Text style={styles.contentText}>
+                    {selectedGuide.content || 'No content available'}
+                  </Text>
+                </View>
+
+                <View style={styles.metaInfo}>
+                  <Text style={styles.metaLabel}>
+                    Last updated: {new Date(selectedGuide.updatedAt).toLocaleDateString()}
+                  </Text>
+                </View>
               </View>
-            }
-          />
-        </>
+            </ScrollView>
+          </View>
+        </Modal>
       )}
     </View>
   );
 };
-
-interface CategoryButtonProps {
-  label: string;
-  isSelected: boolean;
-  onPress: () => void;
-}
-
-const CategoryButton: React.FC<CategoryButtonProps> = ({ label, isSelected, onPress }) => (
-  <TouchableOpacity
-    style={[
-      styles.categoryButton,
-      {
-        backgroundColor: isSelected ? colors.primary.teal : colors.neutral[100],
-      },
-    ]}
-    onPress={onPress}
-  >
-    <Text
-      style={[
-        styles.categoryButtonText,
-        {
-          color: isSelected ? colors.primary.white : colors.primary.black,
-        },
-      ]}
-    >
-      {label}
-    </Text>
-  </TouchableOpacity>
-);
 
 interface GuideCardProps {
   guide: any;
@@ -211,22 +275,31 @@ interface GuideCardProps {
 
 const GuideCard: React.FC<GuideCardProps> = ({ guide, onPress }) => (
   <TouchableOpacity style={styles.guideCard} onPress={onPress}>
-    <View style={styles.guideCardHeader}>
-      <View style={styles.guideCardTitleContainer}>
-        <Text style={styles.guideCardTitle}>{guide.title}</Text>
-        <Text style={styles.guideCardCategory}>{guide.category}</Text>
-      </View>
-      <Text style={styles.guideCardArrow}>›</Text>
+    <View style={styles.guideIcon}>
+      <Text style={styles.guideIconText}>📖</Text>
     </View>
-    <Text style={styles.guideCardDescription} numberOfLines={2}>
-      {guide.description}
-    </Text>
-    <View style={styles.guideCardFooter}>
-      <Text style={styles.guideCardVersion}>v{guide.version}</Text>
-      <Text style={styles.guideCardDate}>
-        Updated {new Date(guide.updatedAt).toLocaleDateString()}
+
+    <View style={styles.guideContent}>
+      <Text style={styles.guideTitle}>{guide.title}</Text>
+      <Text style={styles.guideDescription} numberOfLines={2}>
+        {guide.description}
       </Text>
+
+      {Array.isArray(guide.tags) && guide.tags.length > 0 && (
+        <View style={styles.guideTags}>
+          {guide.tags.slice(0, 2).map((tag: string) => (
+            <View key={tag} style={styles.guideTag}>
+              <Text style={styles.guideTagText}>{tag}</Text>
+            </View>
+          ))}
+          {guide.tags.length > 2 && (
+            <Text style={styles.guideTagMore}>+{guide.tags.length - 2}</Text>
+          )}
+        </View>
+      )}
     </View>
+
+    <Text style={styles.guideChevron}>›</Text>
   </TouchableOpacity>
 );
 
@@ -269,22 +342,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   retryText: {
-    fontSize: typography.fontSize.label2.size,
+    fontSize: typography.fontSize.label1.size,
     color: colors.primary.white,
     fontWeight: '700',
     marginLeft: spacing.lg,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: typography.fontSize.body2.size,
-    color: colors.neutral[600],
-    marginTop: spacing.lg,
-  },
-  searchSection: {
+  searchContainer: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
@@ -299,28 +362,50 @@ const styles = StyleSheet.create({
     color: colors.primary.black,
   },
   categoriesScroll: {
-    maxHeight: 50,
-  },
-  categoriesContainer: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
+  },
+  categories: {
+    flexDirection: 'row',
     gap: spacing.md,
   },
-  categoryButton: {
+  categoryTag: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    ...shadows.sm,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.neutral[100],
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
   },
-  categoryButtonText: {
-    fontSize: typography.fontSize.label2.size,
-    fontWeight: typography.fontSize.label2.weight,
+  categoryTagActive: {
+    backgroundColor: colors.primary.teal,
+    borderColor: colors.primary.teal,
+  },
+  categoryTagText: {
+    fontSize: typography.fontSize.label1.size,
+    fontWeight: typography.fontSize.label1.weight,
+    color: colors.neutral[600],
+  },
+  categoryTagTextActive: {
+    color: colors.primary.white,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: typography.fontSize.body2.size,
+    color: colors.neutral[600],
+    marginTop: spacing.lg,
   },
   guidesList: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
   guideCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.primary.white,
     borderRadius: borderRadius.md,
     padding: spacing.lg,
@@ -329,53 +414,58 @@ const styles = StyleSheet.create({
     borderColor: colors.neutral[200],
     ...shadows.sm,
   },
-  guideCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.md,
+  guideIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.neutral[50],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.lg,
   },
-  guideCardTitleContainer: {
+  guideIconText: {
+    fontSize: 24,
+  },
+  guideContent: {
     flex: 1,
   },
-  guideCardTitle: {
+  guideTitle: {
     fontSize: typography.fontSize.label1.size,
     fontWeight: typography.fontSize.label1.weight,
     color: colors.primary.black,
     marginBottom: spacing.xs,
   },
-  guideCardCategory: {
-    fontSize: typography.fontSize.body2.size,
-    color: colors.primary.teal,
-    fontWeight: '600',
-  },
-  guideCardArrow: {
-    fontSize: 24,
-    color: colors.neutral[400],
-    marginLeft: spacing.md,
-  },
-  guideCardDescription: {
+  guideDescription: {
     fontSize: typography.fontSize.body2.size,
     color: colors.neutral[600],
-    lineHeight: 20,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
+    lineHeight: 18,
   },
-  guideCardFooter: {
+  guideTags: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.neutral[100],
+    gap: spacing.xs,
+    marginTop: spacing.xs,
   },
-  guideCardVersion: {
+  guideTag: {
+    backgroundColor: colors.neutral[100],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+  },
+  guideTagText: {
+    fontSize: typography.fontSize.body2.size,
+    color: colors.neutral[600],
+  },
+  guideTagMore: {
     fontSize: typography.fontSize.body2.size,
     color: colors.neutral[500],
     fontWeight: '600',
+    marginLeft: spacing.xs,
   },
-  guideCardDate: {
-    fontSize: typography.fontSize.body2.size,
-    color: colors.neutral[500],
+  guideChevron: {
+    fontSize: 24,
+    color: colors.neutral[300],
+    marginLeft: spacing.lg,
   },
   emptyState: {
     alignItems: 'center',
@@ -396,6 +486,93 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.body2.size,
     color: colors.neutral[500],
     textAlign: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: colors.primary.white,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[200],
+  },
+  modalBackButton: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  modalBackText: {
+    fontSize: typography.fontSize.label1.size,
+    fontWeight: typography.fontSize.label1.weight,
+    color: colors.primary.teal,
+  },
+  modalTitle: {
+    fontSize: typography.fontSize.h2.size,
+    fontWeight: typography.fontSize.h2.weight,
+    color: colors.primary.black,
+  },
+  modalContent: {
+    flex: 1,
+  },
+  modalGuideContent: {
+    padding: spacing.lg,
+  },
+  modalGuideTitle: {
+    fontSize: typography.fontSize.h2.size,
+    fontWeight: typography.fontSize.h2.weight,
+    color: colors.primary.black,
+    marginBottom: spacing.md,
+  },
+  modalGuideDescription: {
+    fontSize: typography.fontSize.body1.size,
+    color: colors.neutral[600],
+    marginBottom: spacing.lg,
+    lineHeight: 22,
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  tag: {
+    backgroundColor: colors.primary.teal,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+  },
+  tagText: {
+    fontSize: typography.fontSize.body2.size,
+    color: colors.primary.white,
+    fontWeight: '600',
+  },
+  contentSection: {
+    marginBottom: spacing.lg,
+  },
+  contentLabel: {
+    fontSize: typography.fontSize.label1.size,
+    fontWeight: typography.fontSize.label1.weight,
+    color: colors.primary.black,
+    marginBottom: spacing.md,
+  },
+  contentText: {
+    fontSize: typography.fontSize.body1.size,
+    color: colors.neutral[700],
+    lineHeight: 24,
+  },
+  metaInfo: {
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[200],
+    marginTop: spacing.lg,
+  },
+  metaLabel: {
+    fontSize: typography.fontSize.body2.size,
+    color: colors.neutral[500],
   },
 });
 

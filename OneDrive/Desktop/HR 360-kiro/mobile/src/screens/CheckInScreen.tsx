@@ -51,15 +51,16 @@ const CheckInScreen: React.FC<CheckInScreenProps> = ({ navigation, route }) => {
         dispatch(setCurrentCheckIn(response.data));
         dispatch(addToHistory(response.data));
         dispatch(setError(null));
-        Alert.alert('Success', 'Check-in submitted successfully', [
+        Alert.alert('Success', `Check-in submitted as "${status.replace('_', ' ').toUpperCase()}"`, [
           {
             text: 'OK',
             onPress: () => navigation.goBack(),
           },
         ]);
       } else {
-        dispatch(setError('Failed to submit check-in'));
-        Alert.alert('Error', 'Failed to submit check-in. Please try again.');
+        const error = response.message || 'Failed to submit check-in';
+        dispatch(setError(error));
+        Alert.alert('Error', error);
       }
     } catch (err) {
       const apiError = err as ApiError;
@@ -70,6 +71,15 @@ const CheckInScreen: React.FC<CheckInScreenProps> = ({ navigation, route }) => {
     } finally {
       setIsSubmitting(false);
       dispatch(setLoading(false));
+    }
+  };
+
+  const handleGetLocation = async () => {
+    try {
+      // TODO: Integrate with locationService to get current location
+      Alert.alert('Location', 'Location capture feature coming soon');
+    } catch (err) {
+      Alert.alert('Error', 'Failed to get location');
     }
   };
 
@@ -170,7 +180,7 @@ const CheckInScreen: React.FC<CheckInScreenProps> = ({ navigation, route }) => {
           value={location}
           onChangeText={setLocation}
         />
-        <TouchableOpacity style={styles.locationButton}>
+        <TouchableOpacity style={styles.locationButton} onPress={handleGetLocation}>
           <Text style={styles.locationButtonText}>📍 Use Current Location</Text>
         </TouchableOpacity>
       </View>

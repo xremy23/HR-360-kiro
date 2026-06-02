@@ -1,15 +1,17 @@
 /**
- * Contacts Screen - Manage emergency contacts
- * Add, edit, and view emergency contacts with quick call/message options
+ * Contacts Screen - Emergency contacts management
+ * Display, add, edit, delete emergency contacts
  * UPDATED: Redux integration with real-time updates
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, FlatList, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, FlatList, ActivityIndicator, Modal, Alert } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { colors, typography, spacing, borderRadius, shadows } from '../styles/designSystem';
 import { RootState, AppDispatch } from '../store/store';
+import { setLoading, setError, setItems, addItem, updateItem, removeItem } from '../store/slices/contactsSlice';
 import apiService, { ApiError } from '../services/apiService';
+import * as Linking from 'expo-linking';
 
 interface ContactsScreenProps {
   navigation: any;
@@ -17,61 +19,68 @@ interface ContactsScreenProps {
 
 const ContactsScreen: React.FC<ContactsScreenProps> = ({ navigation }) => {
   const dispatch = useDispatch<AppDispatch>();
-  const [contacts, setContacts] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredContacts, setFilteredContacts] = useState<any[]>([]);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newContact, setNewContact] = useState({
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingContact, setEditingContact] = useState<any>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Form state for adding/editing
+  const [formData, setFormData] = useState({
     name: '',
     phone: '',
     email: '',
-    relationship: '',
+    role: '',
+    notes: '',
   });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+
+  // Redux selectors
+  const contacts = useSelector((state: RootState) => state.contacts.items);
+  const loading = useSelector((state: RootState) => state.contacts.loading);
+  const error = useSelector((state: RootState) => state.contacts.error);
 
   // Fetch contacts on mount
   useEffect(() => {
     fetchContacts();
   }, []);
 
-  // Filter contacts when search changes
+  // Filter contacts when search query changes
   useEffect(() => {
-    if (searchQuery) {
-      setFilteredContacts(
-        contacts.filter(
-          (contact: any) =>
-            contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            contact.phone.includes(searchQuery)
-        )
+    let filtered = contacts;
+
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(
+        (contact: any) =>
+          contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          contact.phone?.includes(searchQuery) ||
+          contact.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          contact.role?.toLowerCase().includes(searchQuery.toLowerCase())
       );
-    } else {
-      setFilteredContacts(contacts);
     }
+
+    setFilteredContacts(filtered);
   }, [searchQuery, contacts]);
 
   // Fetch contacts from backend
   const fetchContacts = async () => {
     try {
-      setLoading(true);
-      setError(null);
+      dispatch(setLoading(true));
+      dispatch(setError(null));
 
-      const response = await apiService.getContacts({ pageSize: 100 });
+      const response = await apiService.getEmergencyContacts({ pageSize: 100 });
 
       if (response.success && response.data) {
-        setContacts(response.data);
+        dispatch(setItems(response.data));
       } else {
-        setError('Failed to load contacts');
+        dispatch(setError('Failed to load contacts'));
       }
     } catch (err) {
       const apiError = err as ApiError;
-      setError(apiError.message || 'Failed to load contacts');
+      dispatch(setError(apiError.message || 'Failed to load contacts'));
       console.error('Error fetching contacts:', err);
     } finally {
-      setLoading(false);
       setRefreshing(false);
+      dispatch(setLoading(false));
     }
   };
 
@@ -81,79 +90,151 @@ const ContactsScreen: React.FC<ContactsScreenProps> = ({ navigation }) => {
     fetchContacts();
   };
 
-  // Add new contact
-  const handleAddContact = async () => {
-    if (!newContact.name.trim() || !newContact.phone.trim()) {
-      Alert.alert('Required', 'Please enter name and phone number');
+  // Handle add contact
+  const handleAddContact = () => {
+    setEditingContact(null);
+    setFormData({
+      name: '',
+      phone: '',
+      email: '',
+      role: '',
+      notes: '',
+    });
+    setShowAddModal(true);
+  };
+
+  // Handle edit contact
+  const handleEditContact = (contact: any) => {
+    setEditingContact(contact);
+    setFormData({
+      name: contact.name,
+      phone: contact.phone || '',
+      email: contact.email || '',
+      role: contact.role || '',
+      notes: contact.notes || '',
+    });
+    setShowAddModal(true);
+  };
+
+  // Handle save contact
+  const handleSaveContact = async () => {
+    if (!formData.name.trim()) {
+      Alert.alert('Required', 'Contact name is required');
       return;
     }
 
-    setIsSubmitting(true);
+    if (!formData.phone.trim() && !formData.email.trim()) {
+      Alert.alert('Required', 'Please provide at least a phone number or email');
+      return;
+    }
 
     try {
-      const response = await apiService.createContact({
-        name: newContact.name.trim(),
-        phone: newContact.phone.trim(),
-        email: newContact.email.trim() || undefined,
-        relationship: newContact.relationship.trim() || undefined,
-      });
+      dispatch(setLoading(true));
 
-      if (response.success) {
-        Alert.alert('Success', 'Contact added successfully');
-        setNewContact({ name: '', phone: '', email: '', relationship: '' });
-        setShowAddForm(false);
-        // Refresh contacts list
-        await fetchContacts();
+      const contactData = {
+        name: formData.name.trim(),
+        phone: formData.phone.trim() || undefined,
+        email: formData.email.trim() || undefined,
+        role: formData.role.trim() || undefined,
+        notes: formData.notes.trim() || undefined,
+      };
+
+      if (editingContact) {
+        // Update existing
+        const response = await apiService.updateContact(editingContact.id, contactData);
+        if (response.success) {
+          dispatch(updateItem({ id: editingContact.id, changes: response.data }));
+          setShowAddModal(false);
+        }
       } else {
-        Alert.alert('Error', response.error?.message || 'Failed to add contact');
+        // Create new
+        const response = await apiService.createContact(contactData);
+        if (response.success) {
+          dispatch(addItem(response.data));
+          setShowAddModal(false);
+        }
       }
     } catch (err) {
       const apiError = err as ApiError;
-      Alert.alert('Error', apiError.message || 'Failed to add contact');
-      console.error('Error adding contact:', err);
+      Alert.alert('Error', apiError.message || 'Failed to save contact');
     } finally {
-      setIsSubmitting(false);
+      dispatch(setLoading(false));
     }
   };
 
-  // Delete contact
-  const handleDeleteContact = (contactId: string, contactName: string) => {
-    Alert.alert('Delete Contact', `Are you sure you want to delete ${contactName}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            const response = await apiService.deleteContact(contactId);
-
-            if (response.success) {
-              Alert.alert('Success', 'Contact deleted');
-              // Refresh contacts list
-              await fetchContacts();
-            } else {
-              Alert.alert('Error', response.error?.message || 'Failed to delete contact');
+  // Handle delete contact
+  const handleDeleteContact = (contact: any) => {
+    Alert.alert(
+      'Delete Contact',
+      `Are you sure you want to delete ${contact.name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              dispatch(setLoading(true));
+              const response = await apiService.deleteContact(contact.id);
+              if (response.success) {
+                dispatch(removeItem(contact.id));
+              }
+            } catch (err) {
+              Alert.alert('Error', 'Failed to delete contact');
+            } finally {
+              dispatch(setLoading(false));
             }
-          } catch (err) {
-            const apiError = err as ApiError;
-            Alert.alert('Error', apiError.message || 'Failed to delete contact');
-            console.error('Error deleting contact:', err);
-          }
+          },
         },
-      },
-    ]);
+      ]
+    );
+  };
+
+  // Handle call
+  const handleCall = (phone: string) => {
+    if (!phone) return;
+    Linking.openURL(`tel:${phone}`);
+  };
+
+  // Handle email
+  const handleEmail = (email: string) => {
+    if (!email) return;
+    Linking.openURL(`mailto:${email}`);
+  };
+
+  // Handle SMS
+  const handleSMS = (phone: string) => {
+    if (!phone) return;
+    Linking.openURL(`sms:${phone}`);
   };
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Emergency Contacts</Text>
-        <Text style={styles.headerSubtitle}>Quick access to important numbers</Text>
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>Emergency Contacts</Text>
+          <Text style={styles.headerSubtitle}>
+            {filteredContacts.length} contact{filteredContacts.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
+        <TouchableOpacity style={styles.addButton} onPress={handleAddContact}>
+          <Text style={styles.addButtonText}>+</Text>
+        </TouchableOpacity>
       </View>
 
+      {/* Error Banner */}
+      {error && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>⚠️ {error}</Text>
+          <TouchableOpacity onPress={handleRefresh}>
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Search Bar */}
-      <View style={styles.searchSection}>
+      <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
           placeholder="Search contacts..."
@@ -161,87 +242,126 @@ const ContactsScreen: React.FC<ContactsScreenProps> = ({ navigation }) => {
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setShowAddForm(!showAddForm)}
-        >
-          <Text style={styles.addButtonText}>+ Add</Text>
-        </TouchableOpacity>
       </View>
 
-      {/* Add Contact Form */}
-      {showAddForm && (
-        <View style={styles.formSection}>
-          <Text style={styles.formTitle}>Add New Contact</Text>
-          <TextInput
-            style={styles.formInput}
-            placeholder="Name"
-            placeholderTextColor={colors.neutral[400]}
-            value={newContact.name}
-            onChangeText={(text) => setNewContact({ ...newContact, name: text })}
-          />
-          <TextInput
-            style={styles.formInput}
-            placeholder="Phone"
-            placeholderTextColor={colors.neutral[400]}
-            value={newContact.phone}
-            onChangeText={(text) => setNewContact({ ...newContact, phone: text })}
-            keyboardType="phone-pad"
-          />
-          <TextInput
-            style={styles.formInput}
-            placeholder="Email (optional)"
-            placeholderTextColor={colors.neutral[400]}
-            value={newContact.email}
-            onChangeText={(text) => setNewContact({ ...newContact, email: text })}
-            keyboardType="email-address"
-          />
-          <TextInput
-            style={styles.formInput}
-            placeholder="Relationship"
-            placeholderTextColor={colors.neutral[400]}
-            value={newContact.relationship}
-            onChangeText={(text) => setNewContact({ ...newContact, relationship: text })}
-          />
-          <View style={styles.formButtons}>
-            <TouchableOpacity
-              style={[styles.formButton, { backgroundColor: colors.primary.teal }]}
-              onPress={handleAddContact}
-            >
-              <Text style={styles.formButtonText}>Save Contact</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.formButton, { backgroundColor: colors.neutral[300] }]}
-              onPress={() => setShowAddForm(false)}
-            >
-              <Text style={styles.formButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
+      {/* Loading State */}
+      {loading && !refreshing ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary.teal} />
+          <Text style={styles.loadingText}>Loading contacts...</Text>
         </View>
+      ) : (
+        <FlatList
+          data={filteredContacts}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <ContactCard
+              contact={item}
+              onCall={() => handleCall(item.phone)}
+              onEmail={() => handleEmail(item.email)}
+              onSMS={() => handleSMS(item.phone)}
+              onEdit={() => handleEditContact(item)}
+              onDelete={() => handleDeleteContact(item)}
+            />
+          )}
+          contentContainerStyle={styles.contactsList}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateIcon}>📞</Text>
+              <Text style={styles.emptyStateTitle}>No contacts</Text>
+              <Text style={styles.emptyStateText}>
+                Add emergency contacts to get started
+              </Text>
+            </View>
+          }
+        />
       )}
 
-      {/* Contacts List */}
-      <FlatList
-        data={filteredContacts}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <ContactCard
-            contact={item}
-            onCall={() => handleCallContact(item.phone)}
-            onDelete={() => handleDeleteContact(item.id)}
-          />
-        )}
-        contentContainerStyle={styles.contactsList}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateIcon}>📞</Text>
-            <Text style={styles.emptyStateTitle}>No contacts yet</Text>
-            <Text style={styles.emptyStateText}>
-              Add emergency contacts to quickly reach them in a crisis
+      {/* Add/Edit Contact Modal */}
+      <Modal
+        visible={showAddModal}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setShowAddModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setShowAddModal(false)}
+            >
+              <Text style={styles.modalCloseText}>✕</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>
+              {editingContact ? 'Edit Contact' : 'Add Contact'}
             </Text>
+            <TouchableOpacity
+              style={styles.modalSaveButton}
+              onPress={handleSaveContact}
+            >
+              <Text style={styles.modalSaveText}>Save</Text>
+            </TouchableOpacity>
           </View>
-        }
-      />
+
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Name *</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="Contact name"
+                value={formData.name}
+                onChangeText={(text) => setFormData({ ...formData, name: text })}
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Phone</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="Phone number"
+                keyboardType="phone-pad"
+                value={formData.phone}
+                onChangeText={(text) => setFormData({ ...formData, phone: text })}
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Email</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="Email address"
+                keyboardType="email-address"
+                value={formData.email}
+                onChangeText={(text) => setFormData({ ...formData, email: text })}
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Role</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="e.g., Police, Fire, Ambulance"
+                value={formData.role}
+                onChangeText={(text) => setFormData({ ...formData, role: text })}
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Notes</Text>
+              <TextInput
+                style={[styles.formInput, { height: 80 }]}
+                placeholder="Additional notes"
+                multiline
+                textAlignVertical="top"
+                value={formData.notes}
+                onChangeText={(text) => setFormData({ ...formData, notes: text })}
+              />
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -249,36 +369,93 @@ const ContactsScreen: React.FC<ContactsScreenProps> = ({ navigation }) => {
 interface ContactCardProps {
   contact: any;
   onCall: () => void;
+  onEmail: () => void;
+  onSMS: () => void;
+  onEdit: () => void;
   onDelete: () => void;
 }
 
-const ContactCard: React.FC<ContactCardProps> = ({ contact, onCall, onDelete }) => (
+const ContactCard: React.FC<ContactCardProps> = ({
+  contact,
+  onCall,
+  onEmail,
+  onSMS,
+  onEdit,
+  onDelete,
+}) => (
   <View style={styles.contactCard}>
-    <View style={styles.contactInfo}>
-      <View style={styles.contactAvatar}>
-        <Text style={styles.contactAvatarText}>
-          {contact.name.charAt(0).toUpperCase()}
-        </Text>
-      </View>
-      <View style={styles.contactDetails}>
+    <View style={styles.contactHeader}>
+      <View style={styles.contactInfo}>
         <Text style={styles.contactName}>{contact.name}</Text>
-        <Text style={styles.contactPhone}>{contact.phone}</Text>
-        {contact.relationship && (
-          <Text style={styles.contactRelationship}>{contact.relationship}</Text>
+        {contact.role && <Text style={styles.contactRole}>{contact.role}</Text>}
+      </View>
+      <View style={styles.contactActions}>
+        <TouchableOpacity
+          style={styles.actionIconButton}
+          onPress={onEdit}
+        >
+          <Text style={styles.actionIcon}>✎</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.actionIconButton}
+          onPress={onDelete}
+        >
+          <Text style={styles.actionIcon}>🗑</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+
+    <View style={styles.contactDetails}>
+      {contact.phone && (
+        <TouchableOpacity
+          style={styles.contactDetail}
+          onPress={onCall}
+        >
+          <Text style={styles.contactDetailIcon}>☎️</Text>
+          <Text style={styles.contactDetailText}>{contact.phone}</Text>
+        </TouchableOpacity>
+      )}
+
+      {contact.email && (
+        <TouchableOpacity
+          style={styles.contactDetail}
+          onPress={onEmail}
+        >
+          <Text style={styles.contactDetailIcon}>✉️</Text>
+          <Text style={styles.contactDetailText}>{contact.email}</Text>
+        </TouchableOpacity>
+      )}
+
+      {contact.notes && (
+        <View style={styles.contactDetail}>
+          <Text style={styles.contactDetailIcon}>📝</Text>
+          <Text style={styles.contactDetailText}>{contact.notes}</Text>
+        </View>
+      )}
+    </View>
+
+    {(contact.phone || contact.email) && (
+      <View style={styles.contactActions2}>
+        {contact.phone && (
+          <TouchableOpacity style={styles.quickButton} onPress={onCall}>
+            <Text style={styles.quickButtonIcon}>📞</Text>
+            <Text style={styles.quickButtonText}>Call</Text>
+          </TouchableOpacity>
+        )}
+        {contact.phone && (
+          <TouchableOpacity style={styles.quickButton} onPress={onSMS}>
+            <Text style={styles.quickButtonIcon}>💬</Text>
+            <Text style={styles.quickButtonText}>SMS</Text>
+          </TouchableOpacity>
+        )}
+        {contact.email && (
+          <TouchableOpacity style={styles.quickButton} onPress={onEmail}>
+            <Text style={styles.quickButtonIcon}>📧</Text>
+            <Text style={styles.quickButtonText}>Email</Text>
+          </TouchableOpacity>
         )}
       </View>
-    </View>
-    <View style={styles.contactActions}>
-      <TouchableOpacity style={styles.actionButton} onPress={onCall}>
-        <Text style={styles.actionButtonIcon}>📞</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.actionButton, { backgroundColor: colors.error }]}
-        onPress={onDelete}
-      >
-        <Text style={styles.actionButtonIcon}>🗑️</Text>
-      </TouchableOpacity>
-    </View>
+    )}
   </View>
 );
 
@@ -288,10 +465,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary.white,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     paddingBottom: spacing.md,
     backgroundColor: colors.primary.teal,
+  },
+  headerContent: {
+    flex: 1,
   },
   headerTitle: {
     fontSize: typography.fontSize.h1.size,
@@ -303,84 +486,72 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.body2.size,
     color: colors.secondary.lightTeal,
   },
-  searchSection: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    gap: spacing.md,
-  },
-  searchInput: {
-    flex: 1,
-    backgroundColor: colors.neutral[50],
-    borderWidth: 1,
-    borderColor: colors.neutral[200],
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    fontSize: typography.fontSize.body2.size,
-    color: colors.primary.black,
-  },
   addButton: {
-    backgroundColor: colors.primary.teal,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.lg,
-    justifyContent: 'center',
-    ...shadows.sm,
-  },
-  addButtonText: {
-    fontSize: typography.fontSize.label1.size,
-    fontWeight: typography.fontSize.label1.weight,
-    color: colors.primary.white,
-  },
-  formSection: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-    backgroundColor: colors.neutral[50],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.neutral[200],
-  },
-  formTitle: {
-    fontSize: typography.fontSize.h2.size,
-    fontWeight: typography.fontSize.h2.weight,
-    color: colors.primary.black,
-    marginBottom: spacing.lg,
-  },
-  formInput: {
-    backgroundColor: colors.primary.white,
-    borderWidth: 1,
-    borderColor: colors.neutral[200],
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    fontSize: typography.fontSize.body2.size,
-    color: colors.primary.black,
-    marginBottom: spacing.md,
-  },
-  formButtons: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  formButton: {
-    flex: 1,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.success,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.sm,
+    ...shadows.md,
   },
-  formButtonText: {
-    fontSize: typography.fontSize.label1.size,
-    fontWeight: typography.fontSize.label1.weight,
+  addButtonText: {
+    fontSize: 24,
     color: colors.primary.white,
+    fontWeight: '700',
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.error,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: typography.fontSize.body2.size,
+    color: colors.primary.white,
+    fontWeight: '600',
+  },
+  retryText: {
+    fontSize: typography.fontSize.label1.size,
+    color: colors.primary.white,
+    fontWeight: '700',
+    marginLeft: spacing.lg,
+  },
+  searchContainer: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  searchInput: {
+    backgroundColor: colors.neutral[50],
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    fontSize: typography.fontSize.body2.size,
+    color: colors.primary.black,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: typography.fontSize.body2.size,
+    color: colors.neutral[600],
+    marginTop: spacing.lg,
   },
   contactsList: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
   contactCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     backgroundColor: colors.primary.white,
     borderRadius: borderRadius.md,
     padding: spacing.lg,
@@ -389,59 +560,80 @@ const styles = StyleSheet.create({
     borderColor: colors.neutral[200],
     ...shadows.sm,
   },
-  contactInfo: {
-    flex: 1,
+  contactHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: spacing.lg,
+    marginBottom: spacing.md,
   },
-  contactAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.primary.teal,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  contactAvatarText: {
-    fontSize: typography.fontSize.h2.size,
-    fontWeight: typography.fontSize.h2.weight,
-    color: colors.primary.white,
-  },
-  contactDetails: {
+  contactInfo: {
     flex: 1,
   },
   contactName: {
-    fontSize: typography.fontSize.label1.size,
-    fontWeight: typography.fontSize.label1.weight,
+    fontSize: typography.fontSize.h2.size,
+    fontWeight: typography.fontSize.h2.weight,
     color: colors.primary.black,
     marginBottom: spacing.xs,
   },
-  contactPhone: {
+  contactRole: {
     fontSize: typography.fontSize.body2.size,
-    color: colors.neutral[600],
-    marginBottom: spacing.xs,
-  },
-  contactRelationship: {
-    fontSize: typography.fontSize.body2.size,
-    color: colors.primary.teal,
+    color: colors.neutral[500],
     fontWeight: '600',
   },
   contactActions: {
     flexDirection: 'row',
     gap: spacing.md,
   },
-  actionButton: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.primary.teal,
+  actionIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.neutral[100],
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.sm,
   },
-  actionButtonIcon: {
+  actionIcon: {
+    fontSize: 18,
+  },
+  contactDetails: {
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  contactDetail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  contactDetailIcon: {
+    fontSize: 18,
+    width: 24,
+  },
+  contactDetailText: {
+    flex: 1,
+    fontSize: typography.fontSize.body2.size,
+    color: colors.neutral[600],
+  },
+  contactActions2: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[200],
+  },
+  quickButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    marginHorizontal: spacing.xs,
+  },
+  quickButtonIcon: {
     fontSize: 20,
+    marginBottom: spacing.xs,
+  },
+  quickButtonText: {
+    fontSize: typography.fontSize.body2.size,
+    color: colors.primary.teal,
+    fontWeight: '600',
   },
   emptyState: {
     alignItems: 'center',
@@ -463,6 +655,67 @@ const styles = StyleSheet.create({
     color: colors.neutral[500],
     textAlign: 'center',
     paddingHorizontal: spacing.lg,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: colors.primary.white,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[200],
+  },
+  modalCloseButton: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  modalCloseText: {
+    fontSize: 24,
+    color: colors.neutral[500],
+  },
+  modalTitle: {
+    flex: 1,
+    fontSize: typography.fontSize.h2.size,
+    fontWeight: typography.fontSize.h2.weight,
+    color: colors.primary.black,
+    textAlign: 'center',
+  },
+  modalSaveButton: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  modalSaveText: {
+    fontSize: typography.fontSize.label1.size,
+    fontWeight: typography.fontSize.label1.weight,
+    color: colors.primary.teal,
+  },
+  modalContent: {
+    flex: 1,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+  },
+  formSection: {
+    marginBottom: spacing.lg,
+  },
+  formLabel: {
+    fontSize: typography.fontSize.label1.size,
+    fontWeight: typography.fontSize.label1.weight,
+    color: colors.primary.black,
+    marginBottom: spacing.md,
+  },
+  formInput: {
+    backgroundColor: colors.neutral[50],
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    fontSize: typography.fontSize.body2.size,
+    color: colors.primary.black,
   },
 });
 
