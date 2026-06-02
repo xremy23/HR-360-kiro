@@ -184,6 +184,55 @@ app.get('/health', (req, res) => {
 // API Routes
 const apiRouter = express.Router();
 
+// Demo login (DEVELOPMENT ONLY - bypass rate limiting for testing)
+if (process.env.NODE_ENV !== 'production') {
+  const jwt = require('jsonwebtoken');
+  const jwtSecret = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production';
+  
+  apiRouter.post('/auth/demo-login', (req: express.Request, res: express.Response) => {
+    try {
+      const { email = 'demo@hr360.com', name = 'Demo User', role = 'employee' } = req.body;
+
+      const token = jwt.sign(
+        {
+          id: 'demo-user-' + Date.now(),
+          userId: 'demo-user-' + Date.now(),
+          email,
+          name,
+          role,
+          orgId: 'demo-org',
+        },
+        jwtSecret,
+        { expiresIn: '7d' }
+      );
+
+      res.json({
+        success: true,
+        data: {
+          token,
+          user: {
+            id: 'demo-user-' + Date.now(),
+            email,
+            name,
+            role,
+            orgId: 'demo-org',
+            avatar: '👤',
+          },
+        },
+      });
+    } catch (error) {
+      logger.error('Demo login error', { error });
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'DEMO_LOGIN_FAILED',
+          message: 'Demo login failed',
+        },
+      });
+    }
+  });
+}
+
 // Monitoring routes (admin access required for most)
 apiRouter.use('/monitoring', monitoringRoutes);
 

@@ -196,62 +196,7 @@ router.get('/validate', async (req: Request, res: Response) => {
  * POST /api/auth/demo-login
  * Demo login for testing (no email required)
  * ⚠️ DEVELOPMENT ONLY - Remove in production
+ * NOTE: This route is registered in server.ts to bypass rate limiting
  */
-router.post('/demo-login', async (req: Request, res: Response) => {
-  try {
-    // Only allow in development
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(403).json({
-        success: false,
-        error: {
-          code: 'DEMO_DISABLED',
-          message: 'Demo login disabled in production',
-        },
-      });
-    }
-
-    const { email = 'demo@hr360.com', name = 'Demo User', role = 'employee' } = req.body;
-
-    // Create demo JWT token (valid for 7 days)
-    const jwtSecret = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production';
-    const jwt = require('jsonwebtoken');
-    
-    const token = jwt.sign(
-      {
-        id: 'demo-user-' + Date.now(),
-        email,
-        name,
-        role,
-        orgId: 'demo-org',
-      },
-      jwtSecret,
-      { expiresIn: '7d' }
-    );
-
-    res.json({
-      success: true,
-      data: {
-        token,
-        user: {
-          id: 'demo-user-' + Date.now(),
-          email,
-          name,
-          role,
-          orgId: 'demo-org',
-          avatar: '👤',
-        },
-      },
-    });
-  } catch (error) {
-    logger.error('Demo login error', { error });
-    res.status(500).json({
-      success: false,
-      error: {
-        code: 'DEMO_LOGIN_FAILED',
-        message: 'Demo login failed',
-      },
-    });
-  }
-});
 
 export default router;
