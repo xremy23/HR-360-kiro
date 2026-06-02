@@ -19,6 +19,7 @@ import { apiService } from '../services/apiService';
 import { indexedDBService } from '../services/indexedDBService';
 import { colors, typography, spacing, borderRadius, shadows } from '../styles/designSystem';
 import ChatMessage from './ChatMessage';
+import ChatFeedbackButtons from './ChatFeedbackButtons';
 import toast from 'react-hot-toast';
 
 const ChatbotUI: React.FC = () => {
@@ -331,16 +332,24 @@ const ChatbotUI: React.FC = () => {
           </div>
         ) : (
           messages.map((message) => (
-            <ChatMessage
-              key={message.id}
-              id={message.id}
-              userQuestion={message.userQuestion}
-              botResponse={message.botResponse}
-              context={message.context}
-              isHelpful={message.isHelpful}
-              createdAt={message.createdAt}
-              onFeedback={handleFeedback}
-            />
+            <div key={message.id}>
+              <ChatMessage
+                id={message.id}
+                userQuestion={message.userQuestion}
+                botResponse={message.botResponse}
+                context={message.context}
+                isHelpful={message.isHelpful}
+                createdAt={message.createdAt}
+                onFeedback={handleFeedback}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: spacing.sm }}>
+                <ChatFeedbackButtons
+                  messageId={message.id}
+                  isHelpful={message.isHelpful}
+                  onFeedback={handleFeedback}
+                />
+              </div>
+            </div>
           ))
         )}
         <div ref={messagesEndRef} />
