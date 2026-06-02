@@ -6,6 +6,7 @@
 import express, { Request, Response } from 'express';
 import { authMiddleware, AuthRequest } from '../middleware/authMiddleware';
 import { userService } from '../services/userService';
+import BiometricService from '../services/biometricService';
 import { logger } from '../services/monitoringService';
 
 const router = express.Router();
@@ -300,6 +301,233 @@ router.delete(
         error: {
           code: 'USER_DELETE_FAILED',
           message: 'Failed to delete user',
+        },
+      });
+    }
+  }
+);
+
+// ============================================================================
+// BIOMETRIC AUTHENTICATION ENDPOINTS
+// ============================================================================
+
+/**
+ * POST /api/users/biometric/enable
+ * Enable biometric authentication
+ */
+router.post(
+  '/biometric/enable',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: {
+            code: 'NOT_AUTHENTICATED',
+            message: 'User not authenticated',
+          },
+        });
+      }
+
+      const { biometricType } = req.body;
+
+      // Validate biometric type
+      if (!biometricType || !['fingerprint', 'faceId', 'both'].includes(biometricType)) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_INPUT',
+            message: 'biometricType must be fingerprint, faceId, or both',
+          },
+        });
+      }
+
+      const result = await BiometricService.enableBiometric(req.user.userId, biometricType);
+
+      logger.info('Biometric authentication enabled', { userId: req.user.userId, type: biometricType });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      logger.error('Enable biometric error', { error, userId: req.user?.userId });
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'BIOMETRIC_ENABLE_FAILED',
+          message: 'Failed to enable biometric authentication',
+        },
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/users/biometric/disable
+ * Disable biometric authentication
+ */
+router.post(
+  '/biometric/disable',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: {
+            code: 'NOT_AUTHENTICATED',
+            message: 'User not authenticated',
+          },
+        });
+      }
+
+      const result = await BiometricService.disableBiometric(req.user.userId);
+
+      logger.info('Biometric authentication disabled', { userId: req.user.userId });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      logger.error('Disable biometric error', { error, userId: req.user?.userId });
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'BIOMETRIC_DISABLE_FAILED',
+          message: 'Failed to disable biometric authentication',
+        },
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/users/biometric/status
+ * Get biometric authentication status
+ */
+router.get(
+  '/biometric/status',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: {
+            code: 'NOT_AUTHENTICATED',
+            message: 'User not authenticated',
+          },
+        });
+      }
+
+      const status = await BiometricService.isBiometricEnabled(req.user.userId);
+
+      res.json({
+        success: true,
+        data: status,
+      });
+    } catch (error) {
+      logger.error('Get biometric status error', { error, userId: req.user?.userId });
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'BIOMETRIC_STATUS_FAILED',
+          message: 'Failed to get biometric status',
+        },
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/users/biometric/devices
+ * Get user's enrolled biometric devices
+ */
+router.get(
+  '/biometric/devices',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: {
+            code: 'NOT_AUTHENTICATED',
+            message: 'User not authenticated',
+          },
+        });
+      }
+
+      const devices = await BiometricService.getUserDevices(req.user.userId);
+
+      res.json({
+        success: true,
+        data: devices,
+      });
+    } catch (error) {
+      logger.error('Get biometric devices error', { error, userId: req.user?.userId });
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'BIOMETRIC_DEVICES_FAILED',
+          message: 'Failed to get biometric devices',
+        },
+      });
+    }
+  }
+);
+
+/**
+ * DELETE /api/users/biometric/devices/:deviceId
+ * Remove biometric device
+ */
+router.delete(
+  '/biometric/devices/:deviceId',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: {
+            code: 'NOT_AUTHENTICATED',
+            message: 'User not authenticated',
+          },
+        });
+      }
+
+      const { deviceId } = req.params;
+
+      // Verify device belongs to user
+      const device = await BiometricService.getDevice(deviceId);
+      if (!device || device.userId !== req.user.userId) {
+        return res.status(404).json({
+          success: false,
+          error: {
+            code: 'DEVICE_NOT_FOUND',
+            message: 'Biometric device not found',
+          },
+        });
+      }
+
+      await BiometricService.deleteDevice(deviceId);
+
+      logger.info('Biometric device deleted', { userId: req.user.userId, deviceId });
+
+      res.json({
+        success: true,
+        message: 'Biometric device deleted successfully',
+      });
+    } catch (error) {
+      logger.error('Delete biometric device error', { error, userId: req.user?.userId });
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'BIOMETRIC_DELETE_FAILED',
+          message: 'Failed to delete biometric device',
         },
       });
     }
