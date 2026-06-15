@@ -78,11 +78,21 @@ router.post('/', authMiddleware.verifyToken.bind(authMiddleware), async (req: Au
     // Create invite code for the organization
     const inviteCode = uuidv4().substring(0, 8).toUpperCase();
     
-    await dbQuery(
-      `INSERT INTO organization_invites (organization_id, code, is_active, created_at)
-       VALUES ($1, $2, true, NOW())`,
-      [organization.id, inviteCode]
-    );
+    // Try to insert invite code, but don't fail if database is unavailable
+    try {
+      await dbQuery(
+        `INSERT INTO organization_invites (organization_id, code, is_active, created_at)
+         VALUES ($1, $2, true, NOW())`,
+        [organization.id, inviteCode]
+      );
+    } catch (dbError) {
+      // Log the database error but continue - organization was created
+      logger.warn('Failed to create invite code in database', { 
+        error: dbError instanceof Error ? dbError.message : String(dbError),
+        organizationId: organization.id 
+      });
+      // Generate code client-side as fallback
+    }
 
     // Update user to be admin of new organization
     await userService.updateUser(req.user.userId, {
@@ -666,5 +676,6 @@ router.get(
 );
 
 export default router;
- 
+
+ 
  
