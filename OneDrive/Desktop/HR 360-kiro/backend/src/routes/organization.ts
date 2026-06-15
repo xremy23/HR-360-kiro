@@ -99,12 +99,15 @@ router.post('/', authMiddleware.verifyToken.bind(authMiddleware), async (req: Au
       },
     });
   } catch (error) {
-    logger.error('Create organization error', { error, userId: req.user?.userId });
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : '';
+    logger.error('Create organization error', { error: errorMsg, stack: errorStack, userId: req.user?.userId });
     res.status(500).json({
       success: false,
       error: {
         code: 'ORG_CREATE_FAILED',
         message: 'Failed to create organization',
+        details: errorMsg, // Include error details for debugging
       },
     });
   }
