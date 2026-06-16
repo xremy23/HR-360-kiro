@@ -5,6 +5,8 @@ import toast from 'react-hot-toast';
 import { loginSuccess, setError, setLoading } from '../store/slices/authSlice';
 import { AppDispatch } from '../store/store';
 import apiService, { ApiError } from '../services/apiService';
+import CorporateSignIn from '../components/CorporateSignIn';
+import { getDeviceType } from '../utils/deviceDetection';
 
 // Unregister all service workers on component mount
 const unregisterServiceWorkers = async () => {
@@ -21,18 +23,52 @@ const unregisterServiceWorkers = async () => {
   }
 };
 
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'responder' | 'employee';
+  team?: string;
+  phone?: string;
+  address?: string;
+}
+
 const LoginPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [email, setEmail] = useState('');
-  const [isLoading, setIsLoadingLocal] = useState(false);
-  const [step, setStep] = useState<'email' | 'sent'>('email');
+  const [darkMode, setDarkMode] = useState(false);
   const [isVerifyingLink, setIsVerifyingLink] = useState(false);
+  const [deviceType, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
+
+  // Mock user list for CorporateSignIn component
+  const mockUsers: User[] = [
+    {
+      id: '1',
+      name: 'Admin User',
+      email: 'admin@corporate.com',
+      role: 'admin',
+      team: 'Operations',
+    },
+    {
+      id: '2',
+      name: 'Test User',
+      email: 'test@corporate.com',
+      role: 'employee',
+      team: 'Safety',
+    },
+  ];
+
+  // NOTE: Domain validation moved to server-side only
+  // Frontend accepts any email format - backend validates during org joining
 
   // Unregister service workers on mount
   useEffect(() => {
     unregisterServiceWorkers();
+    
+    // Detect device type
+    const detected = getDeviceType();
+    setDeviceType(detected);
   }, []);
 
   // Check if this is a magic link verification
@@ -45,16 +81,35 @@ const LoginPage: React.FC = () => {
     }
   }, [searchParams]);
 
+  // Redirect to home if already authenticated
+  useEffect(() => {
+    const savedToken = localStorage.getItem('token');
+    const savedUser = localStorage.getItem('user');
+    
+    if (savedToken && savedUser) {
+      try {
+        const user = JSON.parse(savedUser);
+        // User is already authenticated, redirect to home
+        navigate('/', { replace: true });
+      } catch (error) {
+        console.error('Failed to parse saved user:', error);
+      }
+    }
+  }, [navigate]);
+
   const verifyMagicLink = async (linkEmail: string, token: string) => {
     setIsVerifyingLink(true);
     dispatch(setLoading(true));
 
     try {
+      console.log('Verifying magic link for:', linkEmail);
       const response = await apiService.verifyMagicLink(linkEmail, token);
 
       if (response.success && response.data) {
         const jwtToken = response.data.token;
         const backendUser = response.data.user;
+
+        console.log('Magic link verified successfully:', backendUser.email);
 
         // Use user data from verification response (no need for extra profile call)
         const user = {
@@ -66,18 +121,24 @@ const LoginPage: React.FC = () => {
           avatar: backendUser.avatar,
         };
 
+        // Update Redux store first
         dispatch(loginSuccess({ user, token: jwtToken }));
+        
+        // Then update localStorage
         localStorage.setItem('token', jwtToken);
         localStorage.setItem('user', JSON.stringify(user));
 
+        console.log('Token and user saved to localStorage and Redux store');
         toast.success('Login successful!');
-        
-        // Small delay to ensure state is updated before navigation
+
+        // Navigate after a small delay to ensure state update completes
         setTimeout(() => {
+          console.log('Navigating to home...');
           navigate('/', { replace: true });
-        }, 100);
+        }, 200);
       } else {
         const errorMessage = response.error?.message || 'Magic link verification failed';
+        console.error('Magic link verification failed:', errorMessage);
         dispatch(setError(errorMessage));
         toast.error(errorMessage);
         setIsVerifyingLink(false);
@@ -86,6 +147,7 @@ const LoginPage: React.FC = () => {
     } catch (error: any) {
       const apiError = error as ApiError;
       const errorMessage = apiError.message || 'Magic link verification failed';
+      console.error('Magic link verification error:', errorMessage, error);
       dispatch(setError(errorMessage));
       toast.error(errorMessage);
       setIsVerifyingLink(false);
@@ -93,41 +155,37 @@ const LoginPage: React.FC = () => {
     }
   };
 
-  const handleSendMagicLink = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoadingLocal(true);
-    dispatch(setLoading(true));
-
+  const handleSignIn = async (user: User) => {
+    // Sign in existing user with magic link
     try {
-      const response = await apiService.sendMagicLink(email);
+      const response = await apiService.post('/auth/send-magic-link', { email: user.email });
+
       if (response.success) {
-        // If link is returned in response (for testing), show it
-        if (response.data?.magicLink) {
-          toast.success('Magic link generated! Check console or use link below.', {
-            duration: 10000,
-            icon: '🔗',
-          });
-          console.log('Magic Link:', response.data.magicLink);
-        } else {
-          toast.success('Magic link sent to your email! Check your inbox.', {
-            duration: 5000,
-            icon: '📧',
-          });
-        }
-        setStep('sent');
+        toast.success('Magic link sent to your email! Check your inbox to log in.');
       } else {
-        const errorMessage = response.error?.message || 'Failed to send magic link';
-        dispatch(setError(errorMessage));
-        toast.error(errorMessage);
+        throw new Error('Failed to send magic link');
       }
     } catch (error: any) {
-      const apiError = error as ApiError;
-      const errorMessage = apiError.message || 'Failed to send magic link';
-      dispatch(setError(errorMessage));
+      const errorMessage = error?.message || 'Sign in failed. Please try again.';
       toast.error(errorMessage);
-    } finally {
-      setIsLoadingLocal(false);
-      dispatch(setLoading(false));
+      console.error('Sign in error:', error);
+    }
+  };
+
+  const handleAddAndSignIn = async (user: User) => {
+    // Add new user and send magic link
+    try {
+      const response = await apiService.post('/auth/send-magic-link', { email: user.email });
+
+      if (response.success) {
+        toast.success('Account created! Magic link sent to your email.');
+      } else {
+        throw new Error('Failed to create account');
+      }
+    } catch (error: any) {
+      const errorMessage = error?.message || 'Failed to create account. Please try again.';
+      toast.error(errorMessage);
+      console.error('Add and sign in error:', error);
     }
   };
 
@@ -146,142 +204,31 @@ const LoginPage: React.FC = () => {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-bg-light to-brand-cyan/10 flex flex-col items-center justify-center p-4">
-      {/* Background decoration */}
-      <div className="absolute top-0 right-0 w-96 h-96 bg-brand-cyan opacity-5 rounded-full blur-3xl -z-10"></div>
-      <div className="absolute bottom-0 left-0 w-96 h-96 bg-brand-teal-medium opacity-5 rounded-full blur-3xl -z-10"></div>
-
-      <div className="w-full max-w-md">
-        {/* Header */}
-        <div className="text-center mb-8 animate-fade-in">
-          <div className="relative w-16 h-16 mx-auto bg-brand-teal-deep rounded-3xl flex items-center justify-center shadow-lg shadow-brand-teal-medium/15 mb-4">
-            <div className="absolute inset-0 bg-brand-cyan/10 rounded-3xl animate-pulse blur-md"></div>
-            <span className="text-2xl">🚨</span>
-          </div>
-          <h1 className="font-display text-h2 text-brand-teal-deep mb-2 uppercase">
-            HR 360
-          </h1>
-          <p className="font-sans text-body3 text-stone-500">
-            Activate disaster coordination, survival kit logs, and employee status boards.
-          </p>
+  // For desktop devices, show a full-page desktop login layout
+  if (deviceType === 'desktop') {
+    return (
+      <div className="min-h-screen w-full bg-gradient-to-br from-[#0f3d3b] via-[#024645] to-[#051f1e] flex items-center justify-center p-8">
+        <div className="w-full max-w-5xl">
+          <CorporateSignIn
+            users={mockUsers}
+            onSignIn={handleSignIn}
+            onAddAndSignIn={handleAddAndSignIn}
+            darkMode={darkMode}
+          />
         </div>
-
-        {/* Domain Notice */}
-        <div className="p-3 bg-brand-teal-medium/5 border border-brand-teal-medium/15 rounded-2xl flex items-start gap-2.5 mb-6">
-          <span className="text-brand-teal-medium mt-0.5">ℹ️</span>
-          <div className="text-body3 text-brand-teal-deep leading-normal">
-            <span className="font-bold">SSO Domains Configured:</span> corporate.com, rescue.org, health.gov.
-          </div>
-        </div>
-
-        {/* Login Card */}
-        <div className="bg-white dark:bg-neutral-900 border border-stone-200 dark:border-neutral-800 rounded-[2.5rem] shadow-2xl p-8 mb-6 animate-fade-in">
-          {step === 'email' ? (
-            <>
-              <h2 className="font-display text-h4 text-brand-teal-deep mb-2 uppercase">
-                Passwordless Login
-              </h2>
-              <p className="font-sans text-body3 text-stone-500 dark:text-stone-400 mb-6">
-                Enter your email to receive a magic login link
-              </p>
-
-              <form onSubmit={handleSendMagicLink} className="space-y-4">
-                {/* Email Input */}
-                <div>
-                  <label className="block font-sans text-label2 font-extrabold uppercase text-stone-500 dark:text-stone-400 tracking-wider mb-2">
-                    Corporate Identifier / Email
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="employee@corporate.com"
-                      required
-                      className="w-full px-4 py-3 pl-10 border-2 border-stone-200 dark:border-neutral-800 rounded-2xl font-sans text-body3 bg-stone-50 dark:bg-neutral-950 text-neutral-850 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:border-brand-teal-medium focus:ring-2 focus:ring-brand-teal-medium/20 transition"
-                    />
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400">@</span>
-                  </div>
-                </div>
-
-                {/* Send Magic Link Button */}
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full bg-brand-teal-medium hover:bg-brand-teal-deep disabled:bg-stone-300 text-white font-display font-extrabold text-label1 py-3.5 rounded-2xl shadow transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isLoading ? '⏳ Sending...' : '🔑 Initialize Secure Authorization'}
-                </button>
-
-                {/* Demo Login Button (Development Only) */}
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setIsLoadingLocal(true);
-                    try {
-                      const response = await apiService.post('/auth/demo-login', {});
-                      if (response.success && response.data) {
-                        const jwtToken = response.data.token;
-                        const user = response.data.user;
-
-                        dispatch(loginSuccess({ user, token: jwtToken }));
-                        localStorage.setItem('token', jwtToken);
-                        localStorage.setItem('user', JSON.stringify(user));
-
-                        toast.success('Demo login successful!');
-                        setTimeout(() => {
-                          navigate('/', { replace: true });
-                        }, 100);
-                      }
-                    } catch (error: any) {
-                      toast.error('Demo login failed');
-                    } finally {
-                      setIsLoadingLocal(false);
-                    }
-                  }}
-                  disabled={isLoading}
-                  className="w-full bg-stone-500 hover:bg-stone-600 disabled:bg-stone-300 text-white font-sans font-semibold text-label2 py-3 rounded-2xl shadow transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isLoading ? '⏳ Loading...' : '👤 Demo Login (Testing)'}
-                </button>
-              </form>
-            </>
-          ) : (
-            <>
-              <h2 className="font-display text-h4 text-brand-teal-deep mb-2 uppercase">
-                Check Your Email
-              </h2>
-              <p className="font-sans text-body3 text-stone-500 dark:text-stone-400 mb-6">
-                We've sent a magic login link to <strong>{email}</strong>
-              </p>
-
-              <div className="bg-brand-teal-medium/5 rounded-2xl p-4 mb-6 border border-brand-teal-medium/15">
-                <p className="font-sans text-body3 text-brand-teal-deep font-semibold mb-2">
-                  ✅ Magic link sent successfully!
-                </p>
-                <p className="font-sans text-body3 text-stone-600 dark:text-stone-400">
-                  Click the link in your email to log in. The link expires in 15 minutes.
-                </p>
-              </div>
-
-              {/* Back Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  setStep('email');
-                  setEmail('');
-                }}
-                className="w-full bg-stone-100 dark:bg-neutral-800 hover:bg-stone-200 dark:hover:bg-neutral-700 text-brand-teal-deep font-sans font-semibold py-3 px-4 rounded-2xl transition duration-200"
-              >
-                Try Another Email
-              </button>
-            </>
-          )}
-        </div>
-
-
       </div>
+    );
+  }
+
+  // For tablet and mobile devices, use the responsive mobile-optimized layout
+  return (
+    <div className={darkMode ? 'dark' : ''}>
+      <CorporateSignIn
+        users={mockUsers}
+        onSignIn={handleSignIn}
+        onAddAndSignIn={handleAddAndSignIn}
+        darkMode={darkMode}
+      />
     </div>
   );
 };
