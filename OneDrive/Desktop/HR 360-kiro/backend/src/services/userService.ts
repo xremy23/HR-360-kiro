@@ -14,7 +14,7 @@ class UserService {
    */
   async createUser(input: CreateUserInput): Promise<User> {
     try {
-      const id = uuidv4();
+      const id = input.id || uuidv4();
       const now = new Date();
 
       const result = await query(
@@ -163,14 +163,37 @@ class UserService {
         values.push(input.avatarUrl);
       }
 
+      if (input.organizationId !== undefined) {
+        updates.push(`organization_id = $${paramCount++}`);
+        values.push(input.organizationId || null);
+      }
+
       if (input.departmentId !== undefined) {
+        // If departmentId looks like a name string (not a UUID), get or create it
+        let deptId = input.departmentId;
+        if (input.departmentId && !input.departmentId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+          // It's a name, get or create the department
+          const user = await this.getUserById(id);
+          if (user && user.organizationId) {
+            deptId = await this.getOrCreateDepartment(user.organizationId, input.departmentId) || input.departmentId;
+          }
+        }
         updates.push(`department_id = $${paramCount++}`);
-        values.push(input.departmentId);
+        values.push(deptId || null);
       }
 
       if (input.teamId !== undefined) {
+        // If teamId looks like a name string (not a UUID), get or create it
+        let teamId = input.teamId;
+        if (input.teamId && !input.teamId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+          // It's a name, get or create the team
+          const user = await this.getUserById(id);
+          if (user && user.organizationId) {
+            teamId = await this.getOrCreateTeam(user.organizationId, input.teamId) || input.teamId;
+          }
+        }
         updates.push(`team_id = $${paramCount++}`);
-        values.push(input.teamId);
+        values.push(teamId || null);
       }
 
       if (input.position !== undefined) {
@@ -221,9 +244,12 @@ class UserService {
    */
   async updateUserRole(id: string, role: string): Promise<User> {
     try {
+      // Normalize legacy 'hr' role to 'hr_admin'
+      const normalizedRole = role === 'hr' ? 'hr_admin' : role;
+
       const result = await query(
         'UPDATE users SET role = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-        [role, id]
+        [normalizedRole, id]
       );
 
       if (result.rows.length === 0) {
@@ -370,6 +396,72 @@ class UserService {
     } catch (error) {
       logger.error('Failed to get users by role', { organizationId, role, error });
       throw error;
+    }
+  }
+
+  /**
+   * Get or create a department by name
+   */
+  private async getOrCreateDepartment(organizationId: string, departmentName: string): Promise<string | null> {
+    if (!departmentName || departmentName.trim() === '') return null;
+    
+    try {
+      // Try to find existing department
+      const result = await query(
+        `SELECT id FROM departments WHERE organization_id = $1 AND name = $2 LIMIT 1`,
+        [organizationId, departmentName]
+      );
+
+      if (result.rows.length > 0) {
+        return result.rows[0].id;
+      }
+
+      // Create new department
+      const id = uuidv4();
+      const now = new Date();
+      await query(
+        `INSERT INTO departments (id, organization_id, name, created_at, updated_at, is_active)
+         VALUES ($1, $2, $3, $4, $5, true)`,
+        [id, organizationId, departmentName, now, now]
+      );
+
+      return id;
+    } catch (error) {
+      logger.error('Failed to get or create department', { organizationId, departmentName, error });
+      return null;
+    }
+  }
+
+  /**
+   * Get or create a team by name
+   */
+  private async getOrCreateTeam(organizationId: string, teamName: string): Promise<string | null> {
+    if (!teamName || teamName.trim() === '') return null;
+    
+    try {
+      // Try to find existing team
+      const result = await query(
+        `SELECT id FROM teams WHERE organization_id = $1 AND name = $2 LIMIT 1`,
+        [organizationId, teamName]
+      );
+
+      if (result.rows.length > 0) {
+        return result.rows[0].id;
+      }
+
+      // Create new team
+      const id = uuidv4();
+      const now = new Date();
+      await query(
+        `INSERT INTO teams (id, organization_id, name, created_at, updated_at, is_active)
+         VALUES ($1, $2, $3, $4, $5, true)`,
+        [id, organizationId, teamName, now, now]
+      );
+
+      return id;
+    } catch (error) {
+      logger.error('Failed to get or create team', { organizationId, teamName, error });
+      return null;
     }
   }
 

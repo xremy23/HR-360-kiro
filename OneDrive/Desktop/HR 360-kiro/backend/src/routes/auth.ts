@@ -90,10 +90,18 @@ router.get('/check-email', (req: Request, res: Response) => {
       });
     }
 
-    // Demo: All emails are considered new (not found)
-    res.json({
-      success: true,
-      exists: false,
+    // Check if email exists in database
+    userService.getUserByEmail(email).then(user => {
+      res.json({
+        success: true,
+        exists: !!user,
+      });
+    }).catch(error => {
+      logger.error('Check email error', { email, error });
+      res.status(500).json({
+        success: false,
+        error: { code: 'CHECK_EMAIL_FAILED', message: 'Failed to check email' },
+      });
     });
   } catch (error) {
     logger.error('Check email error', { error });
@@ -337,9 +345,19 @@ router.get('/validate', (req: Request, res: Response) => {
       });
     }
 
+    // Validate JWT token
+    const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production';
+    const decoded: any = jwt.verify(token, JWT_SECRET);
+
     res.json({
       success: true,
-      data: { valid: true, email: 'demo@example.com' },
+      data: {
+        valid: true,
+        email: decoded.email,
+        userId: decoded.userId,
+        organizationId: decoded.organizationId,
+        role: decoded.role,
+      },
     });
   } catch (error) {
     logger.error('Token validation error', { error });
