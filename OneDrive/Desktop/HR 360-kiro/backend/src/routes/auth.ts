@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { logger } from '../services/monitoringService';
 import { emailService } from '../services/emailService';
 import { userService } from '../services/userService';
+import { authService } from '../services/authService';
 import { authMiddleware, AuthRequest } from '../middleware/authMiddleware';
 
 const router = express.Router();
@@ -187,33 +188,26 @@ router.post('/send-magic-link', async (req: Request, res: Response) => {
       });
     }
 
-    const token = uuidv4();
-    
-    // Create magic link URL
-    const magicLink = `https://hr-crisis-360-frontend-116253736511.asia-southeast1.run.app/login?email=${encodeURIComponent(email)}&token=${token}`;
-
-    logger.info('=== SEND MAGIC LINK ===', { email, token });
+    logger.info('=== SEND MAGIC LINK ===', { email });
 
     try {
-      logger.info('Calling emailService.sendMagicLink()...', { email });
+      // Use AuthService to send magic link - this handles Redis token storage and expiry
+      const result = await authService.sendMagicLink(email, 'https://hr-crisis-360-frontend-116253736511.asia-southeast1.run.app');
       
-      // Send email
-      const emailSent = await emailService.sendMagicLink(email, magicLink);
-      
-      logger.info('✅ emailService.sendMagicLink() completed', { email, emailSent });
+      logger.info('✅ Magic link sent via authService', { email });
 
       res.json({
         success: true,
-        data: { token },
+        data: { token: result.token },
       });
-    } catch (emailError) {
-      logger.error('❌ emailService.sendMagicLink() THREW ERROR', {
+    } catch (authError) {
+      logger.error('❌ authService.sendMagicLink() THREW ERROR', {
         email,
-        errorName: (emailError as Error).name,
-        errorMessage: (emailError as Error).message,
-        errorStack: (emailError as Error).stack,
+        errorName: (authError as Error).name,
+        errorMessage: (authError as Error).message,
+        errorStack: (authError as Error).stack,
       });
-      throw emailError;
+      throw authError;
     }
   } catch (error) {
     logger.error('❌ SEND MAGIC LINK ERROR', {
@@ -243,69 +237,38 @@ router.post('/verify-magic-link', async (req: Request, res: Response) => {
       });
     }
 
-    logger.info('🔵 Verify magic link - checking user', { email });
+    logger.info('🔵 Verify magic link', { email, token });
 
-    let user;
+    try {
+      // Use AuthService to verify - this validates token from Redis and creates JWT
+      const authToken = await authService.verifyMagicLink(token, email);
+      
+      logger.info('✅ Magic link verified via authService', { email });
 
-    // Get user from database - no demo fallback
-    user = await userService.getUserByEmail(email);
-    
-    if (!user) {
-      logger.info('🔵 User not found, creating new user', { email });
-      user = await userService.createUser({
-        id: uuidv4(),
-        email,
-        firstName: email.split('@')[0],
-        lastName: '',
-        role: 'employee',
-      });
-      logger.info('✅ User created in database', { userId: user.id, email });
-    } else {
-      logger.info('✅ User found in database', { userId: user.id, email, organizationId: user.organizationId });
-      // Update last login timestamp for existing users
-      await userService.updateLastLogin(user.id);
-    }
-
-    // Get JWT secret from environment or use default
-    const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production';
-
-    // Generate proper JWT token with the user ID
-    const jwtToken = jwt.sign(
-      {
-        userId: user.id,
-        email: user.email,
-        role: user.role || 'employee',
-        organizationId: user.organizationId,
-      },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    logger.info('✅ Magic link verified', { email, userId: user.id });
-
-    res.json({
-      success: true,
-      data: {
-        token: jwtToken,
-        expiresIn: 604800,
-        user: {
-          id: user.id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          name: `${user.firstName || email.split('@')[0]} ${user.lastName || ''}`.trim(),
-          role: user.role || 'employee',
-          organizationId: user.organizationId,
-          avatar: user.avatarUrl,
+      res.json({
+        success: true,
+        data: {
+          token: authToken.token,
+          expiresIn: authToken.expiresIn,
+          user: authToken.user,
         },
-      },
-    });
+      });
+    } catch (authError) {
+      logger.error('❌ authService.verifyMagicLink() error', {
+        email,
+        errorMessage: (authError as Error).message,
+      });
+      return res.status(401).json({
+        success: false,
+        error: { code: 'VERIFICATION_FAILED', message: (authError as Error).message },
+      });
+    }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    logger.error('🔴 Verify magic link error', { error: errorMsg, stack: error instanceof Error ? error.stack : '' });
+    logger.error('🔴 Verify magic link error', { error: errorMsg });
     res.status(500).json({
       success: false,
-      error: { code: 'VERIFICATION_FAILED', message: 'Failed to verify magic link', details: errorMsg },
+      error: { code: 'VERIFICATION_FAILED', message: 'Failed to verify magic link' },
     });
   }
 });
