@@ -65,8 +65,16 @@ const EmployeeApp: React.FC = () => {
         });
 
         // Fetch check-ins
-        if (isComponentMounted) dispatch(setCheckInLoading(false));
-        dispatch(setCheckInItems([]));
+        if (isComponentMounted) dispatch(setCheckInLoading(true));
+        const checkInsResponse = await apiService.getCheckIns();
+        if (isComponentMounted) {
+          if (checkInsResponse.success && checkInsResponse.data) {
+            dispatch(setCheckInItems(checkInsResponse.data));
+          } else {
+            dispatch(setCheckInError('Failed to load check-ins'));
+          }
+          dispatch(setCheckInLoading(false));
+        }
 
         // Fetch alerts
         if (isComponentMounted) dispatch(setAlertLoading(false));
