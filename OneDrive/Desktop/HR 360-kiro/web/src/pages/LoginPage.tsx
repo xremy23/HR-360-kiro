@@ -15,10 +15,10 @@ const unregisterServiceWorkers = async () => {
       const registrations = await navigator.serviceWorker.getRegistrations();
       for (const registration of registrations) {
         await registration.unregister();
-        console.log('Service Worker unregistered');
+
       }
     } catch (error) {
-      console.log('Error unregistering service workers:', error);
+      console.error('Error unregistering service workers:', error);
     }
   }
 };
@@ -102,14 +102,14 @@ const LoginPage: React.FC = () => {
     dispatch(setLoading(true));
 
     try {
-      console.log('Verifying magic link for:', linkEmail);
+
       const response = await apiService.verifyMagicLink(linkEmail, token);
 
       if (response.success && response.data) {
         const jwtToken = response.data.token;
         const backendUser = response.data.user;
 
-        console.log('Magic link verified successfully:', backendUser.email);
+
 
         // Use user data from verification response (no need for extra profile call)
         const user = {
@@ -128,12 +128,12 @@ const LoginPage: React.FC = () => {
         localStorage.setItem('token', jwtToken);
         localStorage.setItem('user', JSON.stringify(user));
 
-        console.log('Token and user saved to localStorage and Redux store');
+
         toast.success('Login successful!');
 
         // Navigate after a small delay to ensure state update completes
         setTimeout(() => {
-          console.log('Navigating to home...');
+
           navigate('/', { replace: true });
         }, 200);
       } else {
