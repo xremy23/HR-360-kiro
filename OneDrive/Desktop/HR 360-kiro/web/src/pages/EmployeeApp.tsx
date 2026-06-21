@@ -25,6 +25,7 @@ import BulkImportPage from './BulkImportPage';
 import Chatbot from '../components/Chatbot';
 import { chatbotService } from '../services/chatbotService';
 import { websocketService } from '../services/websocketService';
+import { apiService } from '../services/apiService';
 
 const EmployeeApp: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -71,9 +72,27 @@ const EmployeeApp: React.FC = () => {
         if (isComponentMounted) dispatch(setAlertLoading(false));
         dispatch(setAlertItems([]));
 
-        // Use mock KB data (no need to fetch if not available)
-        if (isComponentMounted) dispatch(setKBLoading(false));
-        dispatch(setKBItems([]));
+        // Fetch KB guides
+        if (isComponentMounted) {
+          dispatch(setKBLoading(true));
+          try {
+            const kbResponse = await apiService.getGuides();
+            if (isComponentMounted) {
+              if (kbResponse.success) {
+                dispatch(setKBItems(kbResponse.data));
+                dispatch(setKBLoading(false));
+              } else {
+                dispatch(setKBError('Failed to load KB guides'));
+                dispatch(setKBLoading(false));
+              }
+            }
+          } catch (kbErr) {
+            if (isComponentMounted) {
+              dispatch(setKBError('Failed to load KB guides'));
+              dispatch(setKBLoading(false));
+            }
+          }
+        }
       } catch (error) {
         console.error('Error in EmployeeApp initialization:', error);
         if (isComponentMounted) {
