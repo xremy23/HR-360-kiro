@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { useOfflineSync } from '../hooks/useOfflineSync';
+import { useDarkMode } from '../hooks/useDarkMode';
 
 interface SyncStatusIndicatorProps {
   className?: string;
@@ -16,11 +17,27 @@ export const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
   showDetails = false,
 }) => {
   const { isOnline, isSyncing, pendingCount, syncNow } = useOfflineSync();
+  const isDarkMode = useDarkMode();
 
   if (isOnline && !isSyncing && pendingCount === 0) {
     // All good, don't show anything
     return null;
   }
+
+  // Color mappings responsive to dark mode
+  const bgColor = isOnline 
+    ? (isDarkMode ? '#1E293B' : '#f0f9ff')
+    : (isDarkMode ? '#3F1F1F' : '#fef2f2');
+  
+  const borderColor = isOnline
+    ? (isDarkMode ? '#0EA5E9' : '#bfdbfe')
+    : (isDarkMode ? '#DC2626' : '#fecaca');
+  
+  const textColor = isOnline
+    ? (isDarkMode ? '#87CEEB' : '#1e40af')
+    : (isDarkMode ? '#FCA5A5' : '#991b1b');
+  
+  const dotColor = isOnline ? '#10b981' : '#ef4444';
 
   return (
     <div
@@ -33,9 +50,9 @@ export const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
         borderRadius: '4px',
         fontSize: '12px',
         fontWeight: '500',
-        backgroundColor: isOnline ? '#f0f9ff' : '#fef2f2',
-        border: `1px solid ${isOnline ? '#bfdbfe' : '#fecaca'}`,
-        color: isOnline ? '#1e40af' : '#991b1b',
+        backgroundColor: bgColor,
+        border: `1px solid ${borderColor}`,
+        color: textColor,
       }}
     >
       {/* Status indicator dot */}
@@ -64,7 +81,7 @@ export const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
             marginLeft: '8px',
             padding: '2px 6px',
             fontSize: '11px',
-            backgroundColor: '#3b82f6',
+            backgroundColor: isDarkMode ? '#1E40AF' : '#3b82f6',
             color: 'white',
             border: 'none',
             borderRadius: '3px',

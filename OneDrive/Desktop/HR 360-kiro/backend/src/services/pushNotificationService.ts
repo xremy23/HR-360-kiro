@@ -1,6 +1,8 @@
 import * as Expo from 'expo-server-sdk';
 import PushNotificationEntity, { PushNotification } from '../entities/PushNotification';
 import DeviceTokenEntity from '../entities/DeviceToken';
+import { guestNotificationService } from './guestNotificationService';
+import { logger } from './monitoringService';
 
 // Initialize Expo SDK
 const expoClient = new Expo.Expo();
@@ -21,6 +23,7 @@ export interface BulkPushPayload {
   body: string;
   data?: Record<string, any>;
   type: 'alert' | 'incident' | 'sos' | 'checkin' | 'custom';
+  source?: 'internal' | 'pagasa' | 'philvolcs' | 'ndrrmc'; // Add source field
 }
 
 export interface ScheduledPushPayload extends PushNotificationPayload {
@@ -116,24 +119,40 @@ class PushNotificationService {
    * Send bulk push notifications
    */
   async sendBulkPushNotifications(payload: BulkPushPayload): Promise<PushNotification[]> {
-    const notifications: PushNotification[] = [];
+    try {
+      // Filter users based on role and alert source
+      const filteredUserIds = await guestNotificationService.filterUsersForNotification(
+        payload.userIds,
+        payload.source || 'internal'
+      );
 
-    for (const userId of payload.userIds) {
-      try {
-        const notification = await this.sendPushNotification({
-          userId,
-          title: payload.title,
-          body: payload.body,
-          data: payload.data,
-          type: payload.type,
-        });
-        notifications.push(notification);
-      } catch (error) {
-        console.error(`Error sending notification to user ${userId}:`, error);
+      if (filteredUserIds.length === 0) {
+        logger.info(`No eligible users for notification with source: ${payload.source}`);
+        return [];
       }
-    }
 
-    return notifications;
+      const notifications: PushNotification[] = [];
+
+      for (const userId of filteredUserIds) {
+        try {
+          const notification = await this.sendPushNotification({
+            userId,
+            title: payload.title,
+            body: payload.body,
+            data: payload.data,
+            type: payload.type,
+          });
+          notifications.push(notification);
+        } catch (error) {
+          logger.error(`Error sending notification to user ${userId}`, { error });
+        }
+      }
+
+      return notifications;
+    } catch (error) {
+      logger.error('Error in sendBulkPushNotifications', { error, payload });
+      throw error;
+    }
   }
 
   /**
@@ -292,7 +311,8 @@ class PushNotificationService {
     userIds: string[],
     alertTitle: string,
     alertMessage: string,
-    severity: string
+    severity: string,
+    source: 'internal' | 'pagasa' | 'philvolcs' | 'ndrrmc' = 'internal'
   ): Promise<PushNotification[]> {
     return this.sendBulkPushNotifications({
       userIds,
@@ -301,8 +321,10 @@ class PushNotificationService {
       data: {
         severity,
         alertTitle,
+        source,
       },
       type: 'alert',
+      source,
     });
   }
 

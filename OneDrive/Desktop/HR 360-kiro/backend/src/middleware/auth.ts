@@ -124,3 +124,52 @@ export const managerMiddleware = (req: AuthRequest, res: Response, next: NextFun
   }
   next();
 };
+
+/**
+ * Optional authentication middleware - doesn't fail if no token provided
+ */
+export const optionalAuthMiddleware = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+
+    if (!token) {
+      // No token, just continue as guest
+      next();
+      return;
+    }
+
+    // Get security configuration
+    const securityConfig = getSecurityConfig();
+
+    // Decode token to get token ID for blacklist check
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, securityConfig.jwtSecret);
+    } catch (error) {
+      // Invalid token, just continue as guest
+      next();
+      return;
+    }
+
+    // Check if token is blacklisted
+    const tokenId = decoded.jti || `${decoded.id}_${decoded.iat}`;
+    const isBlacklisted = await sessionService.isTokenBlacklisted(tokenId);
+    
+    if (isBlacklisted) {
+      // Token revoked, continue as guest
+      next();
+      return;
+    }
+
+    // Update session activity if session exists
+    const sessionId = `session_${decoded.id}`;
+    await sessionService.updateSessionActivity(sessionId);
+
+    req.user = decoded;
+    next();
+  } catch (error) {
+    // Error processing token, continue as guest
+    console.debug('Optional auth error, continuing as guest:', error);
+    next();
+  }
+};

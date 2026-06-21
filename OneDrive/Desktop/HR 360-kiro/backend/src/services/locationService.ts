@@ -1,6 +1,12 @@
-import { query } from '../config/database';
+/**
+ * Location Service
+ * Handles location tracking, geofencing, and nearby services/contacts discovery
+ */
 
-export interface Location {
+import { query } from '../config/database';
+import { logger } from './monitoringService';
+
+interface LocationRecord {
   id: string;
   userId: string;
   latitude: number;
@@ -13,28 +19,7 @@ export interface Location {
   createdAt: Date;
 }
 
-export interface NearbyContact {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  distance: number; // in kilometers
-  latitude: number;
-  longitude: number;
-}
-
-export interface NearbyService {
-  id: string;
-  name: string;
-  type: string;
-  distance: number; // in kilometers
-  latitude: number;
-  longitude: number;
-  address: string;
-  phone?: string;
-}
-
-export interface Geofence {
+interface Geofence {
   id: string;
   userId: string;
   name: string;
@@ -46,11 +31,34 @@ export interface Geofence {
   createdAt: Date;
 }
 
+interface NearbyContact {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  distance: number;
+  latitude: number;
+  longitude: number;
+  category: string;
+}
+
+interface NearbyService {
+  id: string;
+  name: string;
+  type: 'hospital' | 'fire' | 'police' | 'veterinary' | 'government' | 'other';
+  address: string;
+  phone: string;
+  distance: number;
+  latitude: number;
+  longitude: number;
+}
+
 class LocationService {
   /**
    * Track user location
    */
-  static async trackLocation(
+  async trackLocation(
     userId: string,
     latitude: number,
     longitude: number,
@@ -59,232 +67,321 @@ class LocationService {
     altitude?: number,
     heading?: number,
     speed?: number
-  ): Promise<Location> {
-    const result = await query(
-      `INSERT INTO location_history (user_id, latitude, longitude, accuracy, altitude, heading, speed, source)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, user_id as "userId", latitude, longitude, accuracy, altitude, heading, speed, source, created_at as "createdAt"`,
-      [userId, latitude, longitude, accuracy, altitude || null, heading || null, speed || null, source]
-    );
-    return result.rows[0];
+  ): Promise<LocationRecord> {
+    try {
+      const result = await query(
+        `INSERT INTO location_history 
+         (user_id, latitude, longitude, accuracy, altitude, heading, speed, source)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, user_id as "userId", latitude, longitude, accuracy, altitude, heading, speed, source, created_at as "createdAt"`,
+        [userId, latitude, longitude, accuracy, altitude || null, heading || null, speed || null, source]
+      );
+
+      logger.info('Location tracked', { userId, latitude, longitude, source });
+      return result.rows[0];
+    } catch (error) {
+      logger.error('Error tracking location:', { error, userId });
+      throw error;
+    }
   }
 
   /**
    * Get location history for user
    */
-  static async getLocationHistory(
+  async getLocationHistory(
     userId: string,
-    limit: number = 100,
+    limit: number = 50,
     offset: number = 0
-  ): Promise<Location[]> {
-    const result = await query(
-      `SELECT id, user_id as "userId", latitude, longitude, accuracy, altitude, heading, speed, source, created_at as "createdAt"
-       FROM location_history
-       WHERE user_id = $1
-       ORDER BY created_at DESC
-       LIMIT $2 OFFSET $3`,
-      [userId, limit, offset]
-    );
-    return result.rows;
-  }
-
-  /**
-   * Get current user location (most recent)
-   */
-  static async getCurrentLocation(userId: string): Promise<Location | null> {
-    const result = await query(
-      `SELECT id, user_id as "userId", latitude, longitude, accuracy, altitude, heading, speed, source, created_at as "createdAt"
-       FROM location_history
-       WHERE user_id = $1
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [userId]
-    );
-    return result.rows[0] || null;
-  }
-
-  /**
-   * Get nearby contacts using PostGIS
-   * Requires PostGIS extension: CREATE EXTENSION IF NOT EXISTS postgis;
-   */
-  static async getNearbyContacts(
-    latitude: number,
-    longitude: number,
-    radiusKm: number,
-    userId?: string
-  ): Promise<NearbyContact[]> {
+  ): Promise<LocationRecord[]> {
     try {
       const result = await query(
-        `SELECT 
-          c.id, 
-          c.name, 
-          c.email, 
-          c.phone,
-          ST_Distance(
-            ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
-            ST_SetSRID(ST_MakePoint(c.latitude, c.longitude), 4326)::geography
-          ) / 1000 as distance,
-          c.latitude,
-          c.longitude
-        FROM emergency_contacts c
-        WHERE ST_DWithin(
-          ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
-          ST_SetSRID(ST_MakePoint(c.latitude, c.longitude), 4326)::geography,
-          $3 * 1000
-        )
-        ${userId ? 'AND c.user_id = $4' : ''}
-        ORDER BY distance ASC`,
-        userId ? [longitude, latitude, radiusKm, userId] : [longitude, latitude, radiusKm]
+        `SELECT id, user_id as "userId", latitude, longitude, accuracy, altitude, heading, speed, source, created_at as "createdAt"
+         FROM location_history
+         WHERE user_id = $1
+         ORDER BY created_at DESC
+         LIMIT $2 OFFSET $3`,
+        [userId, limit, offset]
       );
+
       return result.rows;
     } catch (error) {
-      console.error('Error getting nearby contacts:', error);
-      // Fallback to simple distance calculation if PostGIS not available
-      return this.getNearbyContactsFallback(latitude, longitude, radiusKm, userId);
-    }
-  }
-
-  /**
-   * Fallback method for nearby contacts (without PostGIS)
-   */
-  private static async getNearbyContactsFallback(
-    latitude: number,
-    longitude: number,
-    radiusKm: number,
-    userId?: string
-  ): Promise<NearbyContact[]> {
-    const result = await query(
-      `SELECT id, name, email, phone, latitude, longitude
-       FROM emergency_contacts
-       ${userId ? 'WHERE user_id = $1' : ''}`,
-      userId ? [userId] : []
-    );
-
-    // Calculate distance using Haversine formula
-    const nearby = result.rows
-      .map(contact => ({
-        ...contact,
-        distance: this.calculateDistance(latitude, longitude, contact.latitude, contact.longitude),
-      }))
-      .filter(contact => contact.distance <= radiusKm)
-      .sort((a, b) => a.distance - b.distance);
-
-    return nearby;
-  }
-
-  /**
-   * Get nearby services
-   */
-  static async getNearbyServices(
-    latitude: number,
-    longitude: number,
-    serviceType?: string,
-    radiusKm: number = 5
-  ): Promise<NearbyService[]> {
-    try {
-      let query_str = `SELECT 
-        id, 
-        name, 
-        type,
-        address,
-        phone,
-        ST_Distance(
-          ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
-          ST_SetSRID(ST_MakePoint(latitude, longitude), 4326)::geography
-        ) / 1000 as distance,
-        latitude,
-        longitude
-      FROM nearby_services
-      WHERE ST_DWithin(
-        ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
-        ST_SetSRID(ST_MakePoint(latitude, longitude), 4326)::geography,
-        $3 * 1000
-      )`;
-
-      const params: any[] = [longitude, latitude, radiusKm];
-
-      if (serviceType) {
-        query_str += ` AND type = $${params.length + 1}`;
-        params.push(serviceType);
-      }
-
-      query_str += ` ORDER BY distance ASC`;
-
-      const result = await query(query_str, params);
-      return result.rows;
-    } catch (error) {
-      console.error('Error getting nearby services:', error);
+      logger.error('Error getting location history:', { error, userId });
       return [];
     }
   }
 
   /**
-   * Create geofence
+   * Get most recent location for user
    */
-  static async createGeofence(
+  async getCurrentLocation(userId: string): Promise<LocationRecord | null> {
+    try {
+      const result = await query(
+        `SELECT id, user_id as "userId", latitude, longitude, accuracy, altitude, heading, speed, source, created_at as "createdAt"
+         FROM location_history
+         WHERE user_id = $1
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [userId]
+      );
+
+      return result.rows[0] || null;
+    } catch (error) {
+      logger.error('Error getting current location:', { error, userId });
+      return null;
+    }
+  }
+
+  /**
+   * Get nearby emergency contacts based on location
+   * Uses hardcoded Philippines emergency services with distance calculation
+   */
+  async getNearbyContacts(latitude: number, longitude: number, radiusKm: number = 10): Promise<NearbyContact[]> {
+    try {
+      // Hardcoded emergency contacts with coordinates
+      const allContacts: NearbyContact[] = [
+        // EMERGENCY RESPONDERS - National Level
+        {
+          id: 'e1',
+          name: 'National Emergency Hotline',
+          email: 'emergency@pnp.gov.ph',
+          phone: '911',
+          role: 'Emergency',
+          distance: 0,
+          latitude: 14.5995,
+          longitude: 121.0274,
+          category: 'emergency',
+        },
+        {
+          id: 'e1a',
+          name: 'Philippine National Police',
+          email: 'information@pnp.gov.ph',
+          phone: '117',
+          role: 'Emergency - Police',
+          distance: 0,
+          latitude: 14.5995,
+          longitude: 121.0274,
+          category: 'emergency',
+        },
+        {
+          id: 'e1b',
+          name: 'Bureau of Fire Protection',
+          email: 'bfp.operations@fire.gov.ph',
+          phone: '160',
+          role: 'Emergency - Fire',
+          distance: 0,
+          latitude: 14.5995,
+          longitude: 121.0274,
+          category: 'emergency',
+        },
+        {
+          id: 'e2',
+          name: 'NDRRMC - Disaster Risk Reduction',
+          email: 'operations@ndrrmc.gov.ph',
+          phone: '+63 2 911-5061',
+          role: 'Emergency',
+          distance: 0,
+          latitude: 14.5950,
+          longitude: 121.0100,
+          category: 'emergency',
+        },
+
+        // MEDICAL FACILITIES - Metro Manila
+        {
+          id: 'm1',
+          name: 'Pasig City General Hospital',
+          email: 'admissions@pcgh.gov.ph',
+          phone: '+63 2 645-4567',
+          role: 'Hospital',
+          distance: 0,
+          latitude: 14.5761,
+          longitude: 121.0437,
+          category: 'medical',
+        },
+        {
+          id: 'm2',
+          name: 'Makati Medical Center',
+          email: 'er@makatimedical.com',
+          phone: '+63 2 888-8888',
+          role: 'Private Hospital',
+          distance: 0,
+          latitude: 14.5546,
+          longitude: 121.0225,
+          category: 'medical',
+        },
+        {
+          id: 'm3',
+          name: 'San Lazaro Hospital',
+          email: 'emergency@sanlazaro.gov.ph',
+          phone: '+63 2 711-9911',
+          role: 'Government Hospital',
+          distance: 0,
+          latitude: 14.6091,
+          longitude: 121.0091,
+          category: 'medical',
+        },
+
+        // GOVERNMENT SERVICES - Pasig
+        {
+          id: 'g1',
+          name: 'Pasig City Hall',
+          email: 'info@pasigcity.gov.ph',
+          phone: '+63 2 645-7896',
+          role: 'City Government',
+          distance: 0,
+          latitude: 14.5761,
+          longitude: 121.0437,
+          category: 'government',
+        },
+        {
+          id: 'g2',
+          name: 'Barangay Ugong',
+          email: 'brgy.ugong@pasig.gov.ph',
+          phone: '+63 2 645-8234',
+          role: 'Barangay Hall',
+          distance: 0,
+          latitude: 14.5765,
+          longitude: 121.0440,
+          category: 'government',
+        },
+      ];
+
+      // Calculate distance for each contact and filter by radius
+      const nearbyContacts = allContacts
+        .map((contact) => ({
+          ...contact,
+          distance: this.calculateDistance(
+            latitude,
+            longitude,
+            contact.latitude,
+            contact.longitude
+          ),
+        }))
+        .filter((contact) => contact.distance <= radiusKm)
+        .sort((a, b) => a.distance - b.distance);
+
+      logger.info('Found nearby contacts', {
+        userLocation: { latitude, longitude },
+        count: nearbyContacts.length,
+        radius: radiusKm,
+      });
+
+      return nearbyContacts;
+    } catch (error) {
+      logger.error('Error getting nearby contacts:', { error });
+      return [];
+    }
+  }
+
+  /**
+   * Get nearby emergency services based on location
+   */
+  async getNearbyServices(latitude: number, longitude: number, radiusKm: number = 10): Promise<NearbyService[]> {
+    try {
+      // Hardcoded services with coordinates
+      const allServices: NearbyService[] = [
+        {
+          id: 's1',
+          name: 'Pasig City General Hospital',
+          type: 'hospital',
+          address: 'Rizal Avenue, Pasig City',
+          phone: '+63 2 645-4567',
+          distance: 0,
+          latitude: 14.5761,
+          longitude: 121.0437,
+        },
+        {
+          id: 's2',
+          name: 'Makati Fire Station',
+          type: 'fire',
+          address: 'Makati Avenue, Makati',
+          phone: '+63 2 726-0219',
+          distance: 0,
+          latitude: 14.5546,
+          longitude: 121.0225,
+        },
+        {
+          id: 's3',
+          name: 'Pasig Police District',
+          type: 'police',
+          address: 'Rizal Avenue, Pasig City',
+          phone: '+63 2 645-3456',
+          distance: 0,
+          latitude: 14.5760,
+          longitude: 121.0435,
+        },
+      ];
+
+      // Calculate distances and filter
+      const nearbyServices = allServices
+        .map((service) => ({
+          ...service,
+          distance: this.calculateDistance(latitude, longitude, service.latitude, service.longitude),
+        }))
+        .filter((service) => service.distance <= radiusKm)
+        .sort((a, b) => a.distance - b.distance);
+
+      return nearbyServices;
+    } catch (error) {
+      logger.error('Error getting nearby services:', { error });
+      return [];
+    }
+  }
+
+  /**
+   * Create geofence for user
+   */
+  async createGeofence(
     userId: string,
     name: string,
     latitude: number,
     longitude: number,
     radiusKm: number,
-    alertType: 'entry' | 'exit' | 'both' = 'both'
+    alertType: 'entry' | 'exit' | 'both'
   ): Promise<Geofence> {
-    const result = await query(
-      `INSERT INTO geofences (user_id, name, latitude, longitude, radius_km, alert_type, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, true)
-       RETURNING id, user_id as "userId", name, latitude, longitude, radius_km as "radiusKm", alert_type as "alertType", is_active as "isActive", created_at as "createdAt"`,
-      [userId, name, latitude, longitude, radiusKm, alertType]
-    );
-    return result.rows[0];
+    try {
+      const result = await query(
+        `INSERT INTO geofences (user_id, name, latitude, longitude, radius_km, alert_type, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, true)
+         RETURNING id, user_id as "userId", name, latitude, longitude, radius_km as "radiusKm", alert_type as "alertType", is_active as "isActive", created_at as "createdAt"`,
+        [userId, name, latitude, longitude, radiusKm, alertType]
+      );
+
+      logger.info('Geofence created', { userId, name });
+      return result.rows[0];
+    } catch (error) {
+      logger.error('Error creating geofence:', { error, userId });
+      throw error;
+    }
   }
 
   /**
    * Get geofences for user
    */
-  static async getGeofences(userId: string): Promise<Geofence[]> {
-    const result = await query(
-      `SELECT id, user_id as "userId", name, latitude, longitude, radius_km as "radiusKm", alert_type as "alertType", is_active as "isActive", created_at as "createdAt"
-       FROM geofences
-       WHERE user_id = $1
-       ORDER BY created_at DESC`,
-      [userId]
-    );
-    return result.rows;
-  }
-
-  /**
-   * Check if location is within geofence
-   */
-  static async checkGeofence(
-    userId: string,
-    latitude: number,
-    longitude: number
-  ): Promise<Geofence[]> {
+  async getGeofences(userId: string): Promise<Geofence[]> {
     try {
       const result = await query(
         `SELECT id, user_id as "userId", name, latitude, longitude, radius_km as "radiusKm", alert_type as "alertType", is_active as "isActive", created_at as "createdAt"
          FROM geofences
-         WHERE user_id = $1
-         AND is_active = true
-         AND ST_DWithin(
-           ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography,
-           ST_SetSRID(ST_MakePoint(latitude, longitude), 4326)::geography,
-           radius_km * 1000
-         )`,
-        [userId, longitude, latitude]
-      );
-      return result.rows;
-    } catch (error) {
-      console.error('Error checking geofence:', error);
-      // Fallback to simple distance calculation
-      const geofences = await query(
-        `SELECT id, user_id as "userId", name, latitude, longitude, radius_km as "radiusKm", alert_type as "alertType", is_active as "isActive", created_at as "createdAt"
-         FROM geofences
-         WHERE user_id = $1 AND is_active = true`,
+         WHERE user_id = $1 AND is_active = true
+         ORDER BY created_at DESC`,
         [userId]
       );
 
-      return geofences.rows.filter(geofence => {
+      return result.rows;
+    } catch (error) {
+      logger.error('Error getting geofences:', { error, userId });
+      return [];
+    }
+  }
+
+  /**
+   * Check if location is within any geofence
+   */
+  async checkGeofence(userId: string, latitude: number, longitude: number): Promise<Geofence[]> {
+    try {
+      const geofences = await this.getGeofences(userId);
+
+      return geofences.filter((geofence) => {
         const distance = this.calculateDistance(
           latitude,
           longitude,
@@ -293,68 +390,90 @@ class LocationService {
         );
         return distance <= geofence.radiusKm;
       });
+    } catch (error) {
+      logger.error('Error checking geofence:', { error, userId });
+      return [];
     }
   }
 
   /**
    * Delete geofence
    */
-  static async deleteGeofence(geofenceId: string): Promise<void> {
-    await query('DELETE FROM geofences WHERE id = $1', [geofenceId]);
+  async deleteGeofence(geofenceId: string): Promise<void> {
+    try {
+      await query('DELETE FROM geofences WHERE id = $1', [geofenceId]);
+      logger.info('Geofence deleted', { geofenceId });
+    } catch (error) {
+      logger.error('Error deleting geofence:', { error, geofenceId });
+      throw error;
+    }
   }
 
   /**
    * Update geofence
    */
-  static async updateGeofence(
+  async updateGeofence(
     geofenceId: string,
-    updates: Partial<Geofence>
+    updates: Partial<{
+      name: string;
+      latitude: number;
+      longitude: number;
+      radiusKm: number;
+      alertType: string;
+      isActive: boolean;
+    }>
   ): Promise<Geofence> {
-    const fields: string[] = [];
-    const values: any[] = [];
-    let paramCount = 1;
+    try {
+      const setClauses: string[] = [];
+      const values: any[] = [];
+      let paramIndex = 1;
 
-    if (updates.name !== undefined) {
-      fields.push(`name = $${paramCount++}`);
-      values.push(updates.name);
-    }
-    if (updates.latitude !== undefined) {
-      fields.push(`latitude = $${paramCount++}`);
-      values.push(updates.latitude);
-    }
-    if (updates.longitude !== undefined) {
-      fields.push(`longitude = $${paramCount++}`);
-      values.push(updates.longitude);
-    }
-    if (updates.radiusKm !== undefined) {
-      fields.push(`radius_km = $${paramCount++}`);
-      values.push(updates.radiusKm);
-    }
-    if (updates.alertType !== undefined) {
-      fields.push(`alert_type = $${paramCount++}`);
-      values.push(updates.alertType);
-    }
-    if (updates.isActive !== undefined) {
-      fields.push(`is_active = $${paramCount++}`);
-      values.push(updates.isActive);
-    }
+      if (updates.name !== undefined) {
+        setClauses.push(`name = $${paramIndex++}`);
+        values.push(updates.name);
+      }
+      if (updates.latitude !== undefined) {
+        setClauses.push(`latitude = $${paramIndex++}`);
+        values.push(updates.latitude);
+      }
+      if (updates.longitude !== undefined) {
+        setClauses.push(`longitude = $${paramIndex++}`);
+        values.push(updates.longitude);
+      }
+      if (updates.radiusKm !== undefined) {
+        setClauses.push(`radius_km = $${paramIndex++}`);
+        values.push(updates.radiusKm);
+      }
+      if (updates.alertType !== undefined) {
+        setClauses.push(`alert_type = $${paramIndex++}`);
+        values.push(updates.alertType);
+      }
+      if (updates.isActive !== undefined) {
+        setClauses.push(`is_active = $${paramIndex++}`);
+        values.push(updates.isActive);
+      }
 
-    values.push(geofenceId);
+      values.push(geofenceId);
 
-    const result = await query(
-      `UPDATE geofences SET ${fields.join(', ')} WHERE id = $${paramCount}
-       RETURNING id, user_id as "userId", name, latitude, longitude, radius_km as "radiusKm", alert_type as "alertType", is_active as "isActive", created_at as "createdAt"`,
-      values
-    );
+      const result = await query(
+        `UPDATE geofences SET ${setClauses.join(', ')} WHERE id = $${paramIndex}
+         RETURNING id, user_id as "userId", name, latitude, longitude, radius_km as "radiusKm", alert_type as "alertType", is_active as "isActive", created_at as "createdAt"`,
+        values
+      );
 
-    return result.rows[0];
+      logger.info('Geofence updated', { geofenceId });
+      return result.rows[0];
+    } catch (error) {
+      logger.error('Error updating geofence:', { error, geofenceId });
+      throw error;
+    }
   }
 
   /**
-   * Calculate distance between two coordinates (Haversine formula)
-   * Returns distance in kilometers
+   * Calculate distance between two coordinates in kilometers
+   * Uses Haversine formula
    */
-  private static calculateDistance(
+  private calculateDistance(
     lat1: number,
     lon1: number,
     lat2: number,
@@ -374,4 +493,4 @@ class LocationService {
   }
 }
 
-export default LocationService;
+export default new LocationService();

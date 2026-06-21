@@ -6,6 +6,53 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Notification Center Animations */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Add dark mode color overrides for custom colors */
+@layer utilities {
+  html.dark {
+    --color-primary-white: #18181B;
+    --color-primary-black: #FAFAFA;
+    --color-primary-teal: #049d9a;
+  }
+  
+  html.light {
+    --color-primary-white: #FFFFFF;
+    --color-primary-black: #000000;
+    --color-primary-teal: #038F8D;
+  }
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -18,14 +65,15 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f2f7f7;
-  color: #024645;
+  background-color: #0f0f0f;
+  color: #e5e5e5;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-html.dark,
-html.dark body {
-  background-color: #080d0d;
-  color: #f0f0f0;
+html:not(.dark),
+html:not(.dark) body {
+  background-color: #f2f7f7;
+  color: #024645;
 }
 
 #root {
@@ -48,17 +96,622 @@ html.dark body {
   height: 8px;
 }
 
-::-webkit-scrollbar-track {
+html:not(.dark) ::-webkit-scrollbar-track {
   background: #f2f7f7;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #038F8D;
+  background: #049d9a;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
+  background: #038F8D;
+}
+
+html:not(.dark) ::-webkit-scrollbar-thumb {
+  background: #038F8D;
+  border-radius: 4px;
+}
+
+html:not(.dark) ::-webkit-scrollbar-thumb:hover {
   background: #024645;
+}
+
+/* Dark mode support for custom colors */
+html.dark {
+  color-scheme: dark;
+}
+
+html:not(.dark) {
+  color-scheme: light;
+}
+
+/* ===== COMPREHENSIVE LIGHT MODE OVERRIDES ===== */
+html:not(.dark) {
+  background-color: #f2f7f7;
+  color: #024645;
+}
+
+/* Light mode: ALL backgrounds to white/light */
+html:not(.dark) .bg-primary-white,
+html:not(.dark) .bg-white,
+html:not(.dark) .bg-stone-50,
+html:not(.dark) .bg-stone-100,
+html:not(.dark) .bg-neutral-50,
+html:not(.dark) .bg-neutral-100,
+html:not(.dark) .bg-neutral-200,
+html:not(.dark) .bg-neutral-300,
+html:not(.dark) .bg-gray-50,
+html:not(.dark) .bg-gray-100,
+html:not(.dark) .bg-gray-200,
+html:not(.dark) .bg-slate-50,
+html:not(.dark) .bg-slate-100,
+html:not(.dark) .bg-slate-200,
+html:not(.dark) .bg-orange-50,
+html:not(.dark) .bg-amber-50 {
+  background-color: #FFFFFF !important;
+}
+
+/* Light mode: Gray/Light backgrounds stay light */
+html:not(.dark) .bg-neutral-400,
+html:not(.dark) .bg-neutral-500,
+html:not(.dark) .bg-gray-400,
+html:not(.dark) .bg-gray-500,
+html:not(.dark) .bg-stone-400 {
+  background-color: #f3f4f6 !important;
+}
+
+/* Light mode: Dark backgrounds become light */
+html:not(.dark) .bg-neutral-600,
+html:not(.dark) .bg-neutral-700,
+html:not(.dark) .bg-neutral-800,
+html:not(.dark) .bg-neutral-900,
+html:not(.dark) .bg-black,
+html:not(.dark) .bg-gray-600,
+html:not(.dark) .bg-gray-700,
+html:not(.dark) .bg-gray-800,
+html:not(.dark) .bg-gray-900,
+html:not(.dark) .bg-slate-600,
+html:not(.dark) .bg-slate-700,
+html:not(.dark) .bg-slate-800,
+html:not(.dark) .bg-slate-900,
+html:not(.dark) .bg-stone-600,
+html:not(.dark) .bg-stone-700,
+html:not(.dark) .bg-stone-800,
+html:not(.dark) .bg-stone-900,
+html:not(.dark) .bg-primary-black {
+  background-color: #f3f4f6 !important;
+}
+
+/* Light mode: All text must be dark for readability on light backgrounds */
+html:not(.dark) .text-primary-black,
+html:not(.dark) .text-black,
+html:not(.dark) .text-neutral-900,
+html:not(.dark) .text-gray-900,
+html:not(.dark) .text-slate-900,
+html:not(.dark) .text-stone-900 {
+  color: #000000 !important;
+}
+
+/* Light mode: White/light text becomes black/dark on light backgrounds */
+html:not(.dark) .text-white,
+html:not(.dark) .text-neutral-50,
+html:not(.dark) .text-neutral-100,
+html:not(.dark) .text-neutral-200,
+html:not(.dark) .text-neutral-300,
+html:not(.dark) .text-neutral-400,
+html:not(.dark) .text-gray-50,
+html:not(.dark) .text-gray-100,
+html:not(.dark) .text-gray-200,
+html:not(.dark) .text-gray-300,
+html:not(.dark) .text-gray-400,
+html:not(.dark) .text-slate-50,
+html:not(.dark) .text-slate-100,
+html:not(.dark) .text-slate-200,
+html:not(.dark) .text-stone-50,
+html:not(.dark) .text-stone-100,
+html:not(.dark) .text-stone-200 {
+  color: #000000 !important;
+}
+
+/* Light mode: Secondary dark text for better readability on light backgrounds */
+html:not(.dark) .text-neutral-300 {
+  color: #1F2937 !important;
+}
+
+html:not(.dark) .text-gray-300 {
+  color: #1F2937 !important;
+}
+
+html:not(.dark) .text-slate-300 {
+  color: #1E293B !important;
+}
+
+html:not(.dark) .text-stone-300 {
+  color: #1C1917 !important;
+}
+
+/* Light mode: Very light text colors on light backgrounds - make them dark */
+html:not(.dark) .text-slate-100,
+html:not(.dark) .text-slate-150 {
+  color: #000000 !important;
+}
+
+html:not(.dark) .text-neutral-150 {
+  color: #000000 !important;
+}
+
+html:not(.dark) .text-gray-150 {
+  color: #000000 !important;
+}
+
+/* Light mode: Light colored descriptive text */
+html:not(.dark) .text-stone-400,
+html:not(.dark) .text-stone-500 {
+  color: #1F2937 !important;
+}
+
+html:not(.dark) .text-stone-450 {
+  color: #1C1917 !important;
+}
+
+html:not(.dark) .text-stone-550 {
+  color: #1C1917 !important;
+}
+
+/* Light mode: Dark gray text - increase saturation for readability */
+html:not(.dark) .text-neutral-500,
+html:not(.dark) .text-neutral-600 {
+  color: #1F2937 !important;
+}
+
+html:not(.dark) .text-neutral-700,
+html:not(.dark) .text-neutral-800 {
+  color: #111827 !important;
+}
+
+html:not(.dark) .text-gray-500,
+html:not(.dark) .text-gray-600 {
+  color: #1F2937 !important;
+}
+
+html:not(.dark) .text-gray-700,
+html:not(.dark) .text-gray-800 {
+  color: #111827 !important;
+}
+
+html:not(.dark) .text-slate-500,
+html:not(.dark) .text-slate-600 {
+  color: #334155 !important;
+}
+
+html:not(.dark) .text-slate-700 {
+  color: #0F172A !important;
+}
+
+html:not(.dark) .text-stone-400,
+html:not(.dark) .text-stone-500 {
+  color: #1F2937 !important;
+}
+
+html:not(.dark) .text-stone-600 {
+  color: #1C1917 !important;
+}
+
+html:not(.dark) .text-stone-700 {
+  color: #0C0A09 !important;
+}
+
+html:not(.dark) .text-stone-750 {
+  color: #000000 !important;
+}
+
+html:not(.dark) .text-stone-850 {
+  color: #000000 !important;
+}
+
+/* Light mode: Amber/Orange text for go-bag and alerts */
+html:not(.dark) .text-amber-700,
+html:not(.dark) .text-amber-600,
+html:not(.dark) .text-amber-500 {
+  color: #7C2D12 !important;
+}
+
+html:not(.dark) .text-amber-900,
+html:not(.dark) .text-amber-800 {
+  color: #431407 !important;
+}
+
+html:not(.dark) .text-orange-700,
+html:not(.dark) .text-orange-600 {
+  color: #7C2D12 !important;
+}
+
+html:not(.dark) .text-orange-900 {
+  color: #431407 !important;
+}
+
+/* Light mode: Additional text colors for screens (home, KB, contacts, chatbot, go-bag) */
+html:not(.dark) .text-stone-200,
+html:not(.dark) .text-stone-250,
+html:not(.dark) .text-stone-300,
+html:not(.dark) .text-neutral-200 {
+  color: #1F2937 !important;
+}
+
+html:not(.dark) .text-slate-200 {
+  color: #1E293B !important;
+}
+
+html:not(.dark) .text-gray-200 {
+  color: #111827 !important;
+}
+
+/* Light mode: Percentage and status text */
+html:not(.dark) .text-orange-100,
+html:not(.dark) .text-amber-100 {
+  color: #78350F !important;
+}
+
+html:not(.dark) .text-yellow-100,
+html:not(.dark) .text-yellow-200 {
+  color: #713F12 !important;
+}
+
+/* Light mode: Alert descriptions and long-form text */
+html:not(.dark) .text-stone-550,
+html:not(.dark) .text-neutral-550 {
+  color: #1F2937 !important;
+}
+
+/* Light mode: Category titles and labels */
+html:not(.dark) .text-sky-100,
+html:not(.dark) .text-sky-200 {
+  color: #003D82 !important;
+}
+
+html:not(.dark) .text-indigo-100,
+html:not(.dark) .text-indigo-200 {
+  color: #312E81 !important;
+}
+
+html:not(.dark) .text-violet-100,
+html:not(.dark) .text-violet-200 {
+  color: #4C0D99 !important;
+}
+
+html:not(.dark) .text-pink-100,
+html:not(.dark) .text-pink-200 {
+  color: #BE123C !important;
+}
+
+html:not(.dark) .text-fuchsia-100,
+html:not(.dark) .text-fuchsia-200 {
+  color: #A6006F !important;
+}
+
+/* Light mode: Ensure all light text on light backgrounds is dark */
+html:not(.dark) .text-slate-150,
+html:not(.dark) .text-slate-250 {
+  color: #1E293B !important;
+}
+
+html:not(.dark) .text-neutral-250 {
+  color: #1F2937 !important;
+}
+
+/* Light mode: Primary black text */
+html:not(.dark) .text-primary-black {
+  color: #000000 !important;
+}
+
+/* Light mode: Red/Orange/Error text stays red/orange on white background */
+html:not(.dark) .text-error,
+html:not(.dark) .text-red-600,
+html:not(.dark) .text-red-655,
+html:not(.dark) .text-rose-600,
+html:not(.dark) .text-rose-650,
+html:not(.dark) .text-rose-400,
+html:not(.dark) .text-red-400 {
+  color: #7F1D1D !important;
+}
+
+html:not(.dark) .text-warning,
+html:not(.dark) .text-amber-500,
+html:not(.dark) .text-amber-600,
+html:not(.dark) .text-orange-600,
+html:not(.dark) .text-orange-500 {
+  color: #78350F !important;
+}
+
+/* Light mode: Borders must be light */
+html:not(.dark) .border-neutral-700,
+html:not(.dark) .border-neutral-800,
+html:not(.dark) .border-neutral-900,
+html:not(.dark) .border-black,
+html:not(.dark) .border-gray-700,
+html:not(.dark) .border-gray-800,
+html:not(.dark) .border-gray-900,
+html:not(.dark) .border-slate-700,
+html:not(.dark) .border-stone-700,
+html:not(.dark) .border-stone-750,
+html:not(.dark) .border-stone-800 {
+  border-color: #e5e7eb !important;
+}
+
+html:not(.dark) .border-neutral-200,
+html:not(.dark) .border-stone-200,
+html:not(.dark) .border-stone-150,
+html:not(.dark) .border-gray-200 {
+  border-color: #e5e7eb !important;
+}
+
+/* Light mode: Hover states */
+html:not(.dark) .hover\:bg-neutral-800:hover,
+html:not(.dark) .hover\:bg-black:hover,
+html:not(.dark) .hover\:bg-gray-800:hover,
+html:not(.dark) .hover\:bg-stone-800:hover {
+  background-color: #f3f4f6 !important;
+}
+
+html:not(.dark) .hover\:text-neutral-900:hover,
+html:not(.dark) .hover\:text-black:hover,
+html:not(.dark) .hover\:text-gray-900:hover,
+html:not(.dark) .hover\:text-stone-900:hover {
+  color: #000000 !important;
+}
+
+/* Light mode: Teal/Cyan/Brand colors - make darker for light mode */
+html:not(.dark) .text-teal-100,
+html:not(.dark) .text-cyan-100 {
+  color: #003D36 !important;
+}
+
+html:not(.dark) .text-teal-200,
+html:not(.dark) .text-cyan-200 {
+  color: #003D36 !important;
+}
+
+html:not(.dark) .text-emerald-200,
+html:not(.dark) .text-emerald-300,
+html:not(.dark) .text-green-200 {
+  color: #022C1F !important;
+}
+
+html:not(.dark) .text-blue-200,
+html:not(.dark) .text-blue-300 {
+  color: #001F5F !important;
+}
+
+html:not(.dark) .text-purple-200,
+html:not(.dark) .text-purple-300 {
+  color: #4A0080 !important;
+}
+
+/* Light mode: Additional text colors for screens (home, KB, contacts, chatbot, go-bag) */
+html:not(.dark) .text-stone-200,
+html:not(.dark) .text-stone-250,
+html:not(.dark) .text-stone-300,
+html:not(.dark) .text-neutral-200 {
+  color: #1F2937 !important;
+}
+
+html:not(.dark) .text-slate-200 {
+  color: #1E293B !important;
+}
+
+html:not(.dark) .text-gray-200 {
+  color: #111827 !important;
+}
+
+/* Light mode: Percentage and status text */
+html:not(.dark) .text-orange-100,
+html:not(.dark) .text-amber-100 {
+  color: #78350F !important;
+}
+
+html:not(.dark) .text-yellow-100,
+html:not(.dark) .text-yellow-200 {
+  color: #713F12 !important;
+}
+
+/* Light mode: Alert descriptions and long-form text */
+html:not(.dark) .text-stone-550,
+html:not(.dark) .text-neutral-550 {
+  color: #1F2937 !important;
+}
+
+/* Light mode: Category titles and labels */
+html:not(.dark) .text-sky-100,
+html:not(.dark) .text-sky-200 {
+  color: #003D82 !important;
+}
+
+html:not(.dark) .text-indigo-100,
+html:not(.dark) .text-indigo-200 {
+  color: #312E81 !important;
+}
+
+html:not(.dark) .text-violet-100,
+html:not(.dark) .text-violet-200 {
+  color: #4C0D99 !important;
+}
+
+html:not(.dark) .text-pink-100,
+html:not(.dark) .text-pink-200 {
+  color: #BE123C !important;
+}
+
+html:not(.dark) .text-fuchsia-100,
+html:not(.dark) .text-fuchsia-200 {
+  color: #A6006F !important;
+}
+
+/* Light mode: Ensure all light text on light backgrounds is dark */
+html:not(.dark) .text-slate-150,
+html:not(.dark) .text-slate-250 {
+  color: #1E293B !important;
+}
+
+html:not(.dark) .text-neutral-250 {
+  color: #1F2937 !important;
+}
+
+/* ===== COMPREHENSIVE DARK MODE OVERRIDES ===== */
+html.dark {
+  background-color: #0f0f0f;
+  color: #e5e5e5;
+}
+
+/* Dark mode: Light backgrounds become dark */
+html.dark .bg-primary-white,
+html.dark .bg-white,
+html.dark .bg-stone-50,
+html.dark .bg-stone-100,
+html.dark .bg-neutral-50,
+html.dark .bg-neutral-100,
+html.dark .bg-neutral-200,
+html.dark .bg-gray-50,
+html.dark .bg-gray-100,
+html.dark .bg-gray-200,
+html.dark .bg-slate-50,
+html.dark .bg-slate-100,
+html.dark .bg-orange-50,
+html.dark .bg-amber-50 {
+  background-color: #18181B !important;
+}
+
+/* Dark mode: Medium gray becomes dark */
+html.dark .bg-neutral-300,
+html.dark .bg-gray-300,
+html.dark .bg-stone-200,
+html.dark .bg-stone-100 {
+  background-color: #27272A !important;
+}
+
+/* Dark mode: All dark backgrounds stay dark but slightly lighter than pure black */
+html.dark .bg-neutral-800,
+html.dark .bg-neutral-900,
+html.dark .bg-black,
+html.dark .bg-gray-800,
+html.dark .bg-gray-900,
+html.dark .bg-slate-800,
+html.dark .bg-slate-900,
+html.dark .bg-stone-800,
+html.dark .bg-stone-900,
+html.dark .bg-primary-black {
+  background-color: #18181B !important;
+}
+
+/* Dark mode: Black text becomes white/light */
+html.dark .text-primary-black,
+html.dark .text-black,
+html.dark .text-neutral-900,
+html.dark .text-gray-900,
+html.dark .text-slate-900,
+html.dark .text-stone-900,
+html.dark .text-stone-850 {
+  color: #FAFAFA !important;
+}
+
+/* Dark mode: Light text stays light */
+html.dark .text-white,
+html.dark .text-neutral-50,
+html.dark .text-neutral-100,
+html.dark .text-gray-50,
+html.dark .text-gray-100,
+html.dark .text-slate-50,
+html.dark .text-stone-50,
+html.dark .text-stone-100 {
+  color: #FAFAFA !important;
+}
+
+/* Dark mode: Gray text becomes light gray */
+html.dark .text-neutral-200,
+html.dark .text-neutral-300,
+html.dark .text-neutral-400,
+html.dark .text-gray-200,
+html.dark .text-gray-300,
+html.dark .text-gray-400,
+html.dark .text-slate-200,
+html.dark .text-slate-300,
+html.dark .text-slate-400,
+html.dark .text-stone-200,
+html.dark .text-stone-300,
+html.dark .text-stone-400 {
+  color: #d4d4d8 !important;
+}
+
+/* Dark mode: Darker gray text becomes medium gray */
+html.dark .text-neutral-500,
+html.dark .text-neutral-600,
+html.dark .text-neutral-700,
+html.dark .text-gray-500,
+html.dark .text-gray-600,
+html.dark .text-gray-700,
+html.dark .text-slate-500,
+html.dark .text-slate-600,
+html.dark .text-slate-700,
+html.dark .text-stone-500,
+html.dark .text-stone-600,
+html.dark .text-stone-700,
+html.dark .text-stone-750 {
+  color: #a1a1aa !important;
+}
+
+/* Dark mode: Red/Orange text becomes WHITE for contrast on dark backgrounds */
+html.dark .text-error,
+html.dark .text-red-600,
+html.dark .text-red-655,
+html.dark .text-rose-600,
+html.dark .text-rose-650,
+html.dark .text-rose-400,
+html.dark .text-red-400 {
+  color: #FFFFFF !important;
+}
+
+html.dark .text-warning,
+html.dark .text-amber-500,
+html.dark .text-amber-600,
+html.dark .text-orange-600,
+html.dark .text-orange-500 {
+  color: #FFFFFF !important;
+}
+
+/* Dark mode: Borders become dark */
+html.dark .border-neutral-200,
+html.dark .border-stone-200,
+html.dark .border-stone-150,
+html.dark .border-gray-200 {
+  border-color: #27272A !important;
+}
+
+html.dark .border-neutral-700,
+html.dark .border-neutral-800,
+html.dark .border-gray-700,
+html.dark .border-gray-800,
+html.dark .border-slate-700,
+html.dark .border-stone-700 {
+  border-color: #3f3f46 !important;
+}
+
+/* Dark mode: Hover states */
+html.dark .hover\:bg-neutral-100:hover,
+html.dark .hover\:bg-stone-100:hover,
+html.dark .hover\:bg-gray-100:hover {
+  background-color: #27272A !important;
+}
+
+html.dark .hover\:bg-neutral-50:hover,
+html.dark .hover\:bg-white:hover {
+  background-color: #27272A !important;
+}
+
+html.dark .hover\:text-neutral-900:hover,
+html.dark .hover\:text-black:hover,
+html.dark .hover\:text-gray-900:hover {
+  color: #FAFAFA !important;
 }
 
 /* Smooth transitions */

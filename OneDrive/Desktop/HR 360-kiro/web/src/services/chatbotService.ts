@@ -172,8 +172,11 @@ class ChatbotService {
     try {
       // Get organization ID from localStorage (set during login)
       const userStr = localStorage.getItem('user');
+      
+      // Skip caching for guest users (they don't have an organization)
       if (!userStr) {
-        throw new Error('User not found in localStorage');
+        console.log('Skipping KB cache for guest user - no organization');
+        return;
       }
       
       const user = JSON.parse(userStr);
@@ -181,7 +184,8 @@ class ChatbotService {
       const orgId = user.organizationId || user.orgId;
       
       if (!orgId) {
-        throw new Error('Organization ID not found in user data');
+        console.log('Skipping KB cache - user has no organization');
+        return;
       }
       
       // Get all guides from API with organization ID
@@ -198,7 +202,7 @@ class ChatbotService {
       }
     } catch (error) {
       console.error('Error caching knowledge base:', error);
-      throw error;
+      // Don't throw - just log the error and continue
     }
   }
 

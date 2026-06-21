@@ -128,7 +128,7 @@ const LocationSharingPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 pb-24">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 pb-24">
       {/* Header */}
       <header className="bg-gradient-to-r from-primary-teal to-secondary-medium sticky top-0 z-40 shadow-md">
         <div className="px-4 py-4 flex items-center gap-4">
@@ -150,7 +150,7 @@ const LocationSharingPage: React.FC = () => {
         {/* Status Card */}
         <div className="bg-primary-white rounded-xl shadow-md p-6 mb-6">
           <div className="mb-4">
-            <h2 className="font-sans text-h5 text-primary-black font-semibold mb-2">
+            <h2 className="font-sans text-h5 text-primary-black dark:text-white font-semibold mb-2">
               📍 Tracking Status
             </h2>
             <div className="flex items-center gap-3">
@@ -219,15 +219,15 @@ const LocationSharingPage: React.FC = () => {
         <div className="bg-primary-white rounded-xl shadow-md overflow-hidden mb-6">
           <button
             onClick={() => setShowMap(!showMap)}
-            className="w-full p-4 flex items-center justify-between hover:bg-neutral-50 transition"
+            className="w-full p-4 flex items-center justify-between hover:bg-neutral-50 dark:bg-neutral-950 transition"
           >
-            <h3 className="font-sans text-h6 text-primary-black font-semibold">
+            <h3 className="font-sans text-h6 text-primary-black dark:text-white font-semibold">
               🗺️ Location Map
             </h3>
             <span className="text-xl">{showMap ? '▼' : '▶'}</span>
           </button>
           {showMap && (
-            <div className="h-96 bg-neutral-100 border-t border-neutral-200">
+            <div className="h-96 bg-neutral-100 dark:bg-neutral-800 border-t border-neutral-200 dark:border-neutral-700">
               <LocationMap />
             </div>
           )}
@@ -235,14 +235,14 @@ const LocationSharingPage: React.FC = () => {
 
         {/* Sharing Preferences */}
         <div className="mb-6">
-          <h3 className="font-sans text-h5 text-primary-black font-semibold mb-4">
+          <h3 className="font-sans text-h5 text-primary-black dark:text-white font-semibold mb-4">
             Sharing Preferences
           </h3>
 
           {/* Share with Admins */}
           <div className="bg-primary-white rounded-xl shadow-md p-4 mb-3 flex items-center justify-between">
             <div className="flex-1">
-              <h4 className="font-sans text-label1 text-primary-black font-semibold">
+              <h4 className="font-sans text-label1 text-primary-black dark:text-white font-semibold">
                 Share with Admins
               </h4>
               <p className="font-sans text-body3 text-neutral-600 mt-1">
@@ -267,7 +267,7 @@ const LocationSharingPage: React.FC = () => {
           {/* Share with Team */}
           <div className="bg-primary-white rounded-xl shadow-md p-4 flex items-center justify-between">
             <div className="flex-1">
-              <h4 className="font-sans text-label1 text-primary-black font-semibold">
+              <h4 className="font-sans text-label1 text-primary-black dark:text-white font-semibold">
                 Share with Team
               </h4>
               <p className="font-sans text-body3 text-neutral-600 mt-1">
@@ -292,7 +292,7 @@ const LocationSharingPage: React.FC = () => {
 
         {/* Info Section */}
         <div className="bg-primary-white rounded-xl shadow-md p-6">
-          <h3 className="font-sans text-h6 text-primary-black font-semibold mb-3">
+          <h3 className="font-sans text-h6 text-primary-black dark:text-white font-semibold mb-3">
             ℹ️ Location Tracking
           </h3>
           <ul className="space-y-2">
@@ -319,3 +319,4 @@ const LocationSharingPage: React.FC = () => {
 };
 
 export default LocationSharingPage;
+

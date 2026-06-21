@@ -100,12 +100,11 @@ router.get('/nearby/contacts', authMiddleware, async (req: AuthRequest, res: Res
       return sendError(res, 'INVALID_DATA', 'latitude and longitude are required', 400);
     }
 
-    const radiusKm = parseFloat(radius as string) || 5;
+    const radiusKm = parseFloat(radius as string) || 10;
     const contacts = await LocationService.getNearbyContacts(
       parseFloat(latitude as string),
       parseFloat(longitude as string),
-      radiusKm,
-      req.user.id
+      radiusKm
     );
 
     return sendSuccess(res, contacts, 'Nearby contacts retrieved', 200);
@@ -127,11 +126,10 @@ router.get('/nearby/services', authMiddleware, async (req: AuthRequest, res: Res
       return sendError(res, 'INVALID_DATA', 'latitude and longitude are required', 400);
     }
 
-    const radiusKm = parseFloat(radius as string) || 5;
+    const radiusKm = parseFloat(radius as string) || 10;
     const services = await LocationService.getNearbyServices(
       parseFloat(latitude as string),
       parseFloat(longitude as string),
-      type as string,
       radiusKm
     );
 

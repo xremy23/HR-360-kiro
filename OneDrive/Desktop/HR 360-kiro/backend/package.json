@@ -1,7 +1,7 @@
 {
-  "name": "cict-safety-portal-backend",
+  "name": "cict-safety-first-backend",
   "version": "1.0.0",
-  "description": "CICT Safety Portal Backend API - Disaster preparedness and emergency response system",
+  "description": "CICT Safety F.I.R.S.T. Backend API - Disaster preparedness and emergency response system",
   "main": "dist/server.js",
   "scripts": {
     "dev": "ts-node src/server.ts",
@@ -43,7 +43,8 @@
     "typeorm": "^0.3.17",
     "uuid": "^9.0.1",
     "winston": "^3.19.0",
-    "ws": "^8.14.2"
+    "ws": "^8.14.2",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

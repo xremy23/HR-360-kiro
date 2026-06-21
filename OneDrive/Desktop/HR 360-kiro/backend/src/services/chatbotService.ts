@@ -1,10 +1,14 @@
 /**
  * Chatbot Service
  * Handles chatbot conversations, feedback, and admin management
+ * Supports multilingual responses (English, Tagalog, Bisaya) with Gemini AI
  */
 
 import { query } from '../config/database';
 import { v4 as uuidv4 } from 'uuid';
+import aiService from './aiService';
+
+type SupportedLanguage = 'en' | 'tl' | 'ceb';
 
 interface ChatMessage {
   id: string;
@@ -58,16 +62,32 @@ interface ChatbotFeedbackItem {
 export class ChatbotService {
   /**
    * Save a chat message with user question and bot response
+   * If no explicit botResponse is provided, fetch KB guides and generate intelligent response
+   * Supports multilingual responses (English, Tagalog, Bisaya)
    */
   async saveChatMessage(
     userId: string,
     organizationId: string,
     userQuestion: string,
-    botResponse: string,
-    context?: Record<string, any>
+    botResponse: string = '',
+    context?: Record<string, any>,
+    language?: SupportedLanguage
   ): Promise<ChatMessage> {
     const id = uuidv4();
     const now = new Date();
+
+    // Detect language if not provided
+    const detectedLanguage = language || this.detectLanguage(userQuestion);
+
+    // If no bot response provided, fetch KB guides and generate intelligent response
+    let finalBotResponse = botResponse;
+    if (!finalBotResponse || finalBotResponse === 'Processing your question...') {
+      finalBotResponse = await this.generateIntelligentResponse(
+        userQuestion,
+        organizationId,
+        detectedLanguage
+      );
+    }
 
     const result = await query(
       `INSERT INTO chat_messages (
@@ -80,14 +100,189 @@ export class ChatbotService {
         userId,
         organizationId,
         userQuestion,
-        botResponse,
-        JSON.stringify(context || {}),
+        finalBotResponse,
+        JSON.stringify({ 
+          ...context,
+          language: detectedLanguage,
+          kbMatches: context?.kbMatches || [],
+          aiGenerated: !botResponse || botResponse === 'Processing your question...'
+        }),
         'active',
         now,
       ]
     );
 
     return this.mapChatMessage(result.rows[0]);
+  }
+
+  /**
+   * Detect language of input text
+   */
+  private detectLanguage(text: string): SupportedLanguage {
+    // Tagalog indicators
+    const tagalogIndicators = /\b(ano|kung|para|ang|nang|sa|ko|mo|ay|na|ng|kami|tayo|sila|kayo|ito|iyan|dito|diyan|narito|nariyan|bakit|kailan|nasaan|paano|salamat|puwede|ayos|dahil|talaga|sige|naman)\b/i;
+    
+    // Bisaya/Cebuano indicators
+    const bisayaIndicators = /\b(unsa|kung|para|ang|nang|sa|ko|mo|kami|kayo|sila|ito|ato|diri|didto|ngano|kailan|asa|pagano|tayo|sala|baylo|bulbuli|usa|dugay)\b/i;
+
+    // Simple heuristic detection
+    const tagalogMatches = (text.match(tagalogIndicators) || []).length;
+    const bisayaMatches = (text.match(bisayaIndicators) || []).length;
+
+    if (bisayaMatches > tagalogMatches && bisayaMatches > 0) {
+      return 'ceb';
+    } else if (tagalogMatches > 0) {
+      return 'tl';
+    }
+    return 'en';
+  }
+
+  /**
+   * Generate intelligent response by searching KB guides and using Gemini AI
+   */
+  private async generateIntelligentResponse(
+    userQuestion: string,
+    organizationId: string,
+    language: SupportedLanguage = 'en'
+  ): Promise<string> {
+    try {
+      // Search for relevant KB guides
+      const relevantGuides = await this.searchKBGuides(userQuestion, organizationId);
+
+      // If AI is ready and we have guides, use Gemini with context
+      if (aiService.isReady() && relevantGuides.length > 0) {
+        const aiResponse = await aiService.generateResponse({
+          question: userQuestion,
+          language,
+          context: `Emergency management context for organization ${organizationId}`,
+          kbGuides: relevantGuides.map((guide) => ({
+            title: guide.title,
+            content: guide.content,
+          })),
+        });
+
+        return aiResponse.answer;
+      }
+
+      // Fallback to KB-based response
+      if (relevantGuides.length === 0) {
+        return aiService.isReady()
+          ? (
+              await aiService.generateResponse({
+                question: userQuestion,
+                language,
+              })
+            ).answer
+          : this.getDefaultResponse(userQuestion, language);
+      }
+
+      // Build response from KB content
+      return await aiService.getKBResponse(userQuestion, language, 
+        relevantGuides.map((guide) => ({
+          title: guide.title,
+          content: guide.content,
+        }))
+      );
+    } catch (err) {
+      console.error('Error generating intelligent response:', err);
+      return this.getDefaultResponse(userQuestion, language);
+    }
+  }
+
+  /**
+   * Search KB guides for relevant content
+   */
+  private async searchKBGuides(
+    userQuestion: string,
+    organizationId: string
+  ): Promise<any[]> {
+    try {
+      const questionLower = userQuestion.toLowerCase();
+      
+      // Search KB guides using text similarity (simple keyword matching for now)
+      const result = await query(
+        `SELECT id, title, content, category, type FROM kb_guides
+         WHERE org_id = $1 AND is_archived = false
+         AND (
+           title ILIKE $2 OR 
+           content ILIKE $2 OR
+           type ILIKE $2
+         )
+         ORDER BY 
+           CASE 
+             WHEN title ILIKE $2 THEN 1
+             WHEN type ILIKE $2 THEN 2
+             ELSE 3
+           END,
+           created_at DESC
+         LIMIT 5`,
+        [organizationId, `%${questionLower}%`]
+      );
+
+      return result.rows;
+    } catch (err) {
+      console.error('Error searching KB guides:', err);
+      return [];
+    }
+  }
+
+  /**
+   * Get default response when no KB matches found
+   */
+  private getDefaultResponse(userQuestion: string, language: SupportedLanguage = 'en'): string {
+    const questionLower = userQuestion.toLowerCase();
+
+    if (language === 'tl') {
+      // Tagalog responses
+      if (
+        questionLower.includes('emergency') ||
+        questionLower.includes('emerhensya') ||
+        questionLower.includes('crisis') ||
+        questionLower.includes('krisis')
+      ) {
+        return `🚨 **Tugon sa Emerhensya**\n\nPara sa agarang emerhensya:\n• Tawagan ang 911 (National Emergency Hotline)\n• I-alert kaagad ang iyong team lead\n• Gamitin ang Check-In feature para ipahayag ang iyong status\n• Sundin ang evacuation procedures kung kinakailangan\n\nAng aming crisis team ay handang tumulong. Bisitahin ang Knowledge Base para sa detalyadong emergency procedures.`;
+      }
+
+      if (questionLower.includes('contact') || questionLower.includes('numero')) {
+        return `📞 **Emergency Contacts**\n\nBisitahin ang Contacts section:\n• Emergency: 911\n• Police: 117\n• Fire: 114\n• Ambulance: 143\n• Disaster Hotline: +63 2 911-5061\n\nAng inyong team leads ay available din sa contacts list.`;
+      }
+
+      return `👋 **Kumusta!**\n\nAko ang iyong HR 360 Assistant. Maaari kang magtanong tungkol sa:\n• Emergency procedures at protocols\n• Emergency contact information\n• Safety guidelines\n• Wellness check procedures\n\nBisitahin ang Knowledge Base section para sa comprehensive guides.`;
+    } else if (language === 'ceb') {
+      // Bisaya/Cebuano responses
+      if (
+        questionLower.includes('emergency') ||
+        questionLower.includes('emerhensya') ||
+        questionLower.includes('crisis')
+      ) {
+        return `🚨 **Tubag sa Emerhensya**\n\nAlang sa daghang emerhensya:\n• Tawagon ang 911 (National Emergency Hotline)\n• I-alert kaagad ang iyong team lead\n• Gamitin ang Check-In feature para ipakita ang iyong status\n• Sundan ang evacuation procedures kung kinakailangan\n\nAng aming crisis team ay handa sa tumulong. Bisitahin ang Knowledge Base para sa detalyadong emergency procedures.`;
+      }
+
+      if (questionLower.includes('contact') || questionLower.includes('numero')) {
+        return `📞 **Emergency Contacts**\n\nBisitahin ang Contacts section:\n• Emergency: 911\n• Police: 117\n• Fire: 114\n• Ambulance: 143\n• Disaster Hotline: +63 2 911-5061\n\nAng inyong team leads ay available din sa contacts list.`;
+      }
+
+      return `👋 **Kumusta!**\n\nAko ang iyong HR 360 Assistant. Maaari kang magtanong tungkol sa:\n• Emergency procedures\n• Emergency contacts\n• Safety guidelines\n• Wellness check procedures\n\nBisitahin ang Knowledge Base para sa mas maraming impormasyon.`;
+    }
+
+    // English responses (default)
+    if (questionLower.includes('emergency') || questionLower.includes('crisis')) {
+      return `🚨 **Emergency Response**\n\nFor immediate emergencies:\n• Call 911 (National Emergency Hotline)\n• Alert your team lead immediately\n• Use the Check-In feature to notify your status\n• Follow evacuation procedures if needed\n\nOur crisis team is standing by to assist. Check the Knowledge Base for detailed emergency procedures.`;
+    }
+
+    if (questionLower.includes('contact') || questionLower.includes('phone')) {
+      return `📞 **Emergency Contacts**\n\nFor emergency contacts, visit the Contacts section in the app:\n• Emergency Services: 911\n• Police: 117\n• Fire Department: 160\n• Ambulance: 143\n• Disaster Hotline: +63 2 911-5061\n\nYour organization's team leads are also available in your contacts list.`;
+    }
+
+    if (questionLower.includes('safety') || questionLower.includes('protocol')) {
+      return `🛡️ **Safety Protocols**\n\nWe have comprehensive safety guidelines available in the Knowledge Base:\n• Workplace Safety Protocols\n• Natural Disaster Response Guide\n• Crisis Response Procedures\n\nVisit the KB section to access detailed safety information.`;
+    }
+
+    if (questionLower.includes('check-in') || questionLower.includes('wellness')) {
+      return `✅ **Wellness Check**\n\nUse the Check-In feature to:\n• Report your status during emergencies\n• Select: Safe, Affected, Need Help, or Unable to Reach\n• Add location and notes if needed\n• Help leadership track team welfare\n\nCheck the Knowledge Base for wellness check procedures.`;
+    }
+
+    return `👋 **Hello!**\n\nThank you for reaching out. I'm your HR 360 Assistant.\n\nI can help you with:\n• Emergency procedures and protocols\n• Emergency contact information\n• Safety guidelines\n• Wellness check procedures\n• Go-bag essentials\n• Crisis response procedures\n\nFeel free to ask me anything related to crisis preparedness, safety, or emergency procedures. You can also browse the Knowledge Base section for comprehensive guides.`;
   }
 
   /**

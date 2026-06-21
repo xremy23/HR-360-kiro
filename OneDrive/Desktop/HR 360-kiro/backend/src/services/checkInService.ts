@@ -24,6 +24,7 @@ export interface CheckIn {
 export interface CreateCheckInInput {
   userId: string;
   organizationId: string;
+  teamId?: string;
   status: 'safe' | 'injured' | 'missing' | 'unknown';
   latitude?: number;
   longitude?: number;
@@ -140,15 +141,16 @@ class CheckInService {
       const result = await query(
         `
         INSERT INTO check_ins (
-          id, user_id, organization_id, status, latitude, longitude,
+          id, user_id, team_id, organization_id, status, latitude, longitude,
           notes, incident_id, is_drill, created_at, updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING *
         `,
         [
           id,
           input.userId,
+          input.teamId || null,
           input.organizationId,
           input.status,
           input.latitude || null,
@@ -161,7 +163,7 @@ class CheckInService {
         ]
       );
 
-      logger.info('Check-in created', { checkInId: id, userId: input.userId });
+      logger.info('Check-in created', { checkInId: id, userId: input.userId, teamId: input.teamId });
 
       return this.mapCheckInRow(result.rows[0]);
     } catch (error) {

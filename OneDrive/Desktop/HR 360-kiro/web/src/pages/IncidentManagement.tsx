@@ -10,6 +10,7 @@ import { setLoading, setError, setItems, addIncident, updateIncident, deleteInci
 import { colors, typography, spacing, borderRadius, shadows } from '../styles/designSystem';
 import websocketService from '../services/websocketService';
 import apiService, { ApiError } from '../services/apiService';
+import useDarkMode from '../hooks/useDarkMode';
 
 interface IncidentFormData {
   title: string;
@@ -31,6 +32,7 @@ interface IncidentStats {
 const IncidentManagement: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const { items: incidents, loading, error } = useSelector((state: RootState) => state.incident);
+  const isDarkMode = useDarkMode();
   
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -49,6 +51,17 @@ const IncidentManagement: React.FC = () => {
     affectedTeams: [],
     isDrill: false,
   });
+
+  // Color mappings for light/dark mode
+  const uiColors = {
+    bg: isDarkMode ? '#18181B' : colors.primary.white,
+    bgSecondary: isDarkMode ? '#27272A' : colors.neutral[50],
+    text: isDarkMode ? '#FAFAFA' : colors.primary.black,
+    textSecondary: isDarkMode ? '#A1A1AA' : colors.neutral[600],
+    textTertiary: isDarkMode ? '#71717A' : colors.neutral[500],
+    border: isDarkMode ? '#3F3F46' : colors.neutral[300],
+    borderLight: isDarkMode ? '#27272A' : colors.neutral[200],
+  };
 
   // Fetch incidents on mount
   useEffect(() => {
@@ -225,7 +238,7 @@ const IncidentManagement: React.FC = () => {
     <div
       style={{
         minHeight: '100vh',
-        backgroundColor: colors.primary.white,
+        backgroundColor: uiColors.bg,
         padding: spacing.xl,
       }}
     >
@@ -243,7 +256,7 @@ const IncidentManagement: React.FC = () => {
             style={{
               fontSize: typography.fontSize.display2.size,
               fontWeight: typography.fontSize.display2.weight,
-              color: colors.primary.black,
+              color: uiColors.text,
               margin: 0,
             }}
           >
@@ -290,10 +303,10 @@ const IncidentManagement: React.FC = () => {
           marginBottom: spacing.xxl,
         }}
       >
-        <StatCard label="Total" value={stats.total} color={colors.neutral[400]} />
-        <StatCard label="Active" value={stats.active} color={colors.error} />
-        <StatCard label="Resolved" value={stats.resolved} color={colors.success} />
-        <StatCard label="Critical" value={stats.critical} color={colors.warning} />
+        <StatCard label="Total" value={stats.total} color={colors.neutral[400]} isDarkMode={isDarkMode} />
+        <StatCard label="Active" value={stats.active} color={colors.error} isDarkMode={isDarkMode} />
+        <StatCard label="Resolved" value={stats.resolved} color={colors.success} isDarkMode={isDarkMode} />
+        <StatCard label="Critical" value={stats.critical} color={colors.warning} isDarkMode={isDarkMode} />
       </div>
 
       {/* Form */}
@@ -301,7 +314,7 @@ const IncidentManagement: React.FC = () => {
         <div
           style={{
             padding: spacing.xl,
-            backgroundColor: colors.neutral[50],
+            backgroundColor: uiColors.bgSecondary,
             border: `2px solid ${colors.primary.teal}`,
             borderRadius: borderRadius.md,
             marginBottom: spacing.xl,
@@ -311,7 +324,7 @@ const IncidentManagement: React.FC = () => {
             style={{
               fontSize: typography.fontSize.h3.size,
               fontWeight: typography.fontSize.h3.weight,
-              color: colors.primary.black,
+              color: uiColors.text,
               marginTop: 0,
               marginBottom: spacing.lg,
             }}
@@ -322,35 +335,35 @@ const IncidentManagement: React.FC = () => {
           <form onSubmit={handleCreateOrUpdateIncident}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: spacing.lg, marginBottom: spacing.lg }}>
               <div>
-                <label style={labelStyle}>Title</label>
+                <label style={getLabelStyle(isDarkMode)}>Title</label>
                 <input
                   type="text"
                   placeholder="Incident title..."
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  style={inputStyle}
+                  style={getInputStyle(isDarkMode)}
                 />
               </div>
               <div>
-                <label style={labelStyle}>Location</label>
+                <label style={getLabelStyle(isDarkMode)}>Location</label>
                 <input
                   type="text"
                   placeholder="Location..."
                   value={formData.location}
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  style={inputStyle}
+                  style={getInputStyle(isDarkMode)}
                 />
               </div>
             </div>
 
             <div style={{ marginBottom: spacing.lg }}>
-              <label style={labelStyle}>Description</label>
+              <label style={getLabelStyle(isDarkMode)}>Description</label>
               <textarea
                 placeholder="Describe the incident..."
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 style={{
-                  ...inputStyle,
+                  ...getInputStyle(isDarkMode),
                   minHeight: '100px',
                   resize: 'vertical',
                   fontFamily: 'inherit',
@@ -360,11 +373,11 @@ const IncidentManagement: React.FC = () => {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: spacing.lg, marginBottom: spacing.lg }}>
               <div>
-                <label style={labelStyle}>Severity</label>
+                <label style={getLabelStyle(isDarkMode)}>Severity</label>
                 <select
                   value={formData.severity}
                   onChange={(e) => setFormData({ ...formData, severity: e.target.value as any })}
-                  style={inputStyle}
+                  style={getInputStyle(isDarkMode)}
                 >
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
@@ -373,11 +386,11 @@ const IncidentManagement: React.FC = () => {
                 </select>
               </div>
               <div>
-                <label style={labelStyle}>Status</label>
+                <label style={getLabelStyle(isDarkMode)}>Status</label>
                 <select
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                  style={inputStyle}
+                  style={getInputStyle(isDarkMode)}
                 >
                   <option value="active">Active</option>
                   <option value="resolved">Resolved</option>
@@ -386,7 +399,7 @@ const IncidentManagement: React.FC = () => {
             </div>
 
             <div style={{ marginBottom: spacing.lg }}>
-              <label style={labelCheckbox}>
+              <label style={getLabelCheckboxStyle(isDarkMode)}>
                 <input
                   type="checkbox"
                   checked={formData.isDrill}
@@ -423,7 +436,7 @@ const IncidentManagement: React.FC = () => {
           style={{
             fontSize: typography.fontSize.h2.size,
             fontWeight: typography.fontSize.h2.weight,
-            color: colors.primary.black,
+            color: uiColors.text,
             marginBottom: spacing.lg,
           }}
         >
@@ -431,9 +444,9 @@ const IncidentManagement: React.FC = () => {
         </h2>
 
         {loading ? (
-          <div style={emptyStateStyle}>Loading incidents...</div>
+          <div style={{ ...emptyStateStyle(isDarkMode), backgroundColor: uiColors.bgSecondary }}>Loading incidents...</div>
         ) : error ? (
-          <div style={{ ...emptyStateStyle, backgroundColor: colors.error, color: colors.primary.white }}>
+          <div style={{ ...emptyStateStyle(isDarkMode), backgroundColor: colors.error, color: colors.primary.white }}>
             {error}
           </div>
         ) : incidents.length > 0 ? (
@@ -443,7 +456,7 @@ const IncidentManagement: React.FC = () => {
                 key={incident.id}
                 style={{
                   padding: spacing.lg,
-                  backgroundColor: colors.primary.white,
+                  backgroundColor: uiColors.bg,
                   border: `2px solid ${getStatusColor(incident.status)}`,
                   borderRadius: borderRadius.md,
                   boxShadow: shadows.md,
@@ -455,7 +468,7 @@ const IncidentManagement: React.FC = () => {
                       style={{
                         fontSize: typography.fontSize.h4.size,
                         fontWeight: typography.fontSize.h4.weight,
-                        color: colors.primary.black,
+                        color: uiColors.text,
                         margin: 0,
                         marginBottom: spacing.sm,
                       }}
@@ -465,7 +478,7 @@ const IncidentManagement: React.FC = () => {
                     <p
                       style={{
                         fontSize: typography.fontSize.body2.size,
-                        color: colors.neutral[600],
+                        color: uiColors.textSecondary,
                         margin: 0,
                         marginBottom: spacing.sm,
                         lineHeight: '1.5',
@@ -477,7 +490,7 @@ const IncidentManagement: React.FC = () => {
                       <p
                         style={{
                           fontSize: typography.fontSize.body3.size,
-                          color: colors.neutral[500],
+                          color: uiColors.textTertiary,
                           margin: 0,
                         }}
                       >
@@ -515,11 +528,11 @@ const IncidentManagement: React.FC = () => {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: spacing.md, borderTop: `1px solid ${colors.neutral[200]}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: spacing.md, borderTop: `1px solid ${uiColors.borderLight}` }}>
                   <p
                     style={{
                       fontSize: typography.fontSize.caption.size,
-                      color: colors.neutral[500],
+                      color: uiColors.textTertiary,
                       margin: 0,
                     }}
                   >
@@ -574,7 +587,7 @@ const IncidentManagement: React.FC = () => {
             ))}
           </div>
         ) : (
-          <div style={emptyStateStyle}>No incidents yet</div>
+          <div style={emptyStateStyle(isDarkMode)}>No incidents yet</div>
         )}
       </div>
     </div>
@@ -585,13 +598,18 @@ interface StatCardProps {
   label: string;
   value: number;
   color: string;
+  isDarkMode: boolean;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ label, value, color }) => (
+const StatCard: React.FC<StatCardProps> = ({ label, value, color, isDarkMode }) => {
+  const bgColor = isDarkMode ? '#27272A' : colors.primary.white;
+  const textColor = isDarkMode ? '#A1A1AA' : colors.neutral[600];
+  
+  return (
   <div
     style={{
       padding: spacing.lg,
-      backgroundColor: colors.primary.white,
+      backgroundColor: bgColor,
       border: `2px solid ${color}`,
       borderRadius: borderRadius.md,
       boxShadow: shadows.sm,
@@ -601,7 +619,7 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, color }) => (
     <p
       style={{
         fontSize: typography.fontSize.body2.size,
-        color: colors.neutral[600],
+        color: textColor,
         margin: 0,
         marginBottom: spacing.sm,
       }}
@@ -619,42 +637,45 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, color }) => (
       {value}
     </p>
   </div>
-);
+  );
+};
 
-// Reusable styles
-const labelStyle: React.CSSProperties = {
+// Reusable styles - updated to accept isDarkMode
+const getLabelStyle = (isDarkMode: boolean): React.CSSProperties => ({
   display: 'block',
   fontSize: typography.fontSize.label1.size,
   fontWeight: typography.fontSize.label1.weight,
-  color: colors.primary.black,
+  color: isDarkMode ? '#FAFAFA' : colors.primary.black,
   marginBottom: spacing.sm,
-};
+});
 
-const labelCheckbox: React.CSSProperties = {
+const getLabelCheckboxStyle = (isDarkMode: boolean): React.CSSProperties => ({
   display: 'flex',
   alignItems: 'center',
   gap: spacing.md,
   fontSize: typography.fontSize.label1.size,
   fontWeight: typography.fontSize.label1.weight,
-  color: colors.primary.black,
+  color: isDarkMode ? '#FAFAFA' : colors.primary.black,
   cursor: 'pointer',
-};
+});
 
-const inputStyle: React.CSSProperties = {
+const getInputStyle = (isDarkMode: boolean): React.CSSProperties => ({
   width: '100%',
   padding: spacing.md,
   fontSize: typography.fontSize.body1.size,
-  border: `1px solid ${colors.neutral[300]}`,
+  border: `1px solid ${isDarkMode ? '#3F3F46' : colors.neutral[300]}`,
   borderRadius: borderRadius.md,
   boxSizing: 'border-box',
-};
+  backgroundColor: isDarkMode ? '#27272A' : colors.primary.white,
+  color: isDarkMode ? '#FAFAFA' : colors.primary.black,
+});
 
-const emptyStateStyle: React.CSSProperties = {
+const emptyStateStyle = (isDarkMode: boolean): React.CSSProperties => ({
   padding: spacing.xl,
-  backgroundColor: colors.neutral[50],
+  backgroundColor: isDarkMode ? '#27272A' : colors.neutral[50],
   borderRadius: borderRadius.md,
   textAlign: 'center',
-  color: colors.neutral[500],
-};
+  color: isDarkMode ? '#A1A1AA' : colors.neutral[500],
+});
 
 export default IncidentManagement;

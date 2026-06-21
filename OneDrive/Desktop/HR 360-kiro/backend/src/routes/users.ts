@@ -7,6 +7,7 @@ import express, { Request, Response } from 'express';
 import { authMiddleware, AuthRequest } from '../middleware/authMiddleware';
 import { userService } from '../services/userService';
 import BiometricService from '../services/biometricService';
+import { storageService } from '../services/storageService';
 import { logger } from '../services/monitoringService';
 
 const router = express.Router();
@@ -528,6 +529,142 @@ router.delete(
         error: {
           code: 'BIOMETRIC_DELETE_FAILED',
           message: 'Failed to delete biometric device',
+        },
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/users/avatar
+ * Upload user avatar
+ */
+router.post(
+  '/avatar',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: {
+            code: 'NOT_AUTHENTICATED',
+            message: 'User not authenticated',
+          },
+        });
+      }
+
+      // Get file from request body (base64 encoded)
+      const { imageData, fileName } = req.body;
+
+      if (!imageData) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_INPUT',
+            message: 'imageData is required',
+          },
+        });
+      }
+
+      // Convert base64 to buffer
+      const fileBuffer = Buffer.from(imageData, 'base64');
+
+      // Validate file size (max 5MB)
+      const maxSize = 5 * 1024 * 1024;
+      if (fileBuffer.length > maxSize) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'FILE_TOO_LARGE',
+            message: 'File size cannot exceed 5MB',
+          },
+        });
+      }
+
+      // Upload to storage service
+      const avatarUrl = await storageService.uploadAvatar(
+        req.user.userId,
+        fileBuffer,
+        'image/jpeg'
+      );
+
+      // Update user profile with new avatar URL
+      const updatedUser = await userService.updateUser(req.user.userId, {
+        avatarUrl,
+      });
+
+      logger.info('User avatar uploaded', { userId: req.user.userId, avatarUrl });
+
+      res.json({
+        success: true,
+        data: {
+          avatarUrl,
+          user: updatedUser,
+        },
+      });
+    } catch (error) {
+      logger.error('Avatar upload error', { error, userId: req.user?.userId });
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'AVATAR_UPLOAD_FAILED',
+          message: 'Failed to upload avatar',
+        },
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/users/avatar/signed-url
+ * Get signed URL for avatar (for frontend access)
+ */
+router.post(
+  '/avatar/signed-url',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: {
+            code: 'NOT_AUTHENTICATED',
+            message: 'User not authenticated',
+          },
+        });
+      }
+
+      const { fileName } = req.body;
+
+      if (!fileName) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_INPUT',
+            message: 'fileName is required',
+          },
+        });
+      }
+
+      // Get signed URL (valid for 24 hours)
+      const signedUrl = await storageService.getSignedUrl(fileName, {
+        expirationMinutes: 24 * 60,
+      });
+
+      res.json({
+        success: true,
+        data: {
+          signedUrl,
+        },
+      });
+    } catch (error) {
+      logger.error('Get signed URL error', { error, userId: req.user?.userId });
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'SIGNED_URL_FAILED',
+          message: 'Failed to generate signed URL',
         },
       });
     }

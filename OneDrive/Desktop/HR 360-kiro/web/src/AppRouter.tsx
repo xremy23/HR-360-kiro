@@ -9,14 +9,12 @@ import { indexedDBService } from './services/indexedDBService';
 // Pages
 import LoginPage from './pages/LoginPage';
 import EmployeeApp from './pages/EmployeeApp';
+import DesktopApp from './pages/DesktopApp';
 import AdminConsole from './pages/AdminConsole';
 import NotFoundPage from './pages/NotFoundPage';
 
-// Components
-import ChatbotButton from './components/ChatbotButton';
-
 const AppRouter: React.FC = () => {
-  const { user, isAuthenticated, loading } = useSelector((state: RootState) => state.auth);
+  const { user, isAuthenticated, loading, accessMode } = useSelector((state: RootState) => state.auth);
   const [deviceType, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -28,7 +26,17 @@ const AppRouter: React.FC = () => {
       indexedDBService.initialize();
 
       // Set device type
-      setDeviceType(getDeviceType());
+      const detected = getDeviceType();
+      setDeviceType(detected);
+      console.log('Device detected:', detected, 'Window width:', window.innerWidth);
+
+      // Handle window resize
+      const handleResize = () => {
+        const newDeviceType = getDeviceType();
+        setDeviceType(newDeviceType);
+        console.log('Window resized - Device type updated:', newDeviceType, 'Width:', window.innerWidth);
+      };
+      window.addEventListener('resize', handleResize);
 
       // Listen for online/offline changes
       const unsubscribe = pwaService.onOnlineStatusChange((online) => {
@@ -40,7 +48,10 @@ const AppRouter: React.FC = () => {
       });
 
       setIsInitialized(true);
-      return unsubscribe;
+      return () => {
+        unsubscribe();
+        window.removeEventListener('resize', handleResize);
+      };
     } catch (error) {
       console.error('AppRouter initialization error:', error);
       setIsInitialized(true); // Still initialize even if there's an error
@@ -66,17 +77,6 @@ const AppRouter: React.FC = () => {
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <Router>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </Router>
-    );
-  }
-
   // Show loading screen while verifying magic link (only if loading after authenticated)
   if (loading && isAuthenticated) {
     return (
@@ -97,31 +97,36 @@ const AppRouter: React.FC = () => {
     );
   }
 
-  // Check if user can access admin console
-  const canAccessAdmin = user && canAccessAdminConsole(user.role, deviceType);
+  // Determine which app to show
+  const isAdminOnDesktop = 
+    user && 
+    ['admin', 'hr'].includes(user.role) && 
+    deviceType === 'desktop' &&
+    user.organizationId; // Admin should see DesktopApp, not auto-redirect to AdminConsole
+
+  let appToRender;
+
+  // Determine which app to show based on authentication and device
+  if (!isAuthenticated) {
+    // Guests can access the app without login - show EmployeeApp for mobile/tablet or DesktopApp for desktop
+    if (deviceType === 'desktop') {
+      appToRender = <DesktopApp />;
+    } else {
+      appToRender = <EmployeeApp />;
+    }
+  } else if (isAuthenticated && deviceType === 'desktop') {
+    appToRender = <DesktopApp />;
+  } else if (deviceType === 'tablet') {
+    appToRender = <EmployeeApp />;
+  } else {
+    appToRender = <EmployeeApp />;
+  }
 
   return (
-    <Router>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
-        {/* Admin Console - Desktop only */}
-        {canAccessAdmin && (
-          <Route path="/admin/*" element={<AdminConsole />} />
-        )}
-
-        {/* Employee App - All devices */}
-        <Route path="/*" element={<EmployeeApp />} />
-
-        {/* Redirect admin on mobile to employee app */}
-        {!canAccessAdmin && user?.role === 'admin' && (
-          <Route path="/admin/*" element={<Navigate to="/" replace />} />
-        )}
-
-        {/* 404 */}
-        <Route path="*" element={<NotFoundPage />} />
+        <Route path="/*" element={appToRender} />
       </Routes>
-
-      {/* Chatbot Button - Available everywhere */}
-      {isAuthenticated && <ChatbotButton />}
 
       {/* Offline indicator */}
       {!isOnline && (

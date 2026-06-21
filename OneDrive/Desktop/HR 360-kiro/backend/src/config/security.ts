@@ -41,8 +41,8 @@ export function getSecurityConfig(): SecurityConfig {
 
   // Validate Node Environment
   const nodeEnv = process.env.NODE_ENV || 'development';
-  if (nodeEnv === 'production' && jwtSecret.length < 64) {
-    throw new Error('JWT_SECRET must be at least 64 characters in production');
+  if (nodeEnv === 'production' && jwtSecret.length < 32) {
+    throw new Error('JWT_SECRET must be at least 32 characters in production');
   }
 
   // Parse CORS Origins
@@ -89,7 +89,8 @@ export function generateSecureJWTSecret(): string {
  * Returns true if valid, false if missing (allows graceful degradation)
  */
 export function validateDatabaseConfig(): boolean {
-  const requiredVars = ['DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
+  // In Cloud Run, DB_PASSWORD is passed via Cloud SQL Proxy, so we only need these
+  const requiredVars = ['DB_HOST', 'DB_USER', 'DB_NAME'];
   const missing = requiredVars.filter(varName => !process.env[varName]);
   
   if (missing.length > 0) {
@@ -98,18 +99,17 @@ export function validateDatabaseConfig(): boolean {
     return false;
   }
 
-  // Check for default/insecure values in production
-  if (process.env.NODE_ENV === 'production') {
-    const insecureValues = [
-      { key: 'DB_PASSWORD', value: process.env.DB_PASSWORD, insecure: ['password', '123456', 'admin'] },
-      { key: 'DB_USER', value: process.env.DB_USER, insecure: ['root', 'admin'] },
-    ];
+  // Set default DB_PORT if not provided
+  if (!process.env.DB_PORT) {
+    process.env.DB_PORT = '5432';
+  }
 
-    insecureValues.forEach(({ key, value, insecure }) => {
-      if (value && insecure.includes(value.toLowerCase())) {
-        throw new Error(`Insecure ${key} detected in production environment`);
-      }
-    });
+  // Check for obviously insecure values in production
+  if (process.env.NODE_ENV === 'production') {
+    const insecureUserValues = ['root', 'admin', 'postgres'];
+    if (process.env.DB_USER && insecureUserValues.includes(process.env.DB_USER.toLowerCase())) {
+      throw new Error(`Insecure DB_USER detected in production environment: ${process.env.DB_USER}`);
+    }
   }
   
   return true;

@@ -9,6 +9,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '../store/store';
 import { setShowMap, setMapCenter, setZoomLevel, setError, setLoading } from '../store/slices/locationSlice';
 import { colors, spacing, borderRadius, typography, shadows } from '../styles/designSystem';
+import { useDarkMode } from '../hooks/useDarkMode';
 
 interface MapMarker {
   id: string;
@@ -27,6 +28,7 @@ const LocationMap: React.FC<{ markers?: MapMarker[] }> = ({ markers = [] }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [googleMap, setGoogleMap] = useState<any>(null);
+  const isDarkMode = useDarkMode();
 
   // Initialize map
   useEffect(() => {
@@ -169,7 +171,7 @@ const LocationMap: React.FC<{ markers?: MapMarker[] }> = ({ markers = [] }) => {
     >
       <div
         style={{
-          backgroundColor: colors.white,
+          backgroundColor: isDarkMode ? '#18181B' : colors.white,
           borderRadius: borderRadius.lg,
           overflow: 'hidden',
           maxWidth: '900px',
@@ -186,13 +188,13 @@ const LocationMap: React.FC<{ markers?: MapMarker[] }> = ({ markers = [] }) => {
         <div
           style={{
             padding: spacing.lg,
-            borderBottom: `1px solid ${colors.borderLight}`,
+            borderBottom: `1px solid ${isDarkMode ? '#27272A' : colors.borderLight}`,
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
           }}
         >
-          <h2 style={{ margin: 0, color: colors.text, fontSize: typography.sizes.lg }}>
+          <h2 style={{ margin: 0, color: isDarkMode ? '#FAFAFA' : colors.text, fontSize: typography.sizes.lg }}>
             📍 Location Map
           </h2>
           <button
@@ -202,7 +204,7 @@ const LocationMap: React.FC<{ markers?: MapMarker[] }> = ({ markers = [] }) => {
               border: 'none',
               fontSize: '24px',
               cursor: 'pointer',
-              color: colors.textSecondary,
+              color: isDarkMode ? '#A1A1AA' : colors.textSecondary,
             }}
           >
             ✕
@@ -241,8 +243,9 @@ const LocationMap: React.FC<{ markers?: MapMarker[] }> = ({ markers = [] }) => {
         <div
           style={{
             padding: spacing.md,
-            borderTop: `1px solid ${colors.borderLight}`,
-            backgroundColor: colors.greyLight,
+            borderTop: `1px solid ${isDarkMode ? '#27272A' : colors.borderLight}`,
+            backgroundColor: isDarkMode ? '#27272A' : colors.greyLight,
+            color: isDarkMode ? '#FAFAFA' : colors.text,
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
             gap: spacing.md,
@@ -302,8 +305,9 @@ const LocationMap: React.FC<{ markers?: MapMarker[] }> = ({ markers = [] }) => {
               maxHeight: '200px',
               overflowY: 'auto',
               padding: spacing.md,
-              backgroundColor: colors.white,
-              borderTop: `1px solid ${colors.borderLight}`,
+              backgroundColor: isDarkMode ? '#18181B' : colors.white,
+              borderTop: `1px solid ${isDarkMode ? '#27272A' : colors.borderLight}`,
+              color: isDarkMode ? '#FAFAFA' : colors.text,
             }}
           >
             <h3 style={{ margin: `0 0 ${spacing.sm} 0`, fontSize: typography.sizes.sm }}>
@@ -325,23 +329,24 @@ const LocationMap: React.FC<{ markers?: MapMarker[] }> = ({ markers = [] }) => {
                     key={marker.id}
                     style={{
                       padding: spacing.sm,
-                      backgroundColor: colors.greyLight,
+                      backgroundColor: isDarkMode ? '#27272A' : colors.greyLight,
                       borderRadius: borderRadius.sm,
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
+                      color: isDarkMode ? '#FAFAFA' : colors.text,
                     }}
                   >
                     <div>
                       <div style={{ fontWeight: 'bold', fontSize: typography.sizes.sm }}>
                         {marker.name}
                       </div>
-                      <div style={{ fontSize: typography.sizes.xs, color: colors.textSecondary }}>
+                      <div style={{ fontSize: typography.sizes.xs, color: isDarkMode ? '#A1A1AA' : colors.textSecondary }}>
                         {marker.status && `Status: ${marker.status}`}
                       </div>
                     </div>
                     {distance !== null && (
-                      <div style={{ fontSize: typography.sizes.sm, color: colors.textSecondary }}>
+                      <div style={{ fontSize: typography.sizes.sm, color: isDarkMode ? '#A1A1AA' : colors.textSecondary }}>
                         {distance.toFixed(1)} km away
                       </div>
                     )}

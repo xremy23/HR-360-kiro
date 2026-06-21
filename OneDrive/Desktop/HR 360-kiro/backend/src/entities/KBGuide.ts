@@ -9,6 +9,7 @@ export interface KBGuide {
   content: string;
   mediaUrls?: string[];
   isRequired: boolean;
+  isArchived: boolean;
   version: number;
   createdBy: string;
   createdAt: Date;
@@ -39,9 +40,9 @@ export class KBGuideEntity {
   }
 
   static async findByOrgId(orgId: string, category?: string, type?: string, limit: number = 50, offset: number = 0): Promise<KBGuide[]> {
-    let sql = `SELECT id, org_id as "orgId", title, category, type, content, media_urls as "mediaUrls", is_required as "isRequired",
+    let sql = `SELECT id, org_id as "orgId", title, category, type, content, media_urls as "mediaUrls", is_required as "isRequired", is_archived as "isArchived",
                       version, created_by as "createdBy", created_at as "createdAt", updated_at as "updatedAt", updated_by as "updatedBy"
-               FROM kb_guides WHERE org_id = $1`;
+               FROM kb_guides WHERE org_id = $1 AND is_archived = false`;
     const params: any[] = [orgId];
     let paramCount = 2;
 
@@ -96,6 +97,10 @@ export class KBGuideEntity {
       updates.push(`is_required = $${paramCount++}`);
       values.push(data.isRequired);
     }
+    if (data.isArchived !== undefined) {
+      updates.push(`is_archived = $${paramCount++}`);
+      values.push(data.isArchived);
+    }
 
     if (updates.length === 0) return this.findById(id);
 
@@ -107,7 +112,7 @@ export class KBGuideEntity {
 
     const result = await query(
       `UPDATE kb_guides SET ${updates.join(', ')} WHERE id = $${paramCount}
-       RETURNING id, org_id as "orgId", title, category, type, content, media_urls as "mediaUrls", is_required as "isRequired",
+       RETURNING id, org_id as "orgId", title, category, type, content, media_urls as "mediaUrls", is_required as "isRequired", is_archived as "isArchived",
                  version, created_by as "createdBy", created_at as "createdAt", updated_at as "updatedAt", updated_by as "updatedBy"`,
       values
     );

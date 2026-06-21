@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { sendSuccess, sendError } from '../utils/response';
-import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { AuthRequest, authMiddleware, optionalAuthMiddleware } from '../middleware/auth';
 import { validatePhoneNumber, validateCoordinates } from '../utils/validators';
 import { ContactEntity } from '../entities';
 
@@ -9,14 +9,19 @@ const router = Router();
 /**
  * GET /contacts
  * Get user contacts
+ * Allows guests to see default emergency contacts
  */
-router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/', optionalAuthMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user) {
-      return sendError(res, 'USER_NOT_FOUND', 'User not found', 404);
-    }
+    let userContacts;
 
-    const userContacts = await ContactEntity.findByUserId(req.user.id);
+    if (req.user) {
+      // Authenticated user - get their personal contacts
+      userContacts = await ContactEntity.findByUserId(req.user.id);
+    } else {
+      // Guest user - return default emergency contacts
+      userContacts = await ContactEntity.findByUserId('default') || [];
+    }
 
     return sendSuccess(res, userContacts, 'Contacts retrieved successfully', 200);
   } catch (error) {
@@ -27,7 +32,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 
 /**
  * POST /contacts
- * Create contact
+ * Create contact (requires authentication)
  */
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {

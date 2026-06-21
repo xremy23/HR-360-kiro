@@ -88,7 +88,7 @@ const BiometricSettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 pb-24">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 pb-24">
       {/* Header */}
       <header className="bg-gradient-to-r from-primary-teal to-secondary-medium sticky top-0 z-40 shadow-md">
         <div className="px-4 py-4 flex items-center gap-4">
@@ -110,7 +110,7 @@ const BiometricSettingsPage: React.FC = () => {
         {/* Status Card */}
         <div className="bg-primary-white rounded-xl shadow-md p-6 mb-6">
           <div className="mb-4">
-            <h2 className="font-sans text-h5 text-primary-black font-semibold mb-2">
+            <h2 className="font-sans text-h5 text-primary-black dark:text-white font-semibold mb-2">
               🔐 Biometric Status
             </h2>
             <div className="flex items-center gap-3">
@@ -156,7 +156,7 @@ const BiometricSettingsPage: React.FC = () => {
 
         {/* Devices Section */}
         <div className="mb-6">
-          <h2 className="font-sans text-h5 text-primary-black font-semibold mb-4">
+          <h2 className="font-sans text-h5 text-primary-black dark:text-white font-semibold mb-4">
             Enrolled Devices
           </h2>
 
@@ -178,7 +178,7 @@ const BiometricSettingsPage: React.FC = () => {
                   className="bg-primary-white rounded-xl shadow-md p-4 flex items-center justify-between"
                 >
                   <div className="flex-1">
-                    <h3 className="font-sans text-label1 text-primary-black font-semibold">
+                    <h3 className="font-sans text-label1 text-primary-black dark:text-white font-semibold">
                       {device.deviceName}
                     </h3>
                     <div className="flex items-center gap-3 mt-2">
@@ -224,7 +224,7 @@ const BiometricSettingsPage: React.FC = () => {
 
         {/* Info Section */}
         <div className="mt-8 bg-primary-white rounded-xl shadow-md p-6">
-          <h3 className="font-sans text-h6 text-primary-black font-semibold mb-3">
+          <h3 className="font-sans text-h6 text-primary-black dark:text-white font-semibold mb-3">
             ℹ️ About Biometric Authentication
           </h3>
           <ul className="space-y-2">
@@ -258,3 +258,4 @@ const BiometricSettingsPage: React.FC = () => {
 };
 
 export default BiometricSettingsPage;
+

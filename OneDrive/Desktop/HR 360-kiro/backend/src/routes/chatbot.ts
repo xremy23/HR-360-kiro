@@ -16,19 +16,21 @@ const router = Router();
 /**
  * POST /api/chatbot/messages
  * Save a chat message with user question and bot response
+ * Optional: language parameter ('en', 'tl', 'ceb')
+ * If no botResponse provided, generates intelligent response using KB + Gemini AI
  */
 router.post(
   '/messages',
   authMiddleware.verifyToken.bind(authMiddleware),
   async (req: AuthRequest, res: Response) => {
     try {
-      const { userQuestion, botResponse, context } = req.body;
+      const { userQuestion, botResponse, context, language } = req.body;
       const userId = req.user?.userId;
       const organizationId = (req as any).user?.organizationId;
 
-      if (!userQuestion || !botResponse) {
+      if (!userQuestion) {
         return res.status(400).json({
-          error: 'userQuestion and botResponse are required',
+          error: 'userQuestion is required',
         });
       }
 
@@ -38,12 +40,14 @@ router.post(
         });
       }
 
+      // botResponse is optional - if not provided, generateIntelligentResponse will be called
       const message = await chatbotService.saveChatMessage(
         userId,
         organizationId,
         userQuestion,
-        botResponse,
-        context
+        botResponse || '',
+        context,
+        language || undefined
       );
 
       res.status(201).json(message);

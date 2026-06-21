@@ -40,14 +40,12 @@ router.get(
       const pageSize = parseInt(req.query.pageSize as string) || 20;
       const status = req.query.status as string;
       const severity = req.query.severity as string;
-      const isDrill = req.query.isDrill === 'true';
 
       const { incidents, total } = await incidentService.getIncidents(user.organizationId, {
         page,
         pageSize,
         status,
         severity,
-        isDrill,
       });
 
       res.json({
@@ -120,7 +118,7 @@ router.post(
         });
       }
 
-      const { title, description, severity, latitude, longitude, isDrill } = req.body;
+      const { title, description, severity, latitude, longitude } = req.body;
 
       if (!title || !description || !severity) {
         return res.status(400).json({
@@ -145,7 +143,6 @@ router.post(
         latitude,
         longitude,
         createdBy: req.user.userId,
-        isDrill: isDrill ?? false,
       });
 
       logger.info('Incident created', { incidentId: incident.id, createdBy: req.user.userId });

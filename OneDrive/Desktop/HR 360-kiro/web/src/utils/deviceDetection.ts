@@ -29,9 +29,17 @@ export const isTablet = (): boolean => {
 };
 
 export const getDeviceType = (): 'mobile' | 'tablet' | 'desktop' => {
-  if (isTablet()) return 'tablet';
-  if (isMobileDevice()) return 'mobile';
-  return 'desktop';
+  // Check window width as primary indicator
+  const width = typeof window !== 'undefined' ? window.innerWidth : 0;
+  
+  // Desktop: 1024px and above
+  if (width >= 1024) return 'desktop';
+  
+  // Tablet: 768px to 1023px
+  if (width >= 768) return 'tablet';
+  
+  // Mobile: below 768px
+  return 'mobile';
 };
 
 export const canAccessAdminConsole = (userRole: string, deviceType: 'mobile' | 'tablet' | 'desktop'): boolean => {

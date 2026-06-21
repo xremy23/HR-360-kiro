@@ -1,85 +1,99 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Routes, Route } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
-import { AppDispatch } from '../store/store';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '../store/store';
 import { setLoading as setCheckInLoading, setError as setCheckInError, setItems as setCheckInItems } from '../store/slices/checkinSlice';
 import { setLoading as setAlertLoading, setError as setAlertError, setItems as setAlertItems } from '../store/slices/alertSlice';
 import { setLoading as setKBLoading, setError as setKBError, setItems as setKBItems } from '../store/slices/kbSlice';
+import { getDeviceType } from '../utils/deviceDetection';
 import MobileLayout from '../components/MobileLayout';
 import MobileHome from './MobileHome';
-import MobileCheckIn from './MobileCheckIn';
 import MobileAlerts from './MobileAlerts';
 import MobileKB from './MobileKB';
+import MobileToBag from './MobileToBag';
+import MobileContacts from './MobileContacts';
+import IncidentManagement from './IncidentManagement';
 import MobileSettings from './MobileSettings';
+import LoginPage from './LoginPage';
 import EditProfile from './EditProfile';
 import OrganizationSettings from './OrganizationSettings';
 import JoinOrganization from './JoinOrganization';
 import BiometricSettingsPage from './BiometricSettingsPage';
 import LocationSharingPage from './LocationSharingPage';
+import CommunityReporting from './CommunityReporting';
+import BulkImportPage from './BulkImportPage';
 import Chatbot from '../components/Chatbot';
 import { chatbotService } from '../services/chatbotService';
+import { websocketService } from '../services/websocketService';
 
 const EmployeeApp: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
+  const { token } = useSelector((state: RootState) => state.auth);
   const [isInitialized, setIsInitialized] = React.useState(false);
   const [showMenu, setShowMenu] = React.useState(false);
+  const [deviceType, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
 
-  // Fetch all data on mount
+  // Initialize WebSocket and fetch data on mount
   useEffect(() => {
-    const fetchData = async () => {
+    let isComponentMounted = true;
+    
+    // Set device type
+    setDeviceType(getDeviceType());
+    
+    const initializeApp = async () => {
       try {
-        // Cache knowledge base for chatbot offline support (non-blocking)
-        try {
-          await chatbotService.cacheKnowledgeBase();
-        } catch (error) {
-          console.warn('Failed to cache knowledge base:', error);
-          // Don't block app initialization if KB caching fails
+      // Initialize WebSocket connection for real-time updates (only once)
+        if (token && isComponentMounted) {
+          console.log('Connecting WebSocket...', 'Token:', token?.substring(0, 20) + '...');
+          try {
+            await websocketService.connect(token);
+            console.log('WebSocket connected successfully');
+          } catch (wsError) {
+            console.warn('WebSocket connection failed (non-blocking):', wsError);
+            // Don't block app if WebSocket fails - real-time updates are nice-to-have
+            // App continues loading
+          }
+        } else {
+          console.log('No token available for WebSocket connection');
         }
 
+        // Cache knowledge base for chatbot offline support (non-blocking)
+        // Don't await - just fire and forget
+        chatbotService.cacheKnowledgeBase().catch((error) => {
+          console.warn('Failed to cache knowledge base:', error);
+        });
+
         // Fetch check-ins
-        dispatch(setCheckInLoading(true));
-        // TODO: Replace with actual API call
-        // const checkInsResponse = await apiService.getCheckIns();
-        // if (checkInsResponse.success) {
-        //   dispatch(setCheckInItems(checkInsResponse.data));
-        // } else {
-        //   dispatch(setCheckInError('Failed to load check-ins'));
-        // }
+        if (isComponentMounted) dispatch(setCheckInLoading(false));
         dispatch(setCheckInItems([]));
 
         // Fetch alerts
-        dispatch(setAlertLoading(true));
-        // TODO: Replace with actual API call
-        // const alertsResponse = await apiService.getAlerts();
-        // if (alertsResponse.success) {
-        //   dispatch(setAlertItems(alertsResponse.data));
-        // } else {
-        //   dispatch(setAlertError('Failed to load alerts'));
-        // }
+        if (isComponentMounted) dispatch(setAlertLoading(false));
         dispatch(setAlertItems([]));
 
-        // Fetch KB guides
-        dispatch(setKBLoading(true));
-        // TODO: Replace with actual API call
-        // const kbResponse = await apiService.getKBGuides();
-        // if (kbResponse.success) {
-        //   dispatch(setKBItems(kbResponse.data));
-        // } else {
-        //   dispatch(setKBError('Failed to load KB guides'));
-        // }
+        // Use mock KB data (no need to fetch if not available)
+        if (isComponentMounted) dispatch(setKBLoading(false));
         dispatch(setKBItems([]));
       } catch (error) {
-        console.error('Error in EmployeeApp fetchData:', error);
-        dispatch(setCheckInError('Failed to load data'));
-        dispatch(setAlertError('Failed to load data'));
-        dispatch(setKBError('Failed to load data'));
+        console.error('Error in EmployeeApp initialization:', error);
+        if (isComponentMounted) {
+          dispatch(setCheckInError(''));
+          dispatch(setAlertError(''));
+          dispatch(setKBError(''));
+        }
       } finally {
-        setIsInitialized(true);
+        if (isComponentMounted) setIsInitialized(true);
       }
     };
 
-    fetchData();
-  }, [dispatch]);
+    initializeApp();
+
+    // Cleanup: prevent state updates and disconnect on unmount
+    return () => {
+      isComponentMounted = false;
+      websocketService.disconnect();
+    };
+  }, [token, dispatch]);
 
   if (!isInitialized) {
     return (
@@ -100,27 +114,38 @@ const EmployeeApp: React.FC = () => {
   }
 
   return (
-    <MobileLayout
-      showHeader={true}
-      headerTitle="HR 360"
-      onMenuClick={() => setShowMenu(!showMenu)}
-      showMenu={showMenu}
-    >
-      <Routes>
-        <Route path="/" element={<MobileHome onMenuClick={() => setShowMenu(!showMenu)} showMenu={showMenu} />} />
-        <Route path="/checkin" element={<MobileCheckIn />} />
-        <Route path="/alerts" element={<MobileAlerts />} />
-        <Route path="/kb" element={<MobileKB />} />
-        <Route path="/contacts" element={<div className="p-4">Contacts coming soon</div>} />
-        <Route path="/chatbot" element={<Chatbot />} />
-        <Route path="/settings" element={<MobileSettings />} />
-        <Route path="/biometric-settings" element={<BiometricSettingsPage />} />
-        <Route path="/location-sharing" element={<LocationSharingPage />} />
-        <Route path="/edit-profile" element={<EditProfile />} />
-        <Route path="/org-settings" element={<OrganizationSettings />} />
-        <Route path="/join-org" element={<JoinOrganization />} />
-      </Routes>
-    </MobileLayout>
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/*"
+        element={
+          <MobileLayout
+            showHeader={true}
+            headerTitle="HR 360"
+            onMenuClick={() => setShowMenu(!showMenu)}
+            showMenu={showMenu}
+          >
+            <Routes>
+              <Route path="/" element={<MobileHome onMenuClick={() => setShowMenu(!showMenu)} showMenu={showMenu} />} />
+              <Route path="/alerts" element={<MobileAlerts />} />
+              <Route path="/kb" element={<MobileKB />} />
+              <Route path="/tobag" element={<MobileToBag />} />
+              <Route path="/contacts" element={<MobileContacts />} />
+              <Route path="/incidents" element={<IncidentManagement />} />
+              <Route path="/community-reports" element={<CommunityReporting />} />
+              <Route path="/bulk-import" element={<BulkImportPage />} />
+              <Route path="/chatbot" element={<Chatbot />} />
+              <Route path="/settings" element={<MobileSettings />} />
+              <Route path="/biometric-settings" element={<BiometricSettingsPage />} />
+              <Route path="/location-sharing" element={<LocationSharingPage />} />
+              <Route path="/edit-profile" element={<EditProfile />} />
+              <Route path="/org-settings" element={<OrganizationSettings />} />
+              <Route path="/join-org" element={<JoinOrganization />} />
+            </Routes>
+          </MobileLayout>
+        }
+      />
+    </Routes>
   );
 };
 

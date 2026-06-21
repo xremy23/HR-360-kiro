@@ -4,29 +4,41 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { isAppError, toAppError, AppError } from '../utils/errors';
-import { logger } from '../services/monitoringService';
+
+/**
+ * Simple app error wrapper
+ */
+function toAppError(err: any): any {
+  if (err.name === 'AppError') return err;
+  return {
+    name: 'AppError',
+    code: 'INTERNAL_SERVER_ERROR',
+    message: err.message || 'An error occurred',
+    statusCode: err.statusCode || 500,
+    details: null,
+  };
+}
 
 /**
  * Global error handler middleware
  * Must be registered last in the middleware chain
  */
 export function errorHandler(err: any, req: Request, res: Response, next: NextFunction): void {
-  const appError = isAppError(err) ? err : toAppError(err);
+  const appError = toAppError(err);
 
-  // Log error
-  const logLevel = appError.statusCode >= 500 ? 'error' : 'warn';
-  logger[logLevel](`${appError.name}: ${appError.message}`, {
-    code: appError.code,
-    statusCode: appError.statusCode,
-    path: req.path,
-    method: req.method,
-    details: appError.details,
-    stack: err.stack,
-  });
+  // Log error to console (fallback since logging service might fail)
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  if (isDevelopment) {
+    console.error(`${appError.name}: ${appError.message}`, {
+      code: appError.code,
+      statusCode: appError.statusCode,
+      path: req.path,
+      method: req.method,
+      stack: err.stack,
+    });
+  }
 
   // Sanitize error message for production
-  const isDevelopment = process.env.NODE_ENV === 'development';
   const errorMessage = isDevelopment ? appError.message : 'An error occurred';
 
   // Send response
@@ -35,7 +47,6 @@ export function errorHandler(err: any, req: Request, res: Response, next: NextFu
     error: {
       code: appError.code,
       message: errorMessage,
-      ...(isDevelopment && appError.details && { details: appError.details }),
     },
     statusCode: appError.statusCode,
   });
@@ -56,10 +67,9 @@ export function asyncHandler(fn: Function) {
  * Should be registered after all other routes
  */
 export function notFoundHandler(req: Request, res: Response, next: NextFunction): void {
-  logger.warn('404 Not Found', {
+  console.warn('404 Not Found', {
     path: req.path,
     method: req.method,
-    ip: req.ip,
   });
 
   res.status(404).json({

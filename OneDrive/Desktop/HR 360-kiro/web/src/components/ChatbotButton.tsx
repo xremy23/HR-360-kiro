@@ -35,11 +35,11 @@ const ChatbotButton: React.FC = () => {
       {isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-end">
           <div className="w-full h-3/4 bg-primary-white rounded-t-2xl shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b border-neutral-200">
-              <h2 className="font-display text-h4 text-primary-black">HR 360 Assistant</h2>
+            <div className="flex items-center justify-between p-4 border-b border-neutral-200 dark:border-neutral-700">
+              <h2 className="font-display text-h4 text-primary-black dark:text-white">HR 360 Assistant</h2>
               <button
                 onClick={() => setIsOpen(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-neutral-100 transition"
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
               >
                 ✕
               </button>
@@ -55,3 +55,4 @@ const ChatbotButton: React.FC = () => {
 };
 
 export default ChatbotButton;
+

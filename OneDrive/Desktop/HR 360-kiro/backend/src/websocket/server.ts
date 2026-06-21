@@ -1,11 +1,15 @@
 /**
  * WebSocket Server Implementation
  * Handles real-time communication with connected clients
+ * Supports horizontal scaling with Redis adapter
  */
 
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import jwt from 'jsonwebtoken';
+import { createClient } from 'redis';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { logger } from '../services/monitoringService';
 
 interface AuthenticatedSocket extends Socket {
   data: {
@@ -19,6 +23,8 @@ export class WebSocketServer {
   private io: SocketIOServer;
   private connectedUsers: Map<string, string> = new Map(); // userId -> socketId
   private userOrganizations: Map<string, string> = new Map(); // userId -> orgId
+  private redisClient: any = null;
+  private redisSubscriber: any = null;
 
   constructor(httpServer: HTTPServer) {
     this.io = new SocketIOServer(httpServer, {
@@ -30,8 +36,48 @@ export class WebSocketServer {
       transports: ['websocket', 'polling'],
     });
 
+    // Initialize Redis adapter for scaling across instances
+    this.initializeRedisAdapter();
     this.setupMiddleware();
     this.setupEventHandlers();
+  }
+
+  /**
+   * Initialize Redis adapter for Socket.IO
+   * Enables communication across multiple instances
+   */
+  private async initializeRedisAdapter(): Promise<void> {
+    try {
+      const redisHost = process.env.REDIS_HOST || 'localhost';
+      const redisPort = parseInt(process.env.REDIS_PORT || '6379');
+      const redisPassword = process.env.REDIS_PASSWORD;
+
+      // Create pub/sub clients for Socket.IO
+      this.redisClient = createClient({
+        socket: {
+          host: redisHost,
+          port: redisPort,
+          connectTimeout: 5000,
+        },
+        password: redisPassword || undefined,
+      });
+
+      this.redisSubscriber = this.redisClient.duplicate();
+
+      // Connect both clients
+      await Promise.all([
+        this.redisClient.connect(),
+        this.redisSubscriber.connect(),
+      ]);
+
+      // Attach Redis adapter to Socket.IO
+      this.io.adapter(createAdapter(this.redisClient, this.redisSubscriber));
+
+      logger.info('✅ Socket.IO Redis adapter initialized successfully');
+    } catch (error) {
+      logger.warn('⚠️  Failed to initialize Socket.IO Redis adapter, using in-memory adapter:', { error });
+      // Will use default in-memory adapter if Redis unavailable
+    }
   }
 
   /**
@@ -324,6 +370,23 @@ export class WebSocketServer {
    */
   public getIO(): SocketIOServer {
     return this.io;
+  }
+
+  /**
+   * Graceful shutdown
+   */
+  public async shutdown(): Promise<void> {
+    try {
+      if (this.redisClient) {
+        await this.redisClient.quit();
+      }
+      if (this.redisSubscriber) {
+        await this.redisSubscriber.quit();
+      }
+      logger.info('WebSocket server shutdown complete');
+    } catch (error) {
+      logger.error('Error during WebSocket shutdown:', { error });
+    }
   }
 }
 

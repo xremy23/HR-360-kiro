@@ -43,7 +43,7 @@ class SessionService {
           host: config.redisConfig.host,
           port: config.redisConfig.port,
           connectTimeout: 5000, // 5 second timeout
-          reconnectStrategy: (retries) => {
+          reconnectStrategy: (retries: number) => {
             if (retries > 3) {
               console.warn('⚠️  Redis reconnection attempts exceeded, using in-memory storage');
               return new Error('Redis reconnection failed');
@@ -54,7 +54,7 @@ class SessionService {
         password: config.redisConfig.password,
       });
 
-      this.client.on('error', (err) => {
+      this.client.on('error', (err: any) => {
         console.error('Redis Client Error:', err);
         this.isConnected = false;
       });

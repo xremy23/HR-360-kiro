@@ -4,6 +4,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import toast from 'react-hot-toast';
 import { AppDispatch, RootState } from '../store/store';
 import apiService, { ApiError } from '../services/apiService';
+import { setOrganization } from '../store/slices/authSlice';
 
 const JoinOrganization: React.FC = () => {
   const navigate = useNavigate();
@@ -34,14 +35,25 @@ const JoinOrganization: React.FC = () => {
 
     setLoading(true);
     try {
+      console.log('Calling joinOrganizationWithCode with code:', inviteCode.toUpperCase());
       const response = await apiService.joinOrganizationWithCode(inviteCode.trim().toUpperCase());
+
+      console.log('Join org response:', response);
 
       if (response.success && response.data) {
         const org = response.data.organization;
         const updatedUser = response.data.user;
 
-        // Update user data in localStorage
+        console.log('Successfully joined organization:', org);
+
+        // Update Redux state with organization
         if (updatedUser) {
+          dispatch(setOrganization({
+            organizationId: org.id,
+            role: updatedUser.role || 'employee'
+          }));
+          
+          // Update user data in localStorage
           localStorage.setItem('user', JSON.stringify(updatedUser));
           console.log('Updated user in localStorage:', updatedUser);
         }
@@ -52,16 +64,22 @@ const JoinOrganization: React.FC = () => {
         setTimeout(() => {
           navigate('/org-settings');
         }, 1000);
+      } else {
+        throw new Error('Invalid response from server');
       }
     } catch (error: any) {
+      console.error('Error joining organization:', error);
       const apiError = error as ApiError;
-      if (apiError.message?.includes('Invalid or expired')) {
+      const errorMsg = apiError.message || error?.message || 'Failed to join organization';
+      console.error('Error message:', errorMsg);
+      
+      if (errorMsg?.includes('Invalid or expired')) {
         toast.error('Invalid or expired invite code');
-      } else if (apiError.message?.includes('already part')) {
+      } else if (errorMsg?.includes('already part')) {
         toast.error('You are already part of an organization');
         navigate('/org-settings');
       } else {
-        toast.error(apiError.message || 'Failed to join organization');
+        toast.error(errorMsg);
       }
     } finally {
       setLoading(false);
@@ -74,7 +92,7 @@ const JoinOrganization: React.FC = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="text-5xl mb-4">🏢</div>
-          <h1 className="font-display text-h2 text-primary-black mb-2">
+          <h1 className="font-display text-h2 text-primary-black dark:text-white mb-2">
             Join Organization
           </h1>
           <p className="font-sans text-body2 text-neutral-600">
@@ -86,7 +104,7 @@ const JoinOrganization: React.FC = () => {
         <form onSubmit={handleJoinOrganization} className="space-y-6">
           {/* Invite Code Input */}
           <div>
-            <label className="block font-sans text-label1 text-primary-black font-semibold mb-2">
+            <label className="block font-sans text-label1 text-primary-black dark:text-white font-semibold mb-2">
               Invite Code
             </label>
             <input
@@ -94,7 +112,7 @@ const JoinOrganization: React.FC = () => {
               value={inviteCode}
               onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
               placeholder="e.g., ABC12345"
-              className="w-full px-4 py-3 border-2 border-neutral-200 rounded-lg font-mono text-lg text-center tracking-widest focus:border-primary-teal focus:outline-none transition"
+              className="w-full px-4 py-3 border-2 border-neutral-200 dark:border-neutral-700 rounded-lg font-mono text-lg text-center tracking-widest focus:border-primary-teal focus:outline-none transition"
               disabled={loading}
               maxLength={8}
             />
@@ -116,7 +134,7 @@ const JoinOrganization: React.FC = () => {
           <button
             type="button"
             onClick={() => navigate('/settings')}
-            className="w-full bg-neutral-100 hover:bg-neutral-200 text-primary-black font-sans font-semibold py-3 rounded-lg transition"
+            className="w-full bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:bg-neutral-800 text-primary-black dark:text-white font-sans font-semibold py-3 rounded-lg transition"
           >
             Cancel
           </button>
@@ -130,7 +148,7 @@ const JoinOrganization: React.FC = () => {
         </div>
 
         {/* User Info */}
-        <div className="mt-8 pt-6 border-t border-neutral-200">
+        <div className="mt-8 pt-6 border-t border-neutral-200 dark:border-neutral-700">
           <p className="font-sans text-body3 text-neutral-600 text-center">
             Joining as: <strong>{user?.email}</strong>
           </p>
@@ -141,3 +159,4 @@ const JoinOrganization: React.FC = () => {
 };
 
 export default JoinOrganization;
+

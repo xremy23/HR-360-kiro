@@ -6,7 +6,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 export interface NotificationPermission {
   permission: 'granted' | 'denied' | 'default';
-  timestamp: Date;
+  timestamp: string;
 }
 
 export interface NotificationPreferences {
@@ -21,7 +21,7 @@ export interface PushNotification {
   title: string;
   body: string;
   type: 'alert' | 'incident' | 'sos' | 'checkin' | 'custom';
-  timestamp: Date;
+  timestamp: string;
   isRead: boolean;
   data?: Record<string, any>;
 }
@@ -38,8 +38,21 @@ export interface NotificationState {
   deviceTokenRegistered: boolean;
 }
 
+// Load notification permission from localStorage
+const getInitialPermission = (): NotificationPermission | null => {
+  try {
+    const stored = localStorage.getItem('notificationPermission');
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (error) {
+    console.error('Failed to load notification permission from cache:', error);
+  }
+  return null;
+};
+
 const initialState: NotificationState = {
-  permission: null,
+  permission: getInitialPermission(),
   preferences: {
     alertsEnabled: true,
     incidentsEnabled: true,
@@ -62,6 +75,12 @@ const notificationSlice = createSlice({
     // Permission management
     setPermission: (state, action: PayloadAction<NotificationPermission>) => {
       state.permission = action.payload;
+      // Persist permission to localStorage
+      try {
+        localStorage.setItem('notificationPermission', JSON.stringify(action.payload));
+      } catch (error) {
+        console.error('Failed to save notification permission to cache:', error);
+      }
     },
 
     // Preferences management

@@ -10,14 +10,11 @@ import { v4 as uuidv4 } from 'uuid';
 export interface KBGuide {
   id: string;
   organizationId: string;
-  categoryId?: string;
   title: string;
-  description: string;
   content: string;
-  author: string;
-  tags?: string[];
+  category: string;
   isPublished: boolean;
-  isActive: boolean;
+  version: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -45,21 +42,15 @@ export interface CreateGuideInput {
   organizationId: string;
   categoryId?: string;
   title: string;
-  description: string;
   content: string;
-  author: string;
-  tags?: string[];
   isPublished?: boolean;
 }
 
 export interface UpdateGuideInput {
   title?: string;
-  description?: string;
   content?: string;
-  author?: string;
-  tags?: string[];
   isPublished?: boolean;
-  isActive?: boolean;
+  isArchived?: boolean;
 }
 
 export interface CreateCategoryInput {
@@ -88,15 +79,15 @@ class KBService {
       page?: number;
       pageSize?: number;
       search?: string;
-      categoryId?: string;
+      category?: string;
       isPublished?: boolean;
     } = {}
   ): Promise<{ guides: KBGuide[]; total: number }> {
     try {
-      const { page = 1, pageSize = 20, search, categoryId, isPublished = true } = options;
+      const { page = 1, pageSize = 20, search, category, isPublished = true } = options;
       const offset = (page - 1) * pageSize;
 
-      let whereClause = 'WHERE kb_guides.organization_id = $1 AND kb_guides.is_active = true';
+      let whereClause = 'WHERE kb_guides.organization_id = $1 AND kb_guides.is_archived = false';
       const params: any[] = [organizationId];
       let paramIndex = 2;
 
@@ -106,14 +97,14 @@ class KBService {
         paramIndex++;
       }
 
-      if (categoryId) {
-        whereClause += ` AND kb_guides.category_id = $${paramIndex}`;
-        params.push(categoryId);
+      if (category) {
+        whereClause += ` AND kb_guides.category = $${paramIndex}`;
+        params.push(category);
         paramIndex++;
       }
 
       if (search) {
-        whereClause += ` AND (kb_guides.title ILIKE $${paramIndex} OR kb_guides.description ILIKE $${paramIndex})`;
+        whereClause += ` AND (kb_guides.title ILIKE $${paramIndex} OR kb_guides.content ILIKE $${paramIndex})`;
         params.push(`%${search}%`);
         paramIndex++;
       }
@@ -129,10 +120,16 @@ class KBService {
       const result = await query(
         `
         SELECT 
-          kb_guides.*,
-          kb_categories.name as category_name
+          kb_guides.id,
+          kb_guides.organization_id as organizationId,
+          kb_guides.title,
+          kb_guides.content,
+          kb_guides.category,
+          kb_guides.is_published as isPublished,
+          kb_guides.version,
+          kb_guides.created_at as createdAt,
+          kb_guides.updated_at as updatedAt
         FROM kb_guides
-        LEFT JOIN kb_categories ON kb_guides.category_id = kb_categories.id
         ${whereClause}
         ORDER BY kb_guides.created_at DESC
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
@@ -141,12 +138,9 @@ class KBService {
       );
 
       const guides = result.rows.map(this.mapGuideRow);
-
-      logger.info('Guides retrieved', { organizationId, count: guides.length });
-
       return { guides, total };
     } catch (error) {
-      logger.error('Failed to get guides', { error, organizationId });
+      logger.error('Failed to get guides', { organizationId, error });
       throw error;
     }
   }
@@ -159,11 +153,17 @@ class KBService {
       const result = await query(
         `
         SELECT 
-          kb_guides.*,
-          kb_categories.name as category_name
+          id,
+          organization_id as organizationId,
+          title,
+          content,
+          category,
+          is_published as isPublished,
+          version,
+          created_at as createdAt,
+          updated_at as updatedAt
         FROM kb_guides
-        LEFT JOIN kb_categories ON kb_guides.category_id = kb_categories.id
-        WHERE kb_guides.id = $1 AND kb_guides.is_active = true
+        WHERE kb_guides.id = $1
         `,
         [guideId]
       );
@@ -190,23 +190,17 @@ class KBService {
       const result = await query(
         `
         INSERT INTO kb_guides (
-          id, organization_id, category_id, title, description, content,
-          author, tags, is_published, is_active, created_at, updated_at
+          id, organization_id, category, title, content, created_at, updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-        RETURNING *
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, organization_id as "organizationId", category, title, content, created_at as "createdAt", updated_at as "updatedAt", version, is_published as "isPublished"
         `,
         [
           id,
           input.organizationId,
-          input.categoryId || null,
+          input.categoryId || 'general',
           input.title,
-          input.description,
           input.content,
-          input.author,
-          JSON.stringify(input.tags || []),
-          input.isPublished ?? true,
-          true,
           now,
           now,
         ]
@@ -236,27 +230,9 @@ class KBService {
         paramIndex++;
       }
 
-      if (input.description !== undefined) {
-        updates.push(`description = $${paramIndex}`);
-        params.push(input.description);
-        paramIndex++;
-      }
-
       if (input.content !== undefined) {
         updates.push(`content = $${paramIndex}`);
         params.push(input.content);
-        paramIndex++;
-      }
-
-      if (input.author !== undefined) {
-        updates.push(`author = $${paramIndex}`);
-        params.push(input.author);
-        paramIndex++;
-      }
-
-      if (input.tags !== undefined) {
-        updates.push(`tags = $${paramIndex}`);
-        params.push(JSON.stringify(input.tags));
         paramIndex++;
       }
 
@@ -266,9 +242,9 @@ class KBService {
         paramIndex++;
       }
 
-      if (input.isActive !== undefined) {
-        updates.push(`is_active = $${paramIndex}`);
-        params.push(input.isActive);
+      if (input.isArchived !== undefined) {
+        updates.push(`is_archived = $${paramIndex}`);
+        params.push(input.isArchived);
         paramIndex++;
       }
 
@@ -311,7 +287,7 @@ class KBService {
   async deleteGuide(guideId: string): Promise<void> {
     try {
       await query(
-        `UPDATE kb_guides SET is_active = false, updated_at = NOW() WHERE id = $1`,
+        `UPDATE kb_guides SET is_archived = true, updated_at = NOW() WHERE id = $1`,
         [guideId]
       );
 
@@ -455,17 +431,14 @@ class KBService {
   private mapGuideRow(row: any): KBGuide {
     return {
       id: row.id,
-      organizationId: row.organization_id,
-      categoryId: row.category_id,
+      organizationId: row.organizationId || row.organization_id,
+      category: row.category,
       title: row.title,
-      description: row.description,
       content: row.content,
-      author: row.author,
-      tags: row.tags ? JSON.parse(row.tags) : [],
-      isPublished: row.is_published,
-      isActive: row.is_active,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      isPublished: row.isPublished || row.is_published,
+      version: row.version,
+      createdAt: row.createdAt || row.created_at,
+      updatedAt: row.updatedAt || row.updated_at,
     };
   }
 

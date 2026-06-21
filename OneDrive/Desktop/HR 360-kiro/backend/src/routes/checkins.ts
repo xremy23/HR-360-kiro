@@ -39,14 +39,12 @@ router.get(
       const pageSize = parseInt(req.query.pageSize as string) || 20;
       const status = req.query.status as string;
       const incidentId = req.query.incidentId as string;
-      const isDrill = req.query.isDrill === 'true';
 
       const { checkIns, total } = await checkInService.getCheckIns(user.organizationId, {
         page,
         pageSize,
         status,
         incidentId,
-        isDrill,
       });
 
       res.json({
@@ -118,7 +116,7 @@ router.post(
         });
       }
 
-      const { status, latitude, longitude, notes, incidentId, isDrill } = req.body;
+      const { status, latitude, longitude, notes, incidentId } = req.body;
 
       if (!status) {
         return res.status(400).json({
@@ -138,12 +136,12 @@ router.post(
       const checkIn = await checkInService.createCheckIn({
         userId: req.user.userId,
         organizationId: user.organizationId,
+        teamId: user.teamId || '',
         status,
         latitude,
         longitude,
         notes,
         incidentId,
-        isDrill: isDrill ?? false,
       });
 
       logger.info('Check-in created', { checkInId: checkIn.id, userId: req.user.userId });
@@ -259,6 +257,121 @@ router.get(
     } catch (error) {
       logger.error('Failed to get check-in stats', { error, userId: req.user?.userId });
       next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/check-ins/team/:teamId
+ * Get check-ins for a team
+ */
+router.get(
+  '/team/:teamId',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response, next) => {
+    try {
+      const { teamId } = req.params;
+      const incidentId = req.query.incidentId as string;
+
+      const checkIns = await checkInService.getCheckIns('', {
+        page: 1,
+        pageSize: 50,
+        incidentId,
+      });
+
+      // Enrich with user names
+      const enrichedCheckIns = await Promise.all(
+        checkIns.checkIns.map(async (checkIn) => {
+          const user = await userService.getUserById(checkIn.userId);
+          return {
+            userId: checkIn.userId,
+            userName: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
+            status: checkIn.status,
+            notes: checkIn.notes,
+          };
+        })
+      );
+
+      res.json({
+        success: true,
+        data: enrichedCheckIns,
+      });
+    } catch (error) {
+      logger.error('Failed to get team check-ins', { error, teamId: req.params.teamId });
+      res.status(500).json({
+        success: false,
+        error: { code: 'SERVER_ERROR', message: 'Failed to get team check-ins' },
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/check-ins/history
+ * Get user check-in history
+ */
+router.get(
+  '/history',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response, next) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'NOT_AUTHENTICATED', message: 'User not authenticated' },
+        });
+      }
+
+      const pageSize = Math.min(parseInt(req.query.pageSize as string) || 50, 100);
+      const page = parseInt(req.query.page as string) || 1;
+
+      const checkIns = await checkInService.getCheckInsByUser(req.user.userId, {
+        page,
+        pageSize,
+      });
+
+      res.json({
+        success: true,
+        data: checkIns.checkIns,
+        pagination: {
+          total: checkIns.total,
+          page,
+          pageSize,
+        },
+      });
+    } catch (error) {
+      logger.error('Failed to get check-in history', { error, userId: req.user?.userId });
+      res.status(500).json({
+        success: false,
+        error: { code: 'SERVER_ERROR', message: 'Failed to get check-in history' },
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/check-ins/incident/:incidentId
+ * Get check-ins for an incident
+ */
+router.get(
+  '/incident/:incidentId',
+  authMiddleware.verifyToken.bind(authMiddleware),
+  async (req: AuthRequest, res: Response, next) => {
+    try {
+      const { incidentId } = req.params;
+
+      const checkIns = await checkInService.getCheckInsByIncident(incidentId);
+
+      res.json({
+        success: true,
+        data: checkIns,
+      });
+    } catch (error) {
+      logger.error('Failed to get incident check-ins', { error, incidentId: req.params.incidentId });
+      res.status(500).json({
+        success: false,
+        error: { code: 'SERVER_ERROR', message: 'Failed to get incident check-ins' },
+      });
     }
   }
 );

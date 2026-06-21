@@ -9,11 +9,13 @@ import { RootState, AppDispatch } from '../store/store';
 import { setPermission, setDeviceTokenRegistered } from '../store/slices/notificationSlice';
 import toast from 'react-hot-toast';
 import { colors, spacing, borderRadius, typography } from '../styles/designSystem';
+import { useDarkMode } from '../hooks/useDarkMode';
 
 const NotificationPermissionModal: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const dispatch = useDispatch<AppDispatch>();
   const { permission, deviceTokenRegistered } = useSelector((state: RootState) => state.notification);
   const [isLoading, setIsLoading] = useState(false);
+  const isDarkMode = useDarkMode();
 
   // Don't show if permission already given or declined
   if (permission && permission.permission !== 'prompt') {
@@ -42,38 +44,17 @@ const NotificationPermissionModal: React.FC<{ onClose?: () => void }> = ({ onClo
       dispatch(
         setPermission({
           permission: permission as 'granted' | 'denied' | 'default',
-          timestamp: new Date(),
+          timestamp: new Date().toISOString(),
         })
       );
 
       if (permission === 'granted') {
         toast.success('Notifications enabled! You will receive alerts.');
         
-        // Register service worker and device token
-        try {
-          const registration = await navigator.serviceWorker.register('/sw.js', {
-            scope: '/',
-          });
-
-          // Get subscription
-          const subscription = await registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: import.meta.env.VITE_VAPID_PUBLIC_KEY || '',
-          });
-
-          if (subscription) {
-            // Send token to backend
-            const token = subscription.endpoint.split('/').pop();
-            if (token) {
-              // This will be called by pushNotificationService
-              dispatch(setDeviceTokenRegistered(true));
-              console.log('Device token registered for push notifications');
-            }
-          }
-        } catch (swError) {
-          console.warn('Service worker registration failed:', swError);
-          // Not critical - app still works without SW
-        }
+        // Note: Push notifications require backend infrastructure (VAPID keys, Web Push API)
+        // For now, just mark permission as granted - in-app notifications will be used
+        dispatch(setDeviceTokenRegistered(true));
+        console.log('Notification permission granted');
       } else if (permission === 'denied') {
         toast.error('Notifications have been disabled. You can enable them in browser settings.');
       }
@@ -91,7 +72,7 @@ const NotificationPermissionModal: React.FC<{ onClose?: () => void }> = ({ onClo
     dispatch(
       setPermission({
         permission: 'default',
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
       })
     );
     onClose?.();
@@ -105,7 +86,7 @@ const NotificationPermissionModal: React.FC<{ onClose?: () => void }> = ({ onClo
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: isDarkMode ? 'rgba(0, 0, 0, 0.7)' : 'rgba(0, 0, 0, 0.5)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -114,7 +95,7 @@ const NotificationPermissionModal: React.FC<{ onClose?: () => void }> = ({ onClo
     >
       <div
         style={{
-          backgroundColor: colors.primary.white,
+          backgroundColor: isDarkMode ? '#18181B' : colors.primary.white,
           borderRadius: borderRadius.lg,
           padding: spacing.lg,
           maxWidth: '400px',
@@ -123,14 +104,14 @@ const NotificationPermissionModal: React.FC<{ onClose?: () => void }> = ({ onClo
           animation: 'slideUp 0.3s ease-out',
         }}
       >
-        <h2 style={{ margin: `0 0 ${spacing.sm} 0`, color: colors.primary.black, fontSize: typography.fontSize.h5.size }}>
+        <h2 style={{ margin: `0 0 ${spacing.sm} 0`, color: isDarkMode ? '#FAFAFA' : colors.primary.black, fontSize: typography.fontSize.h5.size }}>
           🔔 Stay Updated
         </h2>
 
         <p
           style={{
             margin: `0 0 ${spacing.md} 0`,
-            color: colors.neutral[600],
+            color: isDarkMode ? '#A1A1AA' : colors.neutral[600],
             fontSize: typography.fontSize.body3.size,
             lineHeight: '1.6',
           }}
@@ -145,18 +126,18 @@ const NotificationPermissionModal: React.FC<{ onClose?: () => void }> = ({ onClo
             disabled={isLoading}
             style={{
               padding: `${spacing.sm} ${spacing.md}`,
-              border: `2px solid ${colors.neutral[300]}`,
+              border: `2px solid ${isDarkMode ? '#27272A' : colors.neutral[300]}`,
               borderRadius: borderRadius.md,
-              backgroundColor: colors.primary.white,
-              color: colors.neutral[600],
+              backgroundColor: isDarkMode ? '#27272A' : colors.primary.white,
+              color: isDarkMode ? '#A1A1AA' : colors.neutral[600],
               cursor: isLoading ? 'not-allowed' : 'pointer',
               fontSize: typography.fontSize.label2.size,
               fontWeight: 'bold',
               transition: 'all 0.2s',
               opacity: isLoading ? 0.6 : 1,
             }}
-            onMouseOver={e => !isLoading && (e.currentTarget.style.backgroundColor = colors.neutral[100])}
-            onMouseOut={e => (e.currentTarget.style.backgroundColor = colors.primary.white)}
+            onMouseOver={e => !isLoading && (e.currentTarget.style.backgroundColor = isDarkMode ? '#3F3F46' : colors.neutral[100])}
+            onMouseOut={e => (e.currentTarget.style.backgroundColor = isDarkMode ? '#27272A' : colors.primary.white)}
           >
             Not Now
           </button>
@@ -183,7 +164,7 @@ const NotificationPermissionModal: React.FC<{ onClose?: () => void }> = ({ onClo
           </button>
         </div>
 
-        <p style={{ margin: 0, fontSize: typography.fontSize.caption.size, color: colors.neutral[500], textAlign: 'center' }}>
+        <p style={{ margin: 0, fontSize: typography.fontSize.caption.size, color: isDarkMode ? '#71717A' : colors.neutral[500], textAlign: 'center' }}>
           You can change this in settings anytime.
         </p>
       </div>

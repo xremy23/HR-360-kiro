@@ -1,348 +1,158 @@
 /**
- * Alert Routes
- * Handles alert management and notifications
+ * Alert Routes - PRODUCTION MODE
+ * Returns real aggregated alerts from external sources
  */
 
-import express, { Response } from 'express';
-import { authMiddleware, AuthRequest } from '../middleware/authMiddleware';
-import { alertService } from '../services/alertService';
-import { userService } from '../services/userService';
-import { logger } from '../services/monitoringService';
+import express from 'express';
+import { externalAlertsService } from '../services/externalAlertsService';
+import { earthquakeService } from '../services/earthquakeService';
+import { alertAggregatorService } from '../services/alertAggregatorService';
 
 const router = express.Router();
 
 /**
  * GET /api/alerts
- * Get alerts for organization
+ * Get aggregated alerts from all sources
  */
-router.get(
-  '/',
-  authMiddleware.verifyToken.bind(authMiddleware),
-  async (req: AuthRequest, res: Response, next) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'NOT_AUTHENTICATED', message: 'User not authenticated' },
-        });
-      }
+router.get('/', async (req: express.Request, res: express.Response) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const pageSize = parseInt(req.query.pageSize as string) || 20;
+    const offset = (page - 1) * pageSize;
 
-      const user = await userService.getUserById(req.user.userId);
-      if (!user || !user.organizationId) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'NO_ORGANIZATION', message: 'User is not part of an organization' },
-        });
-      }
+    // Fetch external alerts in parallel
+    const [externalAlerts, earthquakeAlerts, aggregatedAlerts] = await Promise.allSettled([
+      externalAlertsService.fetchAllExternalAlerts(),
+      earthquakeService.getRecentSignificantEarthquakes(24),
+      alertAggregatorService.getAggregatedAlerts(),
+    ]);
 
-      const page = parseInt(req.query.page as string) || 1;
-      const pageSize = parseInt(req.query.pageSize as string) || 20;
-      const severity = req.query.severity as string;
-      const isDrill = req.query.isDrill === 'true';
-
-      const { alerts, total } = await alertService.getAlerts(user.organizationId, {
-        page,
-        pageSize,
-        severity,
-        isDrill,
-      });
-
-      res.json({
-        success: true,
-        data: alerts,
-        pagination: {
-          page,
-          pageSize,
-          total,
-          totalPages: Math.ceil(total / pageSize),
-        },
-      });
-    } catch (error) {
-      logger.error('Failed to get alerts', { error, userId: req.user?.userId });
-      next(error);
+    // Combine all alerts
+    let allAlerts = [];
+    
+    if (externalAlerts.status === 'fulfilled' && externalAlerts.value) {
+      allAlerts.push(...externalAlerts.value);
     }
+    
+    if (earthquakeAlerts.status === 'fulfilled' && earthquakeAlerts.value) {
+      allAlerts.push(...earthquakeAlerts.value);
+    }
+    
+    if (aggregatedAlerts.status === 'fulfilled' && aggregatedAlerts.value?.alerts) {
+      allAlerts.push(...aggregatedAlerts.value.alerts);
+    }
+
+    // Deduplicate by ID
+    const uniqueAlerts = Array.from(
+      new Map(allAlerts.map(alert => [alert.id, alert])).values()
+    );
+
+    // Sort by creation date descending
+    uniqueAlerts.sort((a, b) => {
+      const aTime = new Date(
+        (a as any).created_at || 
+        (a as any).timestamp || 
+        (a as any).lastUpdated || 
+        new Date()
+      ).getTime();
+      const bTime = new Date(
+        (b as any).created_at || 
+        (b as any).timestamp || 
+        (b as any).lastUpdated || 
+        new Date()
+      ).getTime();
+      return bTime - aTime;
+    });
+
+    // Paginate
+    const paginatedAlerts = uniqueAlerts.slice(offset, offset + pageSize);
+    const total = uniqueAlerts.length;
+    const totalPages = Math.ceil(total / pageSize);
+
+    res.json({
+      success: true,
+      data: paginatedAlerts,
+      pagination: { page, pageSize, total, totalPages },
+      statusCode: 200,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Error fetching alerts:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'FETCH_ERROR',
+        message: 'Failed to fetch alerts',
+      },
+      statusCode: 500,
+    });
   }
-);
+});
 
 /**
- * GET /api/alerts/:id
- * Get alert by ID
+ * GET /api/alerts/weather
+ * Get weather alerts from PAGASA
  */
-router.get(
-  '/:id',
-  authMiddleware.verifyToken.bind(authMiddleware),
-  async (req: AuthRequest, res: Response, next) => {
-    try {
-      const { id } = req.params;
-
-      const alert = await alertService.getAlertById(id);
-
-      if (!alert) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'ALERT_NOT_FOUND', message: 'Alert not found' },
-        });
-      }
-
-      res.json({ success: true, data: alert });
-    } catch (error) {
-      logger.error('Failed to get alert', { error, alertId: req.params.id });
-      next(error);
-    }
+router.get('/weather', async (req: express.Request, res: express.Response) => {
+  try {
+    const alerts = await externalAlertsService.fetchPagasaAlerts();
+    res.json({
+      success: true,
+      data: alerts,
+      statusCode: 200,
+    });
+  } catch (error) {
+    console.error('Error fetching weather alerts:', error);
+    res.json({
+      success: true,
+      data: [],
+      statusCode: 200, // Return 200 even on error to prevent caching issues
+    });
   }
-);
+});
 
 /**
- * POST /api/alerts
- * Create alert (admin/hr only)
+ * GET /api/alerts/earthquakes
+ * Get earthquake alerts from PHIVOLCS/USGS
  */
-router.post(
-  '/',
-  authMiddleware.verifyToken.bind(authMiddleware),
-  authMiddleware.requireRole('admin', 'hr'),
-  async (req: AuthRequest, res: Response, next) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'NOT_AUTHENTICATED', message: 'User not authenticated' },
-        });
-      }
-
-      const user = await userService.getUserById(req.user.userId);
-      if (!user || !user.organizationId) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'NO_ORGANIZATION', message: 'User is not part of an organization' },
-        });
-      }
-
-      const { title, description, severity, type, isDrill } = req.body;
-
-      if (!title || !description || !severity || !type) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'INVALID_INPUT', message: 'Missing required fields' },
-        });
-      }
-
-      const validSeverities = ['low', 'medium', 'high', 'critical'];
-      if (!validSeverities.includes(severity)) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'INVALID_SEVERITY', message: 'Invalid severity level' },
-        });
-      }
-
-      const alert = await alertService.createAlert({
-        organizationId: user.organizationId,
-        title,
-        description,
-        severity,
-        type,
-        createdBy: req.user.userId,
-        isDrill: isDrill ?? false,
-      });
-
-      logger.info('Alert created', { alertId: alert.id, createdBy: req.user.userId });
-
-      res.status(201).json({ success: true, data: alert });
-    } catch (error) {
-      logger.error('Failed to create alert', { error, userId: req.user?.userId });
-      next(error);
-    }
+router.get('/earthquakes', async (req: express.Request, res: express.Response) => {
+  try {
+    const alerts = await earthquakeService.getRecentSignificantEarthquakes(24);
+    res.json({
+      success: true,
+      data: alerts,
+      statusCode: 200,
+    });
+  } catch (error) {
+    console.error('Error fetching earthquake alerts:', error);
+    res.json({
+      success: true,
+      data: [],
+      statusCode: 200,
+    });
   }
-);
+});
 
 /**
- * PUT /api/alerts/:id
- * Update alert (admin/hr only)
+ * GET /api/alerts/disasters
+ * Get aggregated disaster alerts
  */
-router.put(
-  '/:id',
-  authMiddleware.verifyToken.bind(authMiddleware),
-  authMiddleware.requireRole('admin', 'hr'),
-  async (req: AuthRequest, res: Response, next) => {
-    try {
-      const { id } = req.params;
-      const { title, description, severity, type, isDrill, isActive } = req.body;
-
-      if (severity) {
-        const validSeverities = ['low', 'medium', 'high', 'critical'];
-        if (!validSeverities.includes(severity)) {
-          return res.status(400).json({
-            success: false,
-            error: { code: 'INVALID_SEVERITY', message: 'Invalid severity level' },
-          });
-        }
-      }
-
-      const alert = await alertService.updateAlert(id, {
-        title,
-        description,
-        severity,
-        type,
-        isDrill,
-        isActive,
-      });
-
-      if (!alert) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'ALERT_NOT_FOUND', message: 'Alert not found' },
-        });
-      }
-
-      logger.info('Alert updated', { alertId: id, updatedBy: req.user?.userId });
-
-      res.json({ success: true, data: alert });
-    } catch (error) {
-      logger.error('Failed to update alert', { error, alertId: req.params.id });
-      next(error);
-    }
+router.get('/disasters', async (req: express.Request, res: express.Response) => {
+  try {
+    const aggregated = await alertAggregatorService.getAggregatedAlerts();
+    res.json({
+      success: true,
+      data: aggregated,
+      statusCode: 200,
+    });
+  } catch (error) {
+    console.error('Error fetching disaster alerts:', error);
+    res.json({
+      success: true,
+      data: { total: 0, critical: 0, high: 0, medium: 0, low: 0, alerts: [], lastRefreshed: new Date() },
+      statusCode: 200,
+    });
   }
-);
-
-/**
- * DELETE /api/alerts/:id
- * Delete alert (admin only)
- */
-router.delete(
-  '/:id',
-  authMiddleware.verifyToken.bind(authMiddleware),
-  authMiddleware.requireRole('admin'),
-  async (req: AuthRequest, res: Response, next) => {
-    try {
-      const { id } = req.params;
-
-      await alertService.deleteAlert(id);
-
-      logger.info('Alert deleted', { alertId: id, deletedBy: req.user?.userId });
-
-      res.json({ success: true, message: 'Alert deleted successfully' });
-    } catch (error) {
-      logger.error('Failed to delete alert', { error, alertId: req.params.id });
-      next(error);
-    }
-  }
-);
-
-/**
- * POST /api/alerts/:id/acknowledge
- * Acknowledge alert
- */
-router.post(
-  '/:id/acknowledge',
-  authMiddleware.verifyToken.bind(authMiddleware),
-  async (req: AuthRequest, res: Response, next) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'NOT_AUTHENTICATED', message: 'User not authenticated' },
-        });
-      }
-
-      const { id } = req.params;
-
-      const acknowledgment = await alertService.acknowledgeAlert(id, req.user.userId);
-
-      logger.info('Alert acknowledged', { alertId: id, userId: req.user.userId });
-
-      res.json({ success: true, data: acknowledgment });
-    } catch (error) {
-      logger.error('Failed to acknowledge alert', { error, alertId: req.params.id });
-      next(error);
-    }
-  }
-);
-
-/**
- * GET /api/alerts/:id/recipients
- * Get alert recipients
- */
-router.get(
-  '/:id/recipients',
-  authMiddleware.verifyToken.bind(authMiddleware),
-  authMiddleware.requireRole('admin', 'hr'),
-  async (req: AuthRequest, res: Response, next) => {
-    try {
-      const { id } = req.params;
-
-      const recipients = await alertService.getAlertRecipients(id);
-
-      res.json({ success: true, data: recipients });
-    } catch (error) {
-      logger.error('Failed to get alert recipients', { error, alertId: req.params.id });
-      next(error);
-    }
-  }
-);
-
-/**
- * GET /api/alerts/notifications
- * Get user notifications
- */
-router.get(
-  '/notifications',
-  authMiddleware.verifyToken.bind(authMiddleware),
-  async (req: AuthRequest, res: Response, next) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'NOT_AUTHENTICATED', message: 'User not authenticated' },
-        });
-      }
-
-      const page = parseInt(req.query.page as string) || 1;
-      const pageSize = parseInt(req.query.pageSize as string) || 20;
-      const unreadOnly = req.query.unreadOnly === 'true';
-
-      const { notifications, total } = await alertService.getUserNotifications(req.user.userId, {
-        page,
-        pageSize,
-        unreadOnly,
-      });
-
-      res.json({
-        success: true,
-        data: notifications,
-        pagination: {
-          page,
-          pageSize,
-          total,
-          totalPages: Math.ceil(total / pageSize),
-        },
-      });
-    } catch (error) {
-      logger.error('Failed to get notifications', { error, userId: req.user?.userId });
-      next(error);
-    }
-  }
-);
-
-/**
- * PUT /api/alerts/notifications/:notificationId/read
- * Mark notification as read
- */
-router.put(
-  '/notifications/:notificationId/read',
-  authMiddleware.verifyToken.bind(authMiddleware),
-  async (req: AuthRequest, res: Response, next) => {
-    try {
-      const { notificationId } = req.params;
-
-      await alertService.markNotificationAsRead(notificationId);
-
-      logger.info('Notification marked as read', { notificationId });
-
-      res.json({ success: true, message: 'Notification marked as read' });
-    } catch (error) {
-      logger.error('Failed to mark notification as read', { error, notificationId: req.params.notificationId });
-      next(error);
-    }
-  }
-);
+});
 
 export default router;

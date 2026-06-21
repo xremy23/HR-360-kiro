@@ -97,10 +97,33 @@ const ChatbotUI: React.FC = () => {
   };
 
   /**
+   * Detect language from user input
+   */
+  const detectLanguage = (text: string): 'en' | 'tl' | 'ceb' => {
+    // Tagalog indicators
+    const tagalogIndicators = /\b(ano|kung|para|ang|nang|sa|ko|mo|ay|na|ng|kami|tayo|sila|kayo|ito|iyan|dito|diyan|narito|nariyan|bakit|kailan|nasaan|paano|salamat|puwede|ayos|dahil|talaga|sige|naman)\b/i;
+    
+    // Bisaya/Cebuano indicators
+    const bisayaIndicators = /\b(unsa|kung|para|ang|nang|sa|ko|mo|kami|kayo|sila|ito|ato|diri|didto|ngano|kailan|asa|pagano|tayo|sala|baylo|bulbuli|usa|dugay)\b/i;
+
+    const tagalogMatches = (text.match(tagalogIndicators) || []).length;
+    const bisayaMatches = (text.match(bisayaIndicators) || []).length;
+
+    if (bisayaMatches > tagalogMatches && bisayaMatches > 0) {
+      return 'ceb';
+    } else if (tagalogMatches > 0) {
+      return 'tl';
+    }
+    return 'en';
+  };
+
+  /**
    * Send message to chatbot
    */
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendMessage = async (e?: React.FormEvent | React.KeyboardEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
 
     if (!inputValue.trim()) {
       toast.error('Please enter a message');
@@ -113,15 +136,16 @@ const ChatbotUI: React.FC = () => {
     }
 
     const userQuestion = inputValue;
+    const detectedLanguage = detectLanguage(userQuestion);
     setInputValue('');
     dispatch(setLoading(true));
 
     try {
       if (isOnline && navigator.onLine) {
-        // Send to API
+        // Send to API with language parameter
         const response = await apiService.saveChatMessage({
           userQuestion,
-          botResponse: 'Processing your question...', // Placeholder
+          language: detectedLanguage,
           context: {},
         });
 
@@ -226,20 +250,22 @@ const ChatbotUI: React.FC = () => {
       {/* Header */}
       <div
         style={{
-          background: `linear-gradient(135deg, ${colors.primary.teal} 0%, ${colors.primary.darkTeal} 100%)`,
+          backgroundColor: '#ffffff',
+          borderBottom: '1px solid #e5e7eb',
           padding: spacing.lg,
-          boxShadow: shadows.md,
-          color: colors.primary.white,
+          boxShadow: 'none',
+          color: colors.primary.black,
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h2
               style={{
-                fontSize: typography.fontSize.h3.size,
-                fontWeight: typography.fontSize.h3.weight,
+                fontSize: typography.fontSize.h4.size,
+                fontWeight: 'bold',
                 margin: 0,
                 marginBottom: spacing.sm,
+                color: colors.primary.black,
               }}
             >
               HR 360 Assistant
@@ -248,7 +274,7 @@ const ChatbotUI: React.FC = () => {
               style={{
                 fontSize: typography.fontSize.body3.size,
                 margin: 0,
-                opacity: 0.9,
+                color: colors.neutral[600],
               }}
             >
               {isOnline && navigator.onLine ? '🟢 Online' : '🔴 Offline Mode'}
@@ -259,20 +285,20 @@ const ChatbotUI: React.FC = () => {
             onClick={handleClearHistory}
             style={{
               padding: `${spacing.sm} ${spacing.lg}`,
-              backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              backgroundColor: colors.primary.teal,
               color: colors.primary.white,
-              border: `2px solid ${colors.primary.white}`,
-              borderRadius: borderRadius.sm,
+              border: 'none',
+              borderRadius: '6px',
               fontSize: typography.fontSize.label2.size,
               fontWeight: typography.fontSize.label2.weight,
               cursor: 'pointer',
               transition: 'all 0.2s',
             }}
             onMouseEnter={(e) => {
-              (e.target as HTMLButtonElement).style.backgroundColor = 'rgba(255, 255, 255, 0.3)';
+              (e.target as HTMLButtonElement).style.backgroundColor = colors.primary.darkTeal;
             }}
             onMouseLeave={(e) => {
-              (e.target as HTMLButtonElement).style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+              (e.target as HTMLButtonElement).style.backgroundColor = colors.primary.teal;
             }}
           >
             🗑️ Clear
@@ -391,7 +417,7 @@ const ChatbotUI: React.FC = () => {
           borderTop: `1px solid ${colors.neutral[200]}`,
           backgroundColor: colors.primary.white,
           padding: spacing.lg,
-          boxShadow: shadows.lg,
+          boxShadow: 'none',
         }}
       >
         <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: spacing.md }}>
@@ -399,13 +425,19 @@ const ChatbotUI: React.FC = () => {
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage(e);
+              }
+            }}
             placeholder="Ask me anything..."
             disabled={loading}
             style={{
               flex: 1,
               padding: spacing.md,
               border: `2px solid ${colors.neutral[200]}`,
-              borderRadius: borderRadius.sm,
+              borderRadius: '8px',
               fontSize: typography.fontSize.body2.size,
               fontFamily: 'inherit',
               transition: 'all 0.2s',
@@ -428,7 +460,7 @@ const ChatbotUI: React.FC = () => {
               backgroundColor: loading || !inputValue.trim() ? colors.neutral[300] : colors.primary.teal,
               color: colors.primary.white,
               border: 'none',
-              borderRadius: borderRadius.sm,
+              borderRadius: '8px',
               fontSize: typography.fontSize.label2.size,
               fontWeight: typography.fontSize.label2.weight,
               cursor: loading || !inputValue.trim() ? 'not-allowed' : 'pointer',

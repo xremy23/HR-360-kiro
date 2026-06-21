@@ -8,14 +8,27 @@ import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '../store/store';
 import { markAsRead, markAllAsRead, removeNotification, setShowCenter } from '../store/slices/notificationSlice';
 import { colors, spacing, borderRadius, typography, shadows } from '../styles/designSystem';
+import { useDarkMode } from '../hooks/useDarkMode';
 
 const NotificationCenter: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const { notifications, unreadCount, showCenter } = useSelector((state: RootState) => state.notification);
+  const isDarkMode = useDarkMode();
 
   if (!showCenter) {
     return null;
   }
+
+  // Color mappings for UI - responsive to dark mode
+  const uiColors = {
+    borderLight: isDarkMode ? '#27272A' : colors.neutral[200],
+    text: isDarkMode ? '#FAFAFA' : colors.neutral[900],
+    textSecondary: isDarkMode ? '#A1A1AA' : colors.neutral[600],
+    primaryLight: isDarkMode ? '#1F3F3E' : '#E8F4F3',
+    greyLight: isDarkMode ? '#27272A' : colors.neutral[100],
+    primaryDark: isDarkMode ? '#03A39A' : '#027370',
+    background: isDarkMode ? '#18181B' : colors.primary.white,
+  };
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -43,7 +56,7 @@ const NotificationCenter: React.FC = () => {
       case 'checkin':
         return '#00AA00';
       default:
-        return colors.primary;
+        return colors.primary.teal;
     }
   };
 
@@ -58,42 +71,56 @@ const NotificationCenter: React.FC = () => {
   };
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        right: 0,
-        top: 0,
-        bottom: 0,
-        width: '100%',
-        maxWidth: '400px',
-        backgroundColor: colors.white,
-        boxShadow: shadows.lg,
-        zIndex: 999,
-        display: 'flex',
-        flexDirection: 'column',
-        animation: 'slideInRight 0.3s ease-out',
-      }}
-    >
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={() => dispatch(setShowCenter(false))}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          zIndex: 99998,
+          animation: 'fadeIn 0.2s ease-out',
+        }}
+      />
+      
+      {/* Notification Panel */}
+      <div
+        style={{
+          position: 'fixed',
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: 'min(100%, 400px)',
+          backgroundColor: uiColors.background,
+          boxShadow: shadows.lg,
+          zIndex: 99999,
+          display: 'flex',
+          flexDirection: 'column',
+          animation: 'slideInRight 0.3s ease-out',
+          overflow: 'hidden',
+        }}
+      >
       {/* Header */}
       <div
         style={{
           padding: spacing.lg,
-          borderBottom: `1px solid ${colors.borderLight}`,
+          borderBottom: `1px solid ${uiColors.borderLight}`,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
         }}
       >
         <div>
-          <h2 style={{ margin: 0, fontSize: typography.sizes.lg, color: colors.text }}>
+          <h2 style={{ margin: 0, fontSize: typography.fontSize.h2.size, color: uiColors.text }}>
             Notifications
           </h2>
           {unreadCount > 0 && (
             <p
               style={{
                 margin: `${spacing.xs} 0 0 0`,
-                fontSize: typography.sizes.sm,
-                color: colors.textSecondary,
+                fontSize: typography.fontSize.body2.size,
+                color: uiColors.textSecondary,
               }}
             >
               {unreadCount} new
@@ -102,13 +129,14 @@ const NotificationCenter: React.FC = () => {
         </div>
 
         <button
+          type="button"
           onClick={() => dispatch(setShowCenter(false))}
           style={{
             background: 'none',
             border: 'none',
             fontSize: '20px',
             cursor: 'pointer',
-            color: colors.textSecondary,
+            color: uiColors.textSecondary,
             padding: 0,
           }}
         >
@@ -118,23 +146,23 @@ const NotificationCenter: React.FC = () => {
 
       {/* Actions */}
       {unreadCount > 0 && (
-        <div style={{ padding: spacing.md, borderBottom: `1px solid ${colors.borderLight}` }}>
+        <div style={{ padding: spacing.md, borderBottom: `1px solid ${uiColors.borderLight}` }}>
           <button
             onClick={() => dispatch(markAllAsRead())}
             style={{
               width: '100%',
               padding: `${spacing.sm} ${spacing.md}`,
-              backgroundColor: colors.primary,
-              color: colors.white,
+              backgroundColor: colors.primary.teal,
+              color: colors.primary.white,
               border: 'none',
               borderRadius: borderRadius.md,
               cursor: 'pointer',
-              fontSize: typography.sizes.sm,
+              fontSize: typography.fontSize.body2.size,
               fontWeight: 'bold',
               transition: 'background-color 0.2s',
             }}
-            onMouseOver={e => (e.currentTarget.style.backgroundColor = colors.primaryDark)}
-            onMouseOut={e => (e.currentTarget.style.backgroundColor = colors.primary)}
+            onMouseOver={e => (e.currentTarget.style.backgroundColor = uiColors.primaryDark)}
+            onMouseOut={e => (e.currentTarget.style.backgroundColor = colors.primary.teal)}
           >
             Mark all as read
           </button>
@@ -151,7 +179,7 @@ const NotificationCenter: React.FC = () => {
               alignItems: 'center',
               justifyContent: 'center',
               height: '100%',
-              color: colors.textSecondary,
+              color: uiColors.textSecondary,
               textAlign: 'center',
             }}
           >
@@ -165,25 +193,27 @@ const NotificationCenter: React.FC = () => {
               style={{
                 padding: spacing.md,
                 marginBottom: spacing.sm,
-                backgroundColor: notification.isRead ? colors.white : colors.primaryLight,
+                backgroundColor: notification.isRead 
+                  ? uiColors.background 
+                  : uiColors.primaryLight,
                 borderLeft: `4px solid ${getNotificationColor(notification.type)}`,
                 borderRadius: borderRadius.md,
                 cursor: 'pointer',
                 transition: 'all 0.2s',
-                border: `1px solid ${colors.borderLight}`,
+                border: `1px solid ${uiColors.borderLight}`,
               }}
-              onMouseOver={e => (e.currentTarget.style.backgroundColor = colors.greyLight)}
-              onMouseOut={e => (e.currentTarget.style.backgroundColor = notification.isRead ? colors.white : colors.primaryLight)}
+              onMouseOver={e => (e.currentTarget.style.backgroundColor = uiColors.greyLight)}
+              onMouseOut={e => (e.currentTarget.style.backgroundColor = notification.isRead ? uiColors.background : uiColors.primaryLight)}
               onClick={() => !notification.isRead && dispatch(markAsRead(notification.id))}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: spacing.xs }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm, flex: 1 }}>
                   <span style={{ fontSize: '20px' }}>{getNotificationIcon(notification.type)}</span>
                   <div style={{ flex: 1 }}>
-                    <h3 style={{ margin: 0, fontSize: typography.sizes.sm, fontWeight: 'bold', color: colors.text }}>
+                    <h3 style={{ margin: 0, fontSize: typography.fontSize.body2.size, fontWeight: 'bold', color: uiColors.text }}>
                       {notification.title}
                     </h3>
-                    <p style={{ margin: `${spacing.xs} 0 0 0`, fontSize: typography.sizes.xs, color: colors.textSecondary }}>
+                    <p style={{ margin: `${spacing.xs} 0 0 0`, fontSize: typography.fontSize.caption.size, color: uiColors.textSecondary }}>
                       {formatTime(notification.timestamp)}
                     </p>
                   </div>
@@ -199,7 +229,7 @@ const NotificationCenter: React.FC = () => {
                     border: 'none',
                     fontSize: '16px',
                     cursor: 'pointer',
-                    color: colors.textSecondary,
+                    color: uiColors.textSecondary,
                     padding: 0,
                     marginLeft: spacing.sm,
                   }}
@@ -208,7 +238,7 @@ const NotificationCenter: React.FC = () => {
                 </button>
               </div>
 
-              <p style={{ margin: 0, fontSize: typography.sizes.sm, color: colors.text, lineHeight: '1.4' }}>
+              <p style={{ margin: 0, fontSize: typography.fontSize.body2.size, color: uiColors.text, lineHeight: '1.4' }}>
                 {notification.body}
               </p>
 
@@ -218,7 +248,7 @@ const NotificationCenter: React.FC = () => {
                     width: '8px',
                     height: '8px',
                     borderRadius: '50%',
-                    backgroundColor: colors.primary,
+                    backgroundColor: colors.primary.teal,
                     marginTop: spacing.sm,
                   }}
                 />
@@ -227,20 +257,17 @@ const NotificationCenter: React.FC = () => {
           ))
         )}
       </div>
+      </div>
 
       <style>{`
-        @keyframes slideInRight {
-          from {
-            opacity: 0;
-            transform: translateX(100%);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
+        @media (max-width: 640px) {
+          [data-notification-panel] {
+            max-width: 100% !important;
+            width: 100vw !important;
           }
         }
       `}</style>
-    </div>
+    </>
   );
 };
 

@@ -1,33 +1,43 @@
+# Root Cloud Build configuration
+# Builds backend and frontend services for CICT Safety F.I.R.S.T. project
+
 steps:
-  # Build the web app Docker image
+  # Build backend Docker image
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
-      - '-t'
-      - 'gcr.io/$PROJECT_ID/web:latest'
       - '-f'
-      - 'web/Dockerfile'
-      - 'web'
+      - 'backend/Dockerfile'
+      - '-t'
+      - 'gcr.io/cict-safety-first/cict-safety-first-backend:latest'
+      - 'backend'
 
-  # Push the image to Container Registry
+  # Push backend image to Container Registry
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
-      - 'gcr.io/$PROJECT_ID/web:latest'
+      - 'gcr.io/cict-safety-first/cict-safety-first-backend:latest'
 
-  # Deploy using gcloud run deploy
-  - name: 'gcr.io/cloud-builders/gcloud'
+  # Build frontend Docker image
+  - name: 'gcr.io/cloud-builders/docker'
     args:
-      - 'run'
-      - 'deploy'
+      - 'build'
+      - '-f'
+      - 'web/Dockerfile'
+      - '-t'
+      - 'gcr.io/cict-safety-first/cict-safety-first-frontend:latest'
       - 'web'
-      - '--image=gcr.io/$PROJECT_ID/web:latest'
-      - '--platform=managed'
-      - '--region=us-central1'
-      - '--allow-unauthenticated'
 
+  # Push frontend image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/cict-safety-first/cict-safety-first-frontend:latest'
+
+# Store built images
 images:
-  - 'gcr.io/$PROJECT_ID/web:latest'
+  - 'gcr.io/cict-safety-first/cict-safety-first-backend:latest'
+  - 'gcr.io/cict-safety-first/cict-safety-first-frontend:latest'
 
-options:
-  machineType: 'N1_HIGHCPU_8'
+# 30 minute timeout for build
+timeout: '1800s'

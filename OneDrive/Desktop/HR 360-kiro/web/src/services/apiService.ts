@@ -5,8 +5,69 @@
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 
-// API Configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+// API Configuration - Resolved at runtime from config file
+let API_BASE_URL = 'http://localhost:3000/api'; // default fallback
+
+// Function to load config asynchronously
+async function loadApiConfig(): Promise<string> {
+  try {
+    // First, check if it was pre-initialized in index.html
+    if (window.__API_URL__) {
+      console.log('[API Config] Using pre-initialized API URL:', window.__API_URL__);
+      API_BASE_URL = window.__API_URL__;
+      return window.__API_URL__;
+    }
+
+    // Try to load from runtime-injected config.json (with cache-busting)
+    const response = await fetch('/config.json?t=' + Date.now(), {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' }
+    });
+    
+    if (response.ok) {
+      const config = await response.json();
+      if (config.apiUrl) {
+        console.log('[API Config] Loaded API URL from config.json:', config.apiUrl);
+        API_BASE_URL = config.apiUrl;
+        window.__API_URL__ = config.apiUrl;
+        return config.apiUrl;
+      }
+    }
+  } catch (error) {
+    console.warn('[API Config] Failed to load config.json, trying fallbacks:', error);
+  }
+
+  // Fallback: check environment variable from build time
+  if (import.meta.env.VITE_API_URL) {
+    console.log('[API Config] Using VITE_API_URL:', import.meta.env.VITE_API_URL);
+    API_BASE_URL = import.meta.env.VITE_API_URL;
+    window.__API_URL__ = import.meta.env.VITE_API_URL;
+    return import.meta.env.VITE_API_URL;
+  }
+
+  // Last resort: try to infer from current location
+  if (typeof window !== 'undefined' && window.location) {
+    const isCloudRun = window.location.hostname.includes('run.app');
+    if (isCloudRun) {
+      // Assume backend is on the same Cloud Run project
+      const url = 'https://hr-crisis-360-backend-116253736511.asia-southeast1.run.app/api';
+      console.log('[API Config] Inferred Cloud Run backend:', url);
+      API_BASE_URL = url;
+      window.__API_URL__ = url;
+      return url;
+    }
+  }
+
+  console.log('[API Config] Using default fallback:', API_BASE_URL);
+  return API_BASE_URL;
+}
+
+// Initialize config on import and store the promise
+const configLoadPromise = loadApiConfig().catch(err => {
+  console.error('[API Config] Initialization error:', err);
+  return API_BASE_URL; // Return current value even if error
+});
+
 const REQUEST_TIMEOUT = 30000; // 30 seconds
 
 // Response types
@@ -52,6 +113,7 @@ class ApiService {
   private client: AxiosInstance;
   private token: string | null = null;
   private refreshTokenPromise: Promise<string> | null = null;
+  private baseUrlLoaded = false;
 
   constructor() {
     this.client = axios.create({
@@ -62,12 +124,21 @@ class ApiService {
       },
     });
 
+    // Update baseURL after config loads
+    loadApiConfig().then(url => {
+      this.client.defaults.baseURL = url;
+      this.baseUrlLoaded = true;
+    }).catch(err => console.error('[API Config] Initialization error:', err));
+
     // Request interceptor
     this.client.interceptors.request.use(
       (config) => {
         const token = this.getToken();
         if (token) {
+          console.log('Sending authorization header with token:', token.substring(0, 20) + '...');
           config.headers.Authorization = `Bearer ${token}`;
+        } else {
+          console.warn('No token available for request to', config.url);
         }
         return config;
       },
@@ -82,6 +153,11 @@ class ApiService {
 
         // Handle 401 Unauthorized
         if (error.response?.status === 401 && !originalRequest._retry) {
+          // Skip redirect if skipRedirectOn401 flag is set
+          if (originalRequest.skipRedirectOn401) {
+            return Promise.reject(error);
+          }
+
           originalRequest._retry = true;
 
           try {
@@ -129,10 +205,12 @@ class ApiService {
    * Set token
    */
   setToken(token: string): void {
+    console.log('setToken called with token:', token.substring(0, 20) + '...');
     this.token = token;
     try {
       localStorage.setItem('token', token);
       localStorage.setItem('authToken', token); // Store in both keys for compatibility
+      console.log('Token stored in localStorage');
     } catch (error) {
       console.error('Error setting token:', error);
     }
@@ -202,13 +280,29 @@ class ApiService {
    */
   async get<T = any>(
     url: string,
-    params?: Record<string, any>
+    params?: Record<string, any>,
+    skipRedirectOn401?: boolean
   ): Promise<ApiResponse<T>> {
     try {
-      const response = await this.client.get<ApiResponse<T>>(url, { params });
+      await this.ensureConfigLoaded(); // Ensure config is loaded before making request
+      const config: any = { params };
+      if (skipRedirectOn401) {
+        config.skipRedirectOn401 = true;
+      }
+      const response = await this.client.get<ApiResponse<T>>(url, config);
       return response.data;
     } catch (error) {
       throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Ensure API config is loaded
+   */
+  private async ensureConfigLoaded(): Promise<void> {
+    if (!this.baseUrlLoaded) {
+      await configLoadPromise;
+      await new Promise(resolve => setTimeout(resolve, 100)); // Give it a moment to update
     }
   }
 
@@ -217,10 +311,16 @@ class ApiService {
    */
   async post<T = any>(
     url: string,
-    data?: Record<string, any>
+    data?: Record<string, any>,
+    skipRedirectOn401?: boolean
   ): Promise<ApiResponse<T>> {
     try {
-      const response = await this.client.post<ApiResponse<T>>(url, data);
+      await this.ensureConfigLoaded(); // Ensure config is loaded before making request
+      const config: any = {};
+      if (skipRedirectOn401) {
+        config.skipRedirectOn401 = true;
+      }
+      const response = await this.client.post<ApiResponse<T>>(url, data, config);
       return response.data;
     } catch (error) {
       throw this.handleError(error);
@@ -286,6 +386,15 @@ class ApiService {
       firstName,
       lastName,
     });
+  }
+
+  /**
+   * GET /api/auth/me
+   * Get current authenticated user with full details including organization
+   * Used for session restoration on app reload
+   */
+  async getCurrentUser(): Promise<ApiResponse<any>> {
+    return this.get('/auth/me');
   }
 
   async logout(): Promise<ApiResponse> {
@@ -422,8 +531,8 @@ class ApiService {
   async getAlerts(params?: {
     page?: number;
     pageSize?: number;
-  }): Promise<PaginatedResponse<any>> {
-    const response = await this.get('/alerts', params);
+  }, skipRedirectOn401?: boolean): Promise<PaginatedResponse<any>> {
+    const response = await this.get('/alerts', params, skipRedirectOn401);
     return response as any;
   }
 
@@ -568,8 +677,8 @@ class ApiService {
   // ORGANIZATION ENDPOINTS
   // ============================================================================
 
-  async getOrganization(): Promise<ApiResponse<any>> {
-    return this.get('/org');
+  async getOrganization(skipRedirect: boolean = true): Promise<ApiResponse<any>> {
+    return this.get('/org', undefined, skipRedirect);
   }
 
   async getOrganizationTeams(): Promise<ApiResponse<any[]>> {
@@ -609,7 +718,7 @@ class ApiService {
     emailDomain?: string;
     logo?: string;
   }): Promise<ApiResponse<any>> {
-    return this.post('/org', data);
+    return this.post('/org', data, true); // skipRedirectOn401 = true
   }
 
   async joinOrganizationWithCode(inviteCode: string): Promise<ApiResponse<any>> {
@@ -684,8 +793,9 @@ class ApiService {
 
   async saveChatMessage(data: {
     userQuestion: string;
-    botResponse: string;
+    botResponse?: string;
     context?: Record<string, any>;
+    language?: 'en' | 'tl' | 'ceb';
   }): Promise<ApiResponse<any>> {
     return this.post('/chatbot/messages', data);
   }

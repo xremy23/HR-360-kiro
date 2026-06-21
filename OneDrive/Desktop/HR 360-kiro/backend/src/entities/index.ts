@@ -14,3 +14,5 @@ export { PushNotificationEntity, type PushNotification } from './PushNotificatio
 export { DeviceTokenEntity, type DeviceToken } from './DeviceToken';
 export { MagicLinkTokenEntity, type MagicLinkToken } from './MagicLinkToken';
 export { ChatMessageEntity, type ChatMessage } from './ChatMessage';
+export { CommunityReportEntity, type CommunityReport } from './CommunityReport';
+export { BulkImportJobEntity, type BulkImportJob } from './BulkImportJob';

@@ -1,407 +1,278 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../store/slices/authSlice';
 import { RootState, AppDispatch } from '../store/store';
-import toast from 'react-hot-toast';
-import apiService from '../services/apiService';
+import { ChevronRight, Bell, Lock, Building2, HelpCircle, LogOut, Sun, Moon, Zap } from 'lucide-react';
 
 const MobileSettings: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
-  const { user } = useSelector((state: RootState) => state.auth);
+  const { user, accessMode } = useSelector((state: RootState) => state.auth);
   const [notifications, setNotifications] = useState(true);
   const [location, setLocation] = useState(false);
   const [camera, setCamera] = useState(false);
-  const [hasOrganization, setHasOrganization] = useState<boolean | null>(null);
-  const [loadingOrgStatus, setLoadingOrgStatus] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('darkMode');
+    // Default to dark mode (true), unless explicitly set to light
+    return saved !== null ? saved === 'true' : true;
+  });
 
-  React.useEffect(() => {
-    checkOrganizationStatus();
-  }, []);
-
-  const checkOrganizationStatus = async () => {
-    setLoadingOrgStatus(true);
-    try {
-      const response = await apiService.getOrganization();
-      // Check if response has data (organization exists) or is null (no organization)
-      const hasOrg = response.success && response.data !== null && response.data !== undefined;
-      setHasOrganization(hasOrg);
-      console.log('Organization status:', hasOrg, 'Response:', response);
-    } catch (error) {
-      console.error('Failed to check org status:', error);
-      // Default to showing create org button if check fails
-      setHasOrganization(false);
-    } finally {
-      setLoadingOrgStatus(false);
+  // Apply dark mode on mount
+  useEffect(() => {
+    const htmlElement = document.documentElement;
+    if (isDarkMode) {
+      htmlElement.classList.add('dark');
+      document.documentElement.style.colorScheme = 'dark';
+    } else {
+      htmlElement.classList.remove('dark');
+      document.documentElement.style.colorScheme = 'light';
     }
-  };
+  }, [isDarkMode]);
 
-  const handleLogout = () => {
-    dispatch(logout());
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    toast.success('Logged out successfully');
-    navigate('/login');
+  const toggleDarkMode = () => {
+    const newDarkMode = !isDarkMode;
+    setIsDarkMode(newDarkMode);
+    localStorage.setItem('darkMode', String(newDarkMode));
+    const htmlElement = document.documentElement;
+    if (newDarkMode) {
+      htmlElement.classList.add('dark');
+      document.documentElement.style.colorScheme = 'dark';
+    } else {
+      htmlElement.classList.remove('dark');
+      document.documentElement.style.colorScheme = 'light';
+    }
   };
 
   const handleNotificationToggle = () => {
     setNotifications(!notifications);
-    toast.success(
-      !notifications ? 'Notifications enabled' : 'Notifications disabled'
-    );
   };
 
-  const handleLocationToggle = async () => {
-    try {
-      if (!location) {
-        // Request location permission
-        const response = await apiService.post('/users/location/enable');
-        if (response.success) {
-          setLocation(true);
-          toast.success('Location tracking enabled');
-        } else {
-          toast.error('Failed to enable location tracking');
-        }
-      } else {
-        // Disable location tracking
-        const response = await apiService.post('/users/location/disable');
-        if (response.success) {
-          setLocation(false);
-          toast.success('Location tracking disabled');
-        } else {
-          toast.error('Failed to disable location tracking');
-        }
-      }
-    } catch (error) {
-      console.error('Location toggle error:', error);
-      toast.error('Failed to update location settings');
-    }
-  };
-
-  const handleCameraToggle = async () => {
-    try {
-      if (!camera) {
-        // Request camera permission
-        const response = await apiService.post('/users/camera/enable');
-        if (response.success) {
-          setCamera(true);
-          toast.success('Camera access enabled');
-        } else {
-          toast.error('Failed to enable camera access');
-        }
-      } else {
-        // Disable camera access
-        const response = await apiService.post('/users/camera/disable');
-        if (response.success) {
-          setCamera(false);
-          toast.success('Camera access disabled');
-        } else {
-          toast.error('Failed to disable camera access');
-        }
-      }
-    } catch (error) {
-      console.error('Camera toggle error:', error);
-      toast.error('Failed to update camera settings');
-    }
+  const handleLogout = () => {
+    dispatch(logout());
+    navigate('/login');
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="w-full min-h-screen bg-stone-50 dark:bg-neutral-950">
       {/* Header */}
-      <header className="bg-gradient-to-r from-primary-teal to-secondary-medium sticky top-0 z-40 shadow-md">
-        <div className="px-4 py-4 flex items-center gap-4">
-          <button
-            onClick={() => navigate(-1)}
-            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-secondary-light hover:bg-opacity-20 transition text-primary-white"
-          >
-            ←
-          </button>
+      <div className="px-4 py-6 space-y-3 border-b border-stone-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-display text-h3 text-primary-white">Settings</h1>
-            <p className="font-sans text-body3 text-secondary-light">Manage your preferences</p>
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-600 dark:text-rose-400 font-mono">⚙️ PREFERENCES</span>
+            <h1 className="text-xl font-black text-[#038F8D] dark:text-[#49D7D1] leading-tight">Settings</h1>
           </div>
+          <button
+            onClick={toggleDarkMode}
+            className="p-2.5 rounded-xl border border-stone-200 dark:border-neutral-800 hover:bg-stone-100 dark:hover:bg-neutral-900 transition"
+            title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            {isDarkMode ? <Sun size={16} className="text-amber-400" /> : <Moon size={16} className="text-slate-600" />}
+          </button>
         </div>
-      </header>
+        <p className="text-xs text-stone-500 dark:text-stone-400">
+          {accessMode === 'guest' ? 'Manage device preferences' : 'Manage your profile and preferences'}
+        </p>
+      </div>
 
       {/* Main Content */}
-      <main className="px-4 py-6 pb-24">
-        {/* Profile Section */}
-        <div className="bg-primary-white rounded-xl shadow-md p-6 mb-6">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary-teal to-secondary-medium flex items-center justify-center text-primary-white text-2xl">
-              👤
-            </div>
-            <div>
-              <h2 className="font-sans text-h5 text-primary-black font-semibold">
-                {user?.name}
-              </h2>
-              <p className="font-sans text-body2 text-neutral-600">{user?.email}</p>
-              <p className="font-sans text-label2 text-primary-teal font-semibold mt-1">
-                {user?.role.toUpperCase()}
-              </p>
-            </div>
-          </div>
-          <button 
-            onClick={() => navigate('/edit-profile')}
-            className="w-full px-4 py-2 border-2 border-primary-teal text-primary-teal rounded-lg font-sans text-label1 font-semibold hover:bg-primary-teal hover:text-primary-white transition">
-            Edit Profile
+      <main className="px-4 py-6 pb-24 space-y-6">
+        {/* Guest Mode - Sign In CTA */}
+        {accessMode === 'guest' && (
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={() => navigate('/login')}
+            className="w-full bg-gradient-to-r from-[#038F8D] to-[#49D7D1] hover:from-[#02706e] hover:to-[#3bc0bb] text-white font-bold text-xs py-3.5 rounded-2xl transition shadow-md active:scale-95 flex items-center justify-center gap-2 uppercase tracking-wider"
+          >
+            <span>🔐 Sign In to Your Account</span>
           </button>
+          <p className="text-[10px] text-stone-500 dark:text-stone-400 text-center">
+            Sign in to access team features, status updates, and organization settings
+          </p>
         </div>
+        )}
 
-        {/* Notifications Section */}
-        <div className="mb-6">
-          <h3 className="font-sans text-h5 text-primary-black font-semibold mb-4">
-            Notifications
-          </h3>
+        {/* Profile Section - Authenticated Only */}
+        {accessMode !== 'guest' && (
+        <div className="space-y-3">
+          <h2 className="font-extrabold text-xs flex items-center gap-1.5 uppercase tracking-wide text-stone-500 dark:text-neutral-400">
+            👤 Your Profile
+          </h2>
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-stone-100 dark:border-neutral-850 p-4 shadow-xs">
+            <div className="flex items-start gap-4 mb-4">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#038F8D] to-[#49D7D1] flex items-center justify-center text-white text-lg font-black shadow-md">
+                {user?.name?.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-sm text-neutral-900 dark:text-white">{user?.name}</h3>
+                <p className="font-sans text-xs text-stone-500 dark:text-stone-400 truncate">{user?.email}</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-[8px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#038F8D]/15 text-[#038F8D] dark:text-[#49D7D1]">
+                    {user?.role}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/edit-profile')}
+              className="w-full px-4 py-2.5 border border-[#038F8D] text-[#038F8D] dark:text-[#49D7D1] rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-[#038F8D]/5 transition flex items-center justify-center gap-2"
+            >
+              <span>Edit Profile</span>
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+        )}
 
-          {/* Push Notifications */}
-          <div className="bg-primary-white rounded-xl shadow-md p-4 mb-3 flex items-center justify-between">
+        {/* Notifications */}
+        <div className="space-y-3">
+          <h2 className="font-extrabold text-xs flex items-center gap-1.5 uppercase tracking-wide text-stone-500 dark:text-neutral-400">
+            <Bell size={14} /> Notifications
+          </h2>
+          
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-stone-100 dark:border-neutral-850 p-4 flex items-center justify-between shadow-xs">
             <div>
-              <h4 className="font-sans text-label1 text-primary-black font-semibold">
-                Push Notifications
-              </h4>
-              <p className="font-sans text-body3 text-neutral-600 mt-1">
-                Receive alerts and updates
-              </p>
+              <h3 className="font-bold text-xs text-neutral-900 dark:text-white uppercase tracking-wider">Push Alerts</h3>
+              <p className="text-[10px] text-stone-500 dark:text-stone-400 mt-1">Crisis updates & alerts</p>
             </div>
             <button
               onClick={handleNotificationToggle}
-              className={`w-12 h-7 rounded-full transition ${
-                notifications ? 'bg-primary-teal' : 'bg-neutral-300'
+              className={`relative w-12 h-6 rounded-full transition-all shrink-0 ${
+                notifications ? 'bg-[#038F8D]' : 'bg-stone-300 dark:bg-neutral-700'
               }`}
             >
               <div
-                className={`w-6 h-6 rounded-full bg-primary-white transition transform ${
-                  notifications ? 'translate-x-5' : 'translate-x-0'
+                className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${
+                  notifications ? 'right-0.5' : 'left-0.5'
                 }`}
               ></div>
             </button>
           </div>
-
-          {/* Email Notifications */}
-          <div className="bg-primary-white rounded-xl shadow-md p-4 flex items-center justify-between">
-            <div>
-              <h4 className="font-sans text-label1 text-primary-black font-semibold">
-                Email Notifications
-              </h4>
-              <p className="font-sans text-body3 text-neutral-600 mt-1">
-                Get email updates
-              </p>
-            </div>
-            <button className="w-12 h-7 rounded-full bg-primary-teal transition">
-              <div className="w-6 h-6 rounded-full bg-primary-white transition transform translate-x-5"></div>
-            </button>
-          </div>
         </div>
 
-        {/* Privacy & Permissions Section */}
-        <div className="mb-6">
-          <h3 className="font-sans text-h5 text-primary-black font-semibold mb-4">
-            Privacy & Permissions
-          </h3>
+        {/* Privacy & Security */}
+        {accessMode !== 'guest' && (
+        <div className="space-y-3">
+          <h2 className="font-extrabold text-xs flex items-center gap-1.5 uppercase tracking-wide text-stone-500 dark:text-neutral-400">
+            <Lock size={14} /> Privacy & Security
+          </h2>
 
-          {/* Biometric Authentication */}
           <button
+            type="button"
             onClick={() => navigate('/biometric-settings')}
-            className="w-full bg-primary-white rounded-xl shadow-md p-4 mb-3 text-left hover:shadow-lg transition"
+            className="w-full bg-white dark:bg-neutral-900 rounded-2xl border border-stone-100 dark:border-neutral-850 p-4 text-left hover:border-[#038F8D] dark:hover:border-[#038F8D] transition shadow-xs group"
           >
-            <h4 className="font-sans text-label1 text-primary-black font-semibold">
-              🔐 Biometric Authentication
-            </h4>
-            <p className="font-sans text-body3 text-neutral-600 mt-1">
-              Manage fingerprint and face recognition
-            </p>
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="font-bold text-xs text-neutral-900 dark:text-white uppercase tracking-wider">🔐 Biometric Auth</h3>
+                <p className="text-[10px] text-stone-500 dark:text-stone-400 mt-1">Fingerprint & face recognition</p>
+              </div>
+              <ChevronRight size={14} className="text-stone-400 dark:text-neutral-600 group-hover:text-[#038F8D] transition" />
+            </div>
           </button>
 
-          {/* Location Sharing */}
           <button
+            type="button"
             onClick={() => navigate('/location-sharing')}
-            className="w-full bg-primary-white rounded-xl shadow-md p-4 mb-3 text-left hover:shadow-lg transition"
+            className="w-full bg-white dark:bg-neutral-900 rounded-2xl border border-stone-100 dark:border-neutral-850 p-4 text-left hover:border-[#038F8D] dark:hover:border-[#038F8D] transition shadow-xs group"
           >
-            <h4 className="font-sans text-label1 text-primary-black font-semibold">
-              🗺️ Location Sharing
-            </h4>
-            <p className="font-sans text-body3 text-neutral-600 mt-1">
-              Track and share your location with team
-            </p>
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="font-bold text-xs text-neutral-900 dark:text-white uppercase tracking-wider">📍 Location Sharing</h3>
+                <p className="text-[10px] text-stone-500 dark:text-stone-400 mt-1">Share with team during crisis</p>
+              </div>
+              <ChevronRight size={14} className="text-stone-400 dark:text-neutral-600 group-hover:text-[#038F8D] transition" />
+            </div>
           </button>
-
-          {/* Location */}
-          <div className="bg-primary-white rounded-xl shadow-md p-4 mb-3 flex items-center justify-between">
-            <div>
-              <h4 className="font-sans text-label1 text-primary-black font-semibold">
-                📍 Location Access
-              </h4>
-              <p className="font-sans text-body3 text-neutral-600 mt-1">
-                Allow location tracking
-              </p>
-            </div>
-            <button
-              onClick={handleLocationToggle}
-              className={`w-12 h-7 rounded-full transition ${
-                location ? 'bg-primary-teal' : 'bg-neutral-300'
-              }`}
-            >
-              <div
-                className={`w-6 h-6 rounded-full bg-primary-white transition transform ${
-                  location ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              ></div>
-            </button>
-          </div>
-
-          {/* Camera */}
-          <div className="bg-primary-white rounded-xl shadow-md p-4 flex items-center justify-between">
-            <div>
-              <h4 className="font-sans text-label1 text-primary-black font-semibold">
-                📷 Camera Access
-              </h4>
-              <p className="font-sans text-body3 text-neutral-600 mt-1">
-                Allow camera access
-              </p>
-            </div>
-            <button
-              onClick={handleCameraToggle}
-              className={`w-12 h-7 rounded-full transition ${
-                camera ? 'bg-primary-teal' : 'bg-neutral-300'
-              }`}
-            >
-              <div
-                className={`w-6 h-6 rounded-full bg-primary-white transition transform ${
-                  camera ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              ></div>
-            </button>
-          </div>
         </div>
+        )}
 
-        {/* Organization Section */}
-        <div className="mb-6">
-          <h3 className="font-sans text-h5 text-primary-black font-semibold mb-4">
-            Organization
-          </h3>
+        {/* Organization - Authenticated Only */}
+        {accessMode !== 'guest' && (
+        <div className="space-y-3">
+          <h2 className="font-extrabold text-xs flex items-center gap-1.5 uppercase tracking-wide text-stone-500 dark:text-neutral-400">
+            <Building2 size={14} /> Organization
+          </h2>
 
-          {loadingOrgStatus ? (
-            <div className="bg-primary-white rounded-xl shadow-md p-4 text-center">
-              <p className="font-sans text-body2 text-neutral-600">Loading...</p>
-            </div>
-          ) : !hasOrganization ? (
-            // Show create org and join org buttons when user has no organization
-            <div className="space-y-3">
+          {accessMode === 'authenticated-no-org' ? (
+            <div className="space-y-2">
               <button
+                type="button"
                 onClick={() => navigate('/org-settings')}
-                className="w-full bg-primary-white rounded-xl shadow-md p-4 text-left hover:shadow-lg transition"
+                className="w-full bg-white dark:bg-neutral-900 rounded-2xl border border-stone-100 dark:border-neutral-850 p-4 text-left hover:border-[#038F8D] dark:hover:border-[#038F8D] transition shadow-xs group"
               >
-                <h4 className="font-sans text-label1 text-primary-black font-semibold">
-                  ➕ Create Organization
-                </h4>
-                <p className="font-sans text-body3 text-neutral-600 mt-1">
-                  Set up your organization to manage your team
-                </p>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="font-bold text-xs text-neutral-900 dark:text-white uppercase tracking-wider">➕ Create Organization</h3>
+                    <p className="text-[10px] text-stone-500 dark:text-stone-400 mt-1">Set up a new organization</p>
+                  </div>
+                  <ChevronRight size={14} className="text-stone-400 dark:text-neutral-600 group-hover:text-[#038F8D] transition" />
+                </div>
               </button>
 
               <button
+                type="button"
                 onClick={() => navigate('/join-org')}
-                className="w-full bg-primary-white rounded-xl shadow-md p-4 text-left hover:shadow-lg transition"
+                className="w-full bg-white dark:bg-neutral-900 rounded-2xl border border-stone-100 dark:border-neutral-850 p-4 text-left hover:border-[#038F8D] dark:hover:border-[#038F8D] transition shadow-xs group"
               >
-                <h4 className="font-sans text-label1 text-primary-black font-semibold">
-                  🔗 Join Organization
-                </h4>
-                <p className="font-sans text-body3 text-neutral-600 mt-1">
-                  Join an existing organization with an invite code
-                </p>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="font-bold text-xs text-neutral-900 dark:text-white uppercase tracking-wider">🔗 Join Organization</h3>
+                    <p className="text-[10px] text-stone-500 dark:text-stone-400 mt-1">Join with an invite code</p>
+                  </div>
+                  <ChevronRight size={14} className="text-stone-400 dark:text-neutral-600 group-hover:text-[#038F8D] transition" />
+                </div>
               </button>
             </div>
           ) : (
-            // Show organization settings button when user is part of org
             <button
+              type="button"
               onClick={() => navigate('/org-settings')}
-              className="w-full bg-primary-white rounded-xl shadow-md p-4 text-left hover:shadow-lg transition"
+              className="w-full bg-white dark:bg-neutral-900 rounded-2xl border border-stone-100 dark:border-neutral-850 p-4 text-left hover:border-[#038F8D] dark:hover:border-[#038F8D] transition shadow-xs group"
             >
-              <h4 className="font-sans text-label1 text-primary-black font-semibold">
-                🏢 Organization Settings
-              </h4>
-              <p className="font-sans text-body3 text-neutral-600 mt-1">
-                Manage organization and team members
-              </p>
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="font-bold text-xs text-neutral-900 dark:text-white uppercase tracking-wider">🏢 Organization Settings</h3>
+                  <p className="text-[10px] text-stone-500 dark:text-stone-400 mt-1">Manage organization & team</p>
+                </div>
+                <ChevronRight size={14} className="text-stone-400 dark:text-neutral-600 group-hover:text-[#038F8D] transition" />
+              </div>
             </button>
           )}
         </div>
+        )}
 
-        {/* App Section */}
-        <div className="mb-6">
-          <h3 className="font-sans text-h5 text-primary-black font-semibold mb-4">
-            App
-          </h3>
+        {/* App Info */}
+        <div className="space-y-3">
+          <h2 className="font-extrabold text-xs flex items-center gap-1.5 uppercase tracking-wide text-stone-500 dark:text-neutral-400">
+            <Zap size={14} /> App Information
+          </h2>
 
-          <div className="bg-primary-white rounded-xl shadow-md p-4 space-y-4">
-            <div className="flex items-center justify-between pb-4 border-b border-neutral-200">
-              <span className="font-sans text-body2 text-neutral-600">App Version</span>
-              <span className="font-sans text-label1 text-primary-black font-semibold">
-                1.0.0
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between pb-4 border-b border-neutral-200">
-              <span className="font-sans text-body2 text-neutral-600">Last Updated</span>
-              <span className="font-sans text-label1 text-primary-black font-semibold">
-                Today
-              </span>
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-stone-100 dark:border-neutral-850 p-4 space-y-3 shadow-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-neutral-800">
+              <span className="text-[10px] text-stone-600 dark:text-stone-400 font-semibold">App Version</span>
+              <span className="text-[10px] font-bold text-[#038F8D] dark:text-[#49D7D1]">1.0.0</span>
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="font-sans text-body2 text-neutral-600">Storage Used</span>
-              <span className="font-sans text-label1 text-primary-black font-semibold">
-                12.5 MB
-              </span>
+              <span className="text-[10px] text-stone-600 dark:text-stone-400 font-semibold">Storage Used</span>
+              <span className="text-[10px] font-bold text-neutral-900 dark:text-white">12.5 MB</span>
             </div>
           </div>
         </div>
 
-        {/* Help & Support */}
-        <div className="mb-6">
-          <h3 className="font-sans text-h5 text-primary-black font-semibold mb-4">
-            Help & Support
-          </h3>
-
-          <div className="space-y-3">
-            <button className="w-full bg-primary-white rounded-xl shadow-md p-4 text-left hover:shadow-lg transition">
-              <h4 className="font-sans text-label1 text-primary-black font-semibold">
-                ❓ FAQ
-              </h4>
-              <p className="font-sans text-body3 text-neutral-600 mt-1">
-                Frequently asked questions
-              </p>
-            </button>
-
-            <button className="w-full bg-primary-white rounded-xl shadow-md p-4 text-left hover:shadow-lg transition">
-              <h4 className="font-sans text-label1 text-primary-black font-semibold">
-                📞 Contact Support
-              </h4>
-              <p className="font-sans text-body3 text-neutral-600 mt-1">
-                Get help from our team
-              </p>
-            </button>
-
-            <button className="w-full bg-primary-white rounded-xl shadow-md p-4 text-left hover:shadow-lg transition">
-              <h4 className="font-sans text-label1 text-primary-black font-semibold">
-                📋 Privacy Policy
-              </h4>
-              <p className="font-sans text-body3 text-neutral-600 mt-1">
-                Read our privacy policy
-              </p>
-            </button>
-          </div>
-        </div>
-
-        {/* Logout Button */}
+        {/* Logout Button - Authenticated Only */}
+        {accessMode !== 'guest' && (
         <button
           onClick={handleLogout}
-          className="w-full bg-error hover:bg-opacity-90 text-primary-white font-sans font-semibold py-4 rounded-lg transition"
+          className="w-full bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white font-bold text-xs py-3.5 rounded-2xl transition shadow-sm active:scale-95 flex items-center justify-center gap-2 uppercase tracking-wider"
         >
-          🚪 Logout
+          <LogOut size={14} />
+          <span>End Session</span>
         </button>
+        )}
       </main>
     </div>
   );
