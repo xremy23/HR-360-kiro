@@ -6,6 +6,7 @@ import { setLoading as setCheckInLoading, setError as setCheckInError, setItems 
 import { setLoading as setAlertLoading, setError as setAlertError, setItems as setAlertItems } from '../store/slices/alertSlice';
 import { setLoading as setKBLoading, setError as setKBError, setItems as setKBItems } from '../store/slices/kbSlice';
 import { getDeviceType } from '../utils/deviceDetection';
+import apiService from '../services/apiService';
 import MobileLayout from '../components/MobileLayout';
 import MobileHome from './MobileHome';
 import MobileAlerts from './MobileAlerts';
@@ -81,6 +82,12 @@ const EmployeeApp: React.FC = () => {
         try {
           const alertsResponse = await apiService.getAlerts();
           if (isComponentMounted) {
+            if (alertsResponse.success) {
+              dispatch(setAlertItems(alertsResponse.data || []));
+            } else {
+              dispatch(setAlertError('Failed to load alerts'));
+              dispatch(setAlertItems([]));
+            }
             if (alertsResponse.success && alertsResponse.data) {
               dispatch(setAlertItems(alertsResponse.data));
             } else {
@@ -91,6 +98,10 @@ const EmployeeApp: React.FC = () => {
         } catch (error) {
           if (isComponentMounted) {
             dispatch(setAlertError('Failed to load alerts'));
+            dispatch(setAlertItems([]));
+          }
+        } finally {
+          if (isComponentMounted) dispatch(setAlertLoading(false));
             dispatch(setAlertLoading(false));
           }
         }
