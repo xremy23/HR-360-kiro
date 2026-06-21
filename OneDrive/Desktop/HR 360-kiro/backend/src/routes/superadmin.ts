@@ -15,16 +15,14 @@ router.get('/organizations', authMiddleware, superAdminMiddleware, async (req: A
   try {
     const { organizations, total } = await organizationService.getAllOrganizations({ pageSize: 1000 });
     
-    // Enrich with member count
-    const enrichedOrgs = await Promise.all(
-      organizations.map(async (org: any) => {
-        const { users: members } = await userService.getOrganizationUsers(org.id, { page: 1, pageSize: 1000 });
-        return {
-          ...org,
-          memberCount: members.length,
-        };
-      })
-    );
+    // Enrich with member count using a single query
+    const orgIds = organizations.map(org => org.id);
+    const memberCounts = await organizationService.getOrganizationUserCounts(orgIds);
+
+    const enrichedOrgs = organizations.map((org: any) => ({
+      ...org,
+      memberCount: memberCounts[org.id] || 0,
+    }));
 
     return sendSuccess(res, enrichedOrgs, 'All organizations retrieved', 200);
   } catch (error) {
