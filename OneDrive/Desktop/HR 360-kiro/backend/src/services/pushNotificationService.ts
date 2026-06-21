@@ -133,18 +133,24 @@ class PushNotificationService {
 
       const notifications: PushNotification[] = [];
 
-      for (const userId of filteredUserIds) {
-        try {
-          const notification = await this.sendPushNotification({
+      const results = await Promise.allSettled(
+        filteredUserIds.map(userId =>
+          this.sendPushNotification({
             userId,
             title: payload.title,
             body: payload.body,
             data: payload.data,
             type: payload.type,
-          });
-          notifications.push(notification);
-        } catch (error) {
-          logger.error(`Error sending notification to user ${userId}`, { error });
+          })
+        )
+      );
+
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        if (result.status === 'fulfilled') {
+          notifications.push(result.value);
+        } else {
+          logger.error(`Error sending notification to user ${filteredUserIds[i]}`, { error: result.reason });
         }
       }
 
