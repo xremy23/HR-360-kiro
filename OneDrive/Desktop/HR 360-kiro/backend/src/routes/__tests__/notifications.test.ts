@@ -7,7 +7,7 @@ import request from 'supertest';
 import express from 'express';
 import { jest } from '@jest/globals';
 import notificationsRouter from '../notifications';
-import { authMiddleware } from '../../middleware/auth';
+import { authMiddleware, adminMiddleware } from '../../middleware/auth';
 import pushNotificationService from '../../services/pushNotificationService';
 
 // Mock dependencies
@@ -16,6 +16,7 @@ jest.mock('../../middleware/auth');
 
 const mockedPushNotificationService = pushNotificationService as jest.Mocked<typeof pushNotificationService>;
 const mockedAuthMiddleware = authMiddleware as jest.MockedFunction<typeof authMiddleware>;
+const mockedAdminMiddleware = adminMiddleware as jest.MockedFunction<typeof adminMiddleware>;
 
 // Test app setup
 const app = express();
@@ -35,6 +36,11 @@ describe('Notifications Routes', () => {
         orgId: 'org-123',
         teamId: 'team-123',
       };
+      next();
+    }) as any);
+
+    // Mock admin middleware by default it passes
+    mockedAdminMiddleware.mockImplementation(((req: any, res: any, next: any) => {
       next();
     }) as any);
   });

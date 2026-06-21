@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { AuthRequest, authMiddleware, adminMiddleware } from '../middleware/auth';
 import { sendSuccess, sendError } from '../utils/response';
 import pushNotificationService from '../services/pushNotificationService';
 
@@ -199,7 +199,7 @@ router.put('/read-multiple', authMiddleware, async (req: AuthRequest, res: Respo
  * POST /notifications/send-test
  * Send test notification (admin only)
  */
-router.post('/send-test', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/send-test', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return sendError(res, 'UNAUTHORIZED', 'User not found', 401);

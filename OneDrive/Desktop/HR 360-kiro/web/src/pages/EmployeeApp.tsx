@@ -25,13 +25,14 @@ import BulkImportPage from './BulkImportPage';
 import Chatbot from '../components/Chatbot';
 import { chatbotService } from '../services/chatbotService';
 import { websocketService } from '../services/websocketService';
+import { apiService } from '../services/apiService';
 
 const EmployeeApp: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const { token } = useSelector((state: RootState) => state.auth);
   const [isInitialized, setIsInitialized] = React.useState(false);
   const [showMenu, setShowMenu] = React.useState(false);
-  const [deviceType, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
+  const [, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
 
   // Initialize WebSocket and fetch data on mount
   useEffect(() => {
@@ -64,16 +65,57 @@ const EmployeeApp: React.FC = () => {
         });
 
         // Fetch check-ins
-        if (isComponentMounted) dispatch(setCheckInLoading(false));
-        dispatch(setCheckInItems([]));
+        if (isComponentMounted) dispatch(setCheckInLoading(true));
+        const checkInsResponse = await apiService.getCheckIns();
+        if (isComponentMounted) {
+          if (checkInsResponse.success && checkInsResponse.data) {
+            dispatch(setCheckInItems(checkInsResponse.data));
+          } else {
+            dispatch(setCheckInError('Failed to load check-ins'));
+          }
+          dispatch(setCheckInLoading(false));
+        }
 
         // Fetch alerts
-        if (isComponentMounted) dispatch(setAlertLoading(false));
-        dispatch(setAlertItems([]));
+        if (isComponentMounted) dispatch(setAlertLoading(true));
+        try {
+          const alertsResponse = await apiService.getAlerts();
+          if (isComponentMounted) {
+            if (alertsResponse.success && alertsResponse.data) {
+              dispatch(setAlertItems(alertsResponse.data));
+            } else {
+              dispatch(setAlertError('Failed to load alerts'));
+            }
+            dispatch(setAlertLoading(false));
+          }
+        } catch (error) {
+          if (isComponentMounted) {
+            dispatch(setAlertError('Failed to load alerts'));
+            dispatch(setAlertLoading(false));
+          }
+        }
 
-        // Use mock KB data (no need to fetch if not available)
-        if (isComponentMounted) dispatch(setKBLoading(false));
-        dispatch(setKBItems([]));
+        // Fetch KB guides
+        if (isComponentMounted) {
+          dispatch(setKBLoading(true));
+          try {
+            const kbResponse = await apiService.getGuides();
+            if (isComponentMounted) {
+              if (kbResponse.success) {
+                dispatch(setKBItems(kbResponse.data));
+                dispatch(setKBLoading(false));
+              } else {
+                dispatch(setKBError('Failed to load KB guides'));
+                dispatch(setKBLoading(false));
+              }
+            }
+          } catch (kbErr) {
+            if (isComponentMounted) {
+              dispatch(setKBError('Failed to load KB guides'));
+              dispatch(setKBLoading(false));
+            }
+          }
+        }
       } catch (error) {
         console.error('Error in EmployeeApp initialization:', error);
         if (isComponentMounted) {
