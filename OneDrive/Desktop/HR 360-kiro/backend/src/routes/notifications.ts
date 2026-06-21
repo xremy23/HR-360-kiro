@@ -205,7 +205,10 @@ router.post('/send-test', authMiddleware, async (req: AuthRequest, res: Response
       return sendError(res, 'UNAUTHORIZED', 'User not found', 401);
     }
 
-    // TODO: Add admin role check
+
+    if (req.user.role !== 'admin') {
+      return sendError(res, 'FORBIDDEN', 'Only admins can send test notifications', 403);
+    }
     const { title, body, data, type } = req.body;
 
     if (!title || !body) {
