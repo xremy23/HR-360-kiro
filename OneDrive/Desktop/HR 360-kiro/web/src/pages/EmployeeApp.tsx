@@ -25,6 +25,7 @@ import BulkImportPage from './BulkImportPage';
 import Chatbot from '../components/Chatbot';
 import { chatbotService } from '../services/chatbotService';
 import { websocketService } from '../services/websocketService';
+import apiService from '../services/apiService';
 
 const EmployeeApp: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -64,8 +65,25 @@ const EmployeeApp: React.FC = () => {
         });
 
         // Fetch check-ins
-        if (isComponentMounted) dispatch(setCheckInLoading(false));
-        dispatch(setCheckInItems([]));
+        if (isComponentMounted) dispatch(setCheckInLoading(true));
+        try {
+          const checkInsResponse = await apiService.getCheckIns();
+          if (isComponentMounted) {
+            if (checkInsResponse.success && checkInsResponse.data) {
+              dispatch(setCheckInItems(checkInsResponse.data));
+            } else {
+              dispatch(setCheckInError('Failed to load check-ins'));
+              dispatch(setCheckInItems([]));
+            }
+          }
+        } catch (error) {
+          if (isComponentMounted) {
+            dispatch(setCheckInError('Failed to load check-ins'));
+            dispatch(setCheckInItems([]));
+          }
+        } finally {
+          if (isComponentMounted) dispatch(setCheckInLoading(false));
+        }
 
         // Fetch alerts
         if (isComponentMounted) dispatch(setAlertLoading(false));
