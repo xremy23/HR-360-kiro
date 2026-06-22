@@ -623,6 +623,70 @@ describe('Notifications Routes', () => {
       createdAt: new Date(),
     };
 
+    beforeEach(() => {
+      // Override auth middleware to simulate admin user for these tests
+      const { authMiddleware } = require('../../middleware/auth');
+      const mockedAuthMiddleware = authMiddleware as jest.MockedFunction<typeof authMiddleware>;
+      mockedAuthMiddleware.mockImplementation(((req: any, res: any, next: any) => {
+        req.user = {
+          id: 'user-123',
+          email: 'test@example.com',
+          role: 'admin',
+          orgId: 'org-123',
+          teamId: 'team-123',
+        };
+        next();
+      }) as any);
+    });
+
+    afterEach(() => {
+      // Revert back
+      const { authMiddleware } = require('../../middleware/auth');
+      const mockedAuthMiddleware = authMiddleware as jest.MockedFunction<typeof authMiddleware>;
+      mockedAuthMiddleware.mockImplementation(((req: any, res: any, next: any) => {
+        req.user = {
+          id: 'user-123',
+          email: 'test@example.com',
+          role: 'employee',
+          orgId: 'org-123',
+          teamId: 'team-123',
+        };
+        next();
+      }) as any);
+    });
+
+    it('should reject non-admin users', async () => {
+      // Revert to employee for this specific test
+      const { authMiddleware } = require('../../middleware/auth');
+      const mockedAuthMiddleware = authMiddleware as jest.MockedFunction<typeof authMiddleware>;
+      mockedAuthMiddleware.mockImplementation(((req: any, res: any, next: any) => {
+        req.user = {
+          id: 'user-123',
+          email: 'test@example.com',
+          role: 'employee',
+          orgId: 'org-123',
+          teamId: 'team-123',
+        };
+        next();
+      }) as any);
+
+      const testData = {
+        title: 'Test Notification',
+        body: 'This is a test notification',
+        data: { test: true },
+        type: 'custom',
+      };
+
+      const response = await request(app)
+        .post('/notifications/send-test')
+        .set('Authorization', 'Bearer valid-token')
+        .send(testData);
+
+      expect(response.status).toBe(403);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error.code).toBe('FORBIDDEN');
+    });
+
     it('should send test notification successfully', async () => {
       mockedPushNotificationService.sendPushNotification.mockResolvedValue(mockNotification);
 
