@@ -26,6 +26,7 @@ import BulkImportPage from './BulkImportPage';
 import Chatbot from '../components/Chatbot';
 import { chatbotService } from '../services/chatbotService';
 import { websocketService } from '../services/websocketService';
+import apiService from '../services/apiService';
 import { apiService } from '../services/apiService';
 
 const EmployeeApp: React.FC = () => {
@@ -107,6 +108,23 @@ const EmployeeApp: React.FC = () => {
         }
 
         // Fetch KB guides
+        if (isComponentMounted) dispatch(setKBLoading(true));
+        try {
+          const kbResponse = await apiService.getGuides();
+          if (isComponentMounted) {
+            if (kbResponse.success && kbResponse.data) {
+              dispatch(setKBItems(kbResponse.data));
+            } else {
+              dispatch(setKBError('Failed to load KB guides'));
+              dispatch(setKBItems([]));
+            }
+            dispatch(setKBLoading(false));
+          }
+        } catch (error) {
+          if (isComponentMounted) {
+            dispatch(setKBError('Failed to load KB guides'));
+            dispatch(setKBItems([]));
+            dispatch(setKBLoading(false));
         if (isComponentMounted) {
           dispatch(setKBLoading(true));
           try {
