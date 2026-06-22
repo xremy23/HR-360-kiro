@@ -25,13 +25,14 @@ import BulkImportPage from './BulkImportPage';
 import Chatbot from '../components/Chatbot';
 import { chatbotService } from '../services/chatbotService';
 import { websocketService } from '../services/websocketService';
+import apiService from '../services/apiService';
 
 const EmployeeApp: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const { token } = useSelector((state: RootState) => state.auth);
   const [isInitialized, setIsInitialized] = React.useState(false);
   const [showMenu, setShowMenu] = React.useState(false);
-  const [deviceType, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
+  const [, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
 
   // Initialize WebSocket and fetch data on mount
   useEffect(() => {
@@ -71,9 +72,26 @@ const EmployeeApp: React.FC = () => {
         if (isComponentMounted) dispatch(setAlertLoading(false));
         dispatch(setAlertItems([]));
 
-        // Use mock KB data (no need to fetch if not available)
-        if (isComponentMounted) dispatch(setKBLoading(false));
-        dispatch(setKBItems([]));
+        // Fetch KB guides
+        if (isComponentMounted) dispatch(setKBLoading(true));
+        try {
+          const kbResponse = await apiService.getGuides();
+          if (isComponentMounted) {
+            if (kbResponse.success && kbResponse.data) {
+              dispatch(setKBItems(kbResponse.data));
+            } else {
+              dispatch(setKBError('Failed to load KB guides'));
+              dispatch(setKBItems([]));
+            }
+            dispatch(setKBLoading(false));
+          }
+        } catch (error) {
+          if (isComponentMounted) {
+            dispatch(setKBError('Failed to load KB guides'));
+            dispatch(setKBItems([]));
+            dispatch(setKBLoading(false));
+          }
+        }
       } catch (error) {
         console.error('Error in EmployeeApp initialization:', error);
         if (isComponentMounted) {
