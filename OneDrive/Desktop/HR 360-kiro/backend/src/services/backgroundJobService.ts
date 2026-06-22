@@ -1,5 +1,6 @@
 import { logger } from './monitoringService';
 import { communityReportService } from './communityReportService';
+import { pushNotificationService } from './pushNotificationService';
 
 /**
  * Background Job Service
@@ -20,8 +21,12 @@ class BackgroundJobService {
       // Schedule auto-purge job for community reports (runs every hour)
       this.scheduleJob('purge-expired-reports', this.purgeExpiredReports.bind(this), 60 * 60 * 1000); // 1 hour
 
+      // Schedule job to process scheduled push notifications (runs every minute)
+      this.scheduleJob('process-scheduled-notifications', pushNotificationService.processScheduledNotifications.bind(pushNotificationService), 60 * 1000); // 1 minute
+
       // Also run immediately on startup
       await this.purgeExpiredReports();
+      await pushNotificationService.processScheduledNotifications();
 
       logger.info('Background job service initialized successfully');
     } catch (error) {
