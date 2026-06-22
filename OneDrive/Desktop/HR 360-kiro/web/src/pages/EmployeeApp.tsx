@@ -6,6 +6,7 @@ import { setLoading as setCheckInLoading, setError as setCheckInError, setItems 
 import { setLoading as setAlertLoading, setError as setAlertError, setItems as setAlertItems } from '../store/slices/alertSlice';
 import { setLoading as setKBLoading, setError as setKBError, setItems as setKBItems } from '../store/slices/kbSlice';
 import { getDeviceType } from '../utils/deviceDetection';
+import apiService from '../services/apiService';
 import MobileLayout from '../components/MobileLayout';
 import MobileHome from './MobileHome';
 import MobileAlerts from './MobileAlerts';
@@ -26,6 +27,7 @@ import Chatbot from '../components/Chatbot';
 import { chatbotService } from '../services/chatbotService';
 import { websocketService } from '../services/websocketService';
 import apiService from '../services/apiService';
+import { apiService } from '../services/apiService';
 
 const EmployeeApp: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -65,12 +67,45 @@ const EmployeeApp: React.FC = () => {
         });
 
         // Fetch check-ins
-        if (isComponentMounted) dispatch(setCheckInLoading(false));
-        dispatch(setCheckInItems([]));
+        if (isComponentMounted) dispatch(setCheckInLoading(true));
+        const checkInsResponse = await apiService.getCheckIns();
+        if (isComponentMounted) {
+          if (checkInsResponse.success && checkInsResponse.data) {
+            dispatch(setCheckInItems(checkInsResponse.data));
+          } else {
+            dispatch(setCheckInError('Failed to load check-ins'));
+          }
+          dispatch(setCheckInLoading(false));
+        }
 
         // Fetch alerts
-        if (isComponentMounted) dispatch(setAlertLoading(false));
-        dispatch(setAlertItems([]));
+        if (isComponentMounted) dispatch(setAlertLoading(true));
+        try {
+          const alertsResponse = await apiService.getAlerts();
+          if (isComponentMounted) {
+            if (alertsResponse.success) {
+              dispatch(setAlertItems(alertsResponse.data || []));
+            } else {
+              dispatch(setAlertError('Failed to load alerts'));
+              dispatch(setAlertItems([]));
+            }
+            if (alertsResponse.success && alertsResponse.data) {
+              dispatch(setAlertItems(alertsResponse.data));
+            } else {
+              dispatch(setAlertError('Failed to load alerts'));
+            }
+            dispatch(setAlertLoading(false));
+          }
+        } catch (error) {
+          if (isComponentMounted) {
+            dispatch(setAlertError('Failed to load alerts'));
+            dispatch(setAlertItems([]));
+          }
+        } finally {
+          if (isComponentMounted) dispatch(setAlertLoading(false));
+            dispatch(setAlertLoading(false));
+          }
+        }
 
         // Fetch KB guides
         if (isComponentMounted) dispatch(setKBLoading(true));
@@ -90,6 +125,24 @@ const EmployeeApp: React.FC = () => {
             dispatch(setKBError('Failed to load KB guides'));
             dispatch(setKBItems([]));
             dispatch(setKBLoading(false));
+        if (isComponentMounted) {
+          dispatch(setKBLoading(true));
+          try {
+            const kbResponse = await apiService.getGuides();
+            if (isComponentMounted) {
+              if (kbResponse.success) {
+                dispatch(setKBItems(kbResponse.data));
+                dispatch(setKBLoading(false));
+              } else {
+                dispatch(setKBError('Failed to load KB guides'));
+                dispatch(setKBLoading(false));
+              }
+            }
+          } catch (kbErr) {
+            if (isComponentMounted) {
+              dispatch(setKBError('Failed to load KB guides'));
+              dispatch(setKBLoading(false));
+            }
           }
         }
       } catch (error) {
