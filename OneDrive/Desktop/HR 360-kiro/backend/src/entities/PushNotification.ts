@@ -166,6 +166,24 @@ export class PushNotificationEntity {
   }
 
   /**
+   * Find due scheduled notifications
+   */
+  static async findDueScheduledNotifications(limit: number = 100): Promise<PushNotification[]> {
+    const result = await query(
+      `SELECT id, user_id as "userId", title, body, data, type, status,
+              delivered_at as "deliveredAt", read_at as "readAt", created_at as "createdAt"
+       FROM push_notifications
+       WHERE status = 'pending'
+         AND data->>'scheduledTime' IS NOT NULL
+         AND (data->>'scheduledTime')::timestamptz <= CURRENT_TIMESTAMP
+       ORDER BY created_at ASC
+       LIMIT $1`,
+      [limit]
+    );
+    return result.rows;
+  }
+
+  /**
    * Delete notification
    */
   static async delete(id: string): Promise<void> {
