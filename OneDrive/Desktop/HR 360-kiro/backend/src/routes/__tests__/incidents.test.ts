@@ -19,7 +19,12 @@ import { organizationService } from '../../services/organizationService';
 // Mock dependencies
 jest.mock('../../websocket/server');
 jest.mock('../../services/pushNotificationService');
-jest.mock('../../middleware/authMiddleware');
+jest.mock('../../middleware/authMiddleware', () => ({
+  authMiddleware: {
+    verifyToken: jest.fn(),
+    requireRole: jest.fn(() => (req: any, res: any, next: any) => next())
+  }
+}));
 jest.mock('../../services/sessionService');
 jest.mock('../../services/incidentService');
 jest.mock('../../services/checkInService');
@@ -72,7 +77,7 @@ describe.skip('Incidents Routes', () => {
       next();
     }) as any;
 
-    mockedAuthMiddleware.requireRole = jest.fn((...roles: string[]) => {
+    mockedAuthMiddleware.requireRole.mockImplementation((...roles: string[]) => {
       return (req: any, res: any, next: any) => {
         if (roles.includes(req.user?.role || '')) {
           next();
@@ -86,7 +91,7 @@ describe.skip('Incidents Routes', () => {
           });
         }
       };
-    }) as any;
+    });
 
     // Mock sessionService for auth checks
     mockedSessionService.isTokenBlacklisted.mockResolvedValue(false);
@@ -109,8 +114,11 @@ describe.skip('Incidents Routes', () => {
       {
         id: 'incident-1',
         organizationId: 'org-123',
+        title: 'Fire Incident',
+        description: 'Fire in building A',
+        status: 'open' as const,
         type: 'fire',
-        severity: 'emergency' as const,
+        severity: 'critical' as const,
         startTime: new Date(),
         isDrill: false,
         createdBy: 'user-123',
@@ -120,8 +128,11 @@ describe.skip('Incidents Routes', () => {
       {
         id: 'incident-2',
         organizationId: 'org-123',
+        title: 'Earthquake drill',
+        description: 'Monthly drill',
+        status: 'closed' as const,
         type: 'earthquake',
-        severity: 'watch' as const,
+        severity: 'low' as const,
         startTime: new Date(),
         isDrill: true,
         createdBy: 'user-456',
@@ -131,7 +142,7 @@ describe.skip('Incidents Routes', () => {
     ];
 
     it('should get incidents successfully', async () => {
-      mockedIncidentService.getIncidentsByOrganization.mockResolvedValue({
+      mockedIncidentService.getIncidents.mockResolvedValue({
         incidents: mockIncidents,
         total: 2,
       });
@@ -148,7 +159,7 @@ describe.skip('Incidents Routes', () => {
 
     it('should filter drill incidents', async () => {
       const drillIncidents = [mockIncidents[1]];
-      mockedIncidentService.getIncidentsByOrganization.mockResolvedValue({
+      mockedIncidentService.getIncidents.mockResolvedValue({
         incidents: drillIncidents,
         total: 1,
       });
@@ -166,8 +177,8 @@ describe.skip('Incidents Routes', () => {
       const manyIncidents = Array.from({ length: 75 }, (_, i) => ({
         ...mockIncidents[0],
         id: `incident-${i}`,
-      }));
-      mockedIncidentService.getIncidentsByOrganization.mockResolvedValue({
+      })) as any[];
+      mockedIncidentService.getIncidents.mockResolvedValue({
         incidents: manyIncidents.slice(0, 25),
         total: 75,
       });
@@ -184,7 +195,7 @@ describe.skip('Incidents Routes', () => {
     });
 
     it('should enforce maximum limit', async () => {
-      mockedIncidentService.getIncidentsByOrganization.mockResolvedValue({
+      mockedIncidentService.getIncidents.mockResolvedValue({
         incidents: mockIncidents,
         total: 2,
       });
@@ -198,7 +209,7 @@ describe.skip('Incidents Routes', () => {
     });
 
     it('should handle database errors', async () => {
-      mockedIncidentService.getIncidentsByOrganization.mockRejectedValue(new Error('Database error'));
+      mockedIncidentService.getIncidents.mockRejectedValue(new Error('Database error'));
 
       const response = await request(app)
         .get('/incidents?organizationId=org-123')
@@ -214,8 +225,11 @@ describe.skip('Incidents Routes', () => {
     const mockIncident = {
       id: 'incident-123',
       organizationId: 'org-123',
+      title: 'Fire Incident',
+      description: 'Fire in building A',
+      status: 'open' as const,
       type: 'fire',
-      severity: 'emergency' as const,
+      severity: 'critical' as const,
       startTime: new Date(),
       isDrill: false,
       createdBy: 'user-123',
@@ -226,6 +240,7 @@ describe.skip('Incidents Routes', () => {
     const mockOrganization = {
       id: 'org-123',
       name: 'Test Organization',
+      isActive: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -238,6 +253,7 @@ describe.skip('Incidents Routes', () => {
         email: 'john@example.com',
         role: 'employee' as const,
         organizationId: 'org-123',
+        isActive: true,
         biometricEnabled: false,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -249,16 +265,17 @@ describe.skip('Incidents Routes', () => {
         email: 'jane@example.com',
         role: 'employee' as const,
         organizationId: 'org-123',
+        isActive: true,
         biometricEnabled: false,
         createdAt: new Date(),
         updatedAt: new Date(),
       },
-    ];
+    ] as any;
 
     beforeEach(() => {
       mockedIncidentService.createIncident.mockResolvedValue(mockIncident);
       mockedOrganizationService.getOrganizationById.mockResolvedValue(mockOrganization);
-      mockedUserService.getUsersByOrganization.mockResolvedValue({
+      mockedUserService.getOrganizationUsers.mockResolvedValue({
         users: mockUsers,
         total: mockUsers.length,
       });
@@ -283,7 +300,7 @@ describe.skip('Incidents Routes', () => {
       expect(response.body.data.id).toBe(mockIncident.id);
 
       expect(mockedIncidentService.createIncident).toHaveBeenCalledWith(expect.objectContaining({
-        organizationId: 'org-123',
+        orgId: 'org-123',
         type: 'fire',
         severity: 'emergency',
         isDrill: false,
@@ -295,15 +312,18 @@ describe.skip('Incidents Routes', () => {
       const drillIncident = {
         id: 'incident-123',
         organizationId: 'org-123',
+        title: 'Earthquake Drill',
+        description: 'Earthquake drill',
+        status: 'open' as const,
         type: 'earthquake',
-        severity: 'watch' as const,
+        severity: 'low' as const,
         startTime: new Date(),
         isDrill: true,
         createdBy: 'admin-123',
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      mockedIncidentService.createIncident.mockResolvedValue(drillIncident);
+      mockedIncidentService.createIncident.mockResolvedValue(drillIncident as any);
 
       const drillData = {
         type: 'earthquake',
@@ -455,8 +475,11 @@ describe.skip('Incidents Routes', () => {
     const mockIncident = {
       id: 'incident-123',
       organizationId: 'org-123',
+      title: 'Fire Incident',
+      description: 'Fire in building A',
+      status: 'open' as const,
       type: 'fire',
-      severity: 'emergency' as const,
+      severity: 'critical' as const,
       startTime: new Date(),
       isDrill: false,
       createdBy: 'user-123',
@@ -465,7 +488,7 @@ describe.skip('Incidents Routes', () => {
     };
 
     it('should get incident details successfully', async () => {
-      mockedIncidentService.getIncidentById.mockResolvedValue(mockIncident);
+      mockedIncidentService.getIncidentById.mockResolvedValue(mockIncident as any);
 
       const response = await request(app)
         .get('/incidents/incident-123')
@@ -509,8 +532,11 @@ describe.skip('Incidents Routes', () => {
     const mockIncident = {
       id: 'incident-123',
       organizationId: 'org-123',
+      title: 'Fire Incident',
+      description: 'Fire in building A',
+      status: 'open' as const,
       type: 'fire',
-      severity: 'emergency' as const,
+      severity: 'critical' as const,
       startTime: new Date(),
       isDrill: false,
       createdBy: 'user-123',
@@ -562,8 +588,11 @@ describe.skip('Incidents Routes', () => {
     ];
 
     it('should get incident summary successfully', async () => {
-      mockedIncidentService.getIncidentById.mockResolvedValue(mockIncident);
-      mockedCheckInService.getCheckInsByIncident.mockResolvedValue(mockCheckIns);
+      mockedIncidentService.getIncidentById.mockResolvedValue(mockIncident as any);
+      mockedCheckInService.getCheckInsByIncident.mockResolvedValue({
+        checkIns: mockCheckIns as any[],
+        total: mockCheckIns.length
+      });
 
       const response = await request(app)
         .get('/incidents/incident-123/summary')
