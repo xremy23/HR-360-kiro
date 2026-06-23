@@ -16,6 +16,15 @@ const MobileAlerts: React.FC = () => {
     const fetchAlerts = async () => {
       dispatch(setLoading(true));
       try {
+        const response = await apiService.getAlerts({ pageSize: 100 });
+        if (response.success && response.data) {
+          // Filter to only active alerts
+          const activeAlerts = response.data.filter((alert: any) =>
+            alert.isActive !== false && (!alert.resolved_at || new Date(alert.resolved_at) > new Date())
+          );
+          dispatch(setItems(activeAlerts));
+        } else {
+          dispatch(setError('Failed to load alerts'));
         const response = await apiService.getAlerts();
 
         if (response.success && response.data) {
