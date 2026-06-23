@@ -5,13 +5,31 @@
 import { pushNotificationService } from '../pushNotificationService';
 import PushNotificationEntity from '../../entities/PushNotification';
 import DeviceTokenEntity from '../../entities/DeviceToken';
+import { userService } from '../userService';
+import { User } from '../../types';
+import { notificationQueueService } from '../notificationQueueService';
 
 // Mock Expo SDK
 jest.mock('expo-server-sdk');
 
+jest.mock('../notificationQueueService', () => ({
+  notificationQueueService: {
+    scheduleNotification: jest.fn(),
+    shutdown: jest.fn()
+  }
+}));
+
 // Mock entities
 jest.mock('../../entities/PushNotification');
 jest.mock('../../entities/DeviceToken');
+jest.mock('../userService');
+
+// Prevent actual DB queries in filtering function
+jest.mock('../guestNotificationService', () => ({
+  guestNotificationService: {
+    filterUsersForNotification: jest.fn().mockImplementation(async (userIds) => userIds)
+  }
+}));
 
 describe('PushNotificationService', () => {
   beforeEach(() => {
@@ -104,6 +122,15 @@ describe('PushNotificationService', () => {
         type: 'alert' as const,
       };
 
+      // Mock user service to return regular users (not guests)
+      (userService.getUserById as jest.Mock).mockImplementation((id: string) => {
+        return Promise.resolve({
+          id,
+          role: 'employee',
+          organizationId: 'org-1'
+        });
+      });
+
       // Mock device tokens for each user
       (DeviceTokenEntity.findByUserId as jest.Mock).mockResolvedValue([
         { id: 'token-1', token: 'ExponentPushToken[test-token]', platform: 'ios' },
@@ -127,6 +154,46 @@ describe('PushNotificationService', () => {
 
       expect(result).toHaveLength(3);
       expect(PushNotificationEntity.create).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe('processScheduledNotifications', () => {
+    it('should process pending scheduled notifications correctly', async () => {
+      const mockScheduledNotifications = [
+        {
+          id: '1',
+          userId: 'user-1',
+          title: 'Scheduled Alert',
+          body: 'This is scheduled',
+          data: {
+            scheduledTime: new Date(Date.now() - 1000).toISOString()
+          },
+          type: 'alert',
+          status: 'pending'
+        }
+      ];
+
+      (PushNotificationEntity.findDueScheduledNotifications as jest.Mock).mockResolvedValue(mockScheduledNotifications);
+      (DeviceTokenEntity.findByUserId as jest.Mock).mockResolvedValue([
+        { id: 'token-1', userId: 'user-1', token: 'ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]', platform: 'ios' }
+      ]);
+
+      // Mock the module's chunkMessages to prevent the actual chunk implementation from breaking without real mocks
+      jest.spyOn(pushNotificationService as any, 'chunkMessages').mockReturnValue([
+        [
+          { to: 'ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]', sound: 'default', title: 'Scheduled Alert', body: 'This is scheduled', data: { notificationId: '1', type: 'alert', scheduledTime: new Date(Date.now() - 1000).toISOString(), tokenId: 'token-1' }, badge: undefined }
+        ]
+      ]);
+
+      // The internal loop does error handling and waits. Let's make sure our mock doesn't fail Expo check
+      const expoMock = require('expo-server-sdk');
+      expoMock.Expo.isExpoPushToken = jest.fn().mockReturnValue(true);
+      expoMock.Expo.prototype.sendPushNotificationsAsync = jest.fn().mockResolvedValue([{ status: 'ok', id: 'ticket-1' }]);
+
+      await pushNotificationService.processScheduledNotifications();
+
+      expect(PushNotificationEntity.findDueScheduledNotifications).toHaveBeenCalled();
+      expect(PushNotificationEntity.markAsDelivered).toHaveBeenCalledWith('1');
     });
   });
 
@@ -264,6 +331,15 @@ describe('PushNotificationService', () => {
       const alertMessage = 'Unauthorized access attempt detected';
       const severity = 'high';
 
+      // Mock user service to return regular users (not guests)
+      (userService.getUserById as jest.Mock).mockImplementation((id: string) => {
+        return Promise.resolve({
+          id,
+          role: 'employee',
+          organizationId: 'org-1'
+        });
+      });
+
       (DeviceTokenEntity.findByUserId as jest.Mock).mockResolvedValue([
         { id: 'token-1', token: 'ExponentPushToken[test-token]', platform: 'ios' },
       ]);
@@ -294,6 +370,15 @@ describe('PushNotificationService', () => {
       const userIds = ['user-1', 'user-2', 'user-3'];
       const sosUserId = 'sos-user-123';
       const sosUserName = 'John Doe';
+
+      // Mock user service to return regular users (not guests)
+      (userService.getUserById as jest.Mock).mockImplementation((id: string) => {
+        return Promise.resolve({
+          id,
+          role: 'employee',
+          organizationId: 'org-1'
+        });
+      });
 
       (DeviceTokenEntity.findByUserId as jest.Mock).mockResolvedValue([
         { id: 'token-1', token: 'ExponentPushToken[test-token]', platform: 'ios' },

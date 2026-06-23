@@ -4,12 +4,20 @@
  */
 
 import { pushNotificationService } from '../../services/pushNotificationService';
+import { userService } from '../../services/userService';
 
 // Mock all database and external dependencies
 jest.mock('../../config/database');
 jest.mock('../../entities/PushNotification');
 jest.mock('../../entities/DeviceToken');
 jest.mock('../../websocket/server');
+jest.mock('../../services/userService');
+jest.mock('../../services/notificationQueueService', () => ({
+  notificationQueueService: {
+    scheduleNotification: jest.fn(),
+    shutdown: jest.fn()
+  }
+}));
 
 // Import mocked modules
 import PushNotificationEntity from '../../entities/PushNotification';
@@ -93,6 +101,15 @@ describe('Offline Sync + Push Notifications Integration', () => {
   describe('Bulk Notification Flow', () => {
     it('should send notifications to multiple users', async () => {
       const userIds = ['user-1', 'user-2', 'user-3'];
+
+      // Mock user service to return regular users
+      (userService.getUserById as jest.Mock).mockImplementation((id: string) => {
+        return Promise.resolve({
+          id,
+          role: 'employee',
+          organizationId: 'org-1'
+        });
+      });
 
       // Mock device tokens for each user
       (DeviceTokenEntity.findByUserId as jest.Mock).mockResolvedValue([

@@ -30,10 +30,13 @@ const MobileCheckIn: React.FC = () => {
     try {
       dispatch(setLoading(true));
       
+      // Map MobileCheckIn's status to the checkinSlice's CheckIn type status
+      const sliceStatus: 'injured' | 'safe' = status === 'need_help' ? 'injured' : 'safe';
+
       const checkIn = {
         id: `${Date.now()}`,
         userId: 'current-user',
-        status,
+        status: sliceStatus,
         notes: notes || undefined,
         timestamp: new Date().toISOString(),
         syncStatus: 'pending' as const,
@@ -41,9 +44,12 @@ const MobileCheckIn: React.FC = () => {
 
       // Call API to submit check-in
       try {
-        const response = await apiService.post('/checkins/create', checkIn);
+        const response = await apiService.submitCheckIn({
+          status: status === 'need_help' ? 'need_help' : 'safe',
+          notes: notes || undefined,
+        });
         if (response.success) {
-          dispatch(addCheckIn(response.data || checkIn));
+          dispatch(addCheckIn(response.data ? { ...response.data, status: sliceStatus } : { ...checkIn, syncStatus: 'synced' }));
         } else {
           throw new Error(response.error?.message || 'Failed to submit check-in');
         }

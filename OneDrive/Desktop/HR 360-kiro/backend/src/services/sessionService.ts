@@ -324,12 +324,25 @@ class SessionService {
       const keys = await this.client.keys('session:*');
       const now = Date.now();
       
-      for (const key of keys) {
-        const data = await this.client.get(key);
-        if (data) {
-          const sessionData: SessionData = JSON.parse(data);
-          if (now - sessionData.lastActivity > 24 * 60 * 60 * 1000) { // 24 hours
-            await this.client.del(key);
+      if (keys.length > 0) {
+        const BATCH_SIZE = 100;
+        for (let i = 0; i < keys.length; i += BATCH_SIZE) {
+          const batchKeys = keys.slice(i, i + BATCH_SIZE);
+          const dataBatch = await this.client.mGet(batchKeys);
+
+          const keysToDelete: string[] = [];
+          for (let j = 0; j < batchKeys.length; j++) {
+            const data = dataBatch[j];
+            if (data) {
+              const sessionData: SessionData = JSON.parse(data);
+              if (now - sessionData.lastActivity > 24 * 60 * 60 * 1000) { // 24 hours
+                keysToDelete.push(batchKeys[j]);
+              }
+            }
+          }
+
+          if (keysToDelete.length > 0) {
+            await this.client.del(keysToDelete);
           }
         }
       }

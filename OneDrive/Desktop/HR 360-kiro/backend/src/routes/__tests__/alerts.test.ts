@@ -85,7 +85,7 @@ describe.skip('Alerts Routes', () => {
     it('should get alerts successfully', async () => {
       mockedUserService.getUserById.mockResolvedValue(mockUser);
       mockedAlertService.getAlerts.mockResolvedValue({
-        alerts: [mockAlert],
+        alerts: [mockAlert as any],
         total: 1,
       });
 
@@ -126,7 +126,7 @@ describe.skip('Alerts Routes', () => {
 
   describe('GET /alerts/:id', () => {
     it('should get alert by ID successfully', async () => {
-      mockedAlertService.getAlertById.mockResolvedValue(mockAlert);
+      mockedAlertService.getAlertById.mockResolvedValue(mockAlert as any);
 
       const response = await request(app)
         .get('/alerts/alert-123')
@@ -139,7 +139,7 @@ describe.skip('Alerts Routes', () => {
     });
 
     it('should handle alert not found', async () => {
-      mockedAlertService.getAlertById.mockResolvedValue(null);
+      mockedAlertService.getAlertById.mockResolvedValue(null as any);
 
       const response = await request(app)
         .get('/alerts/nonexistent-id')
@@ -165,7 +165,7 @@ describe.skip('Alerts Routes', () => {
     it('should create alert successfully as admin', async () => {
       const adminUser: User = { ...mockUser, role: 'admin' as const };
       mockedUserService.getUserById.mockResolvedValue(adminUser);
-      mockedAlertService.createAlert.mockResolvedValue(mockAlert);
+      mockedAlertService.createAlert.mockResolvedValue(mockAlert as any);
 
       const alertData = {
         title: 'Emergency Alert',
@@ -258,7 +258,7 @@ describe.skip('Alerts Routes', () => {
         ...mockAlert,
         title: 'Updated Alert',
       };
-      mockedAlertService.updateAlert.mockResolvedValue(updatedAlert);
+      mockedAlertService.updateAlert.mockResolvedValue(updatedAlert as any);
 
       const updateData = {
         title: 'Updated Alert',
@@ -409,7 +409,7 @@ describe.skip('Alerts Routes', () => {
 
   describe('GET /alerts/notifications', () => {
     it('should get user notifications successfully', async () => {
-      const mockNotifications: Notification[] = [
+      const mockNotifications = [
         {
           id: 'notif-1',
           userId: 'user-123',
@@ -420,7 +420,7 @@ describe.skip('Alerts Routes', () => {
       ];
 
       mockedAlertService.getUserNotifications.mockResolvedValue({
-        notifications: mockNotifications,
+        notifications: mockNotifications as any[],
         total: 1,
       });
 

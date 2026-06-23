@@ -9,7 +9,6 @@ const MobileAlerts: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
   const { items: reduxAlerts, loading, error } = useSelector((state: RootState) => state.alert);
-  const { token } = useSelector((state: RootState) => state.auth);
   const [filter, setFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
 
   // Fetch alerts on mount and set up polling for real-time updates
@@ -26,10 +25,25 @@ const MobileAlerts: React.FC = () => {
           dispatch(setItems(activeAlerts));
         } else {
           dispatch(setError('Failed to load alerts'));
+        const response = await apiService.getAlerts();
+
+        if (response.success && response.data) {
+          const data = response.data;
+
+          // Filter to only active alerts
+          const activeAlerts = (Array.isArray(data) ? data : []).filter((alert: any) =>
+            alert.isActive !== false && (!alert.resolved_at || new Date(alert.resolved_at) > new Date())
+          );
+
+          dispatch(setItems(activeAlerts));
+        } else {
+          dispatch(setError('Failed to load alerts'));
+          dispatch(setItems([]));
         }
       } catch (err) {
         console.error('Error fetching alerts:', err);
         // Silently fail - show empty list if backend is down
+        dispatch(setError('Failed to load alerts'));
         dispatch(setItems([]));
       } finally {
         dispatch(setLoading(false));
@@ -43,7 +57,7 @@ const MobileAlerts: React.FC = () => {
     const interval = setInterval(fetchAlerts, 30000);
 
     return () => clearInterval(interval);
-  }, [dispatch, token]);
+  }, [dispatch]);
 
   const alerts = reduxAlerts.length > 0 ? reduxAlerts : [];
 

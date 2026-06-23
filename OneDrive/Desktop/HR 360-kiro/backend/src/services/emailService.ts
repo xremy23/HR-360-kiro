@@ -543,15 +543,15 @@ export const emailService = {
         return true;
       }
 
-      for (const email of emails) {
-        await transport.sendMail({
+      await Promise.all(emails.map(email =>
+        transport.sendMail({
           from: process.env.EMAIL_USER,
           to: email,
           subject,
           html,
           text,
-        });
-      }
+        })
+      ));
 
       console.log(`✅ Bulk email sent to ${emails.length} recipients`);
       return true;
