@@ -15,7 +15,12 @@ import { getWebSocketServer } from '../../websocket/server';
 // Mock services BEFORE importing router
 jest.mock('../../services/checkInService');
 jest.mock('../../services/userService');
-jest.mock('../../middleware/authMiddleware');
+jest.mock('../../middleware/authMiddleware', () => ({
+  authMiddleware: {
+    verifyToken: jest.fn(),
+    requireRole: jest.fn(() => (req: any, res: any, next: any) => next())
+  }
+}));
 jest.mock('../../websocket/server');
 
 const mockedCheckInService = checkInService as jest.Mocked<typeof checkInService>;
@@ -84,7 +89,7 @@ describe.skip('Check-ins Routes', () => {
     updatedAt: new Date(),
   };
 
-  const mockCheckIn: CheckIn = {
+  const mockCheckIn = {
     id: 'checkin-123',
     userId: 'user-123',
     teamId: 'team-123',
@@ -95,11 +100,14 @@ describe.skip('Check-ins Routes', () => {
     timestamp: new Date(),
     incidentId: 'incident-123',
     isDrill: false,
+    organizationId: 'org-123',
+    createdAt: new Date(),
+    updatedAt: new Date()
   };
 
   describe('POST /check-ins', () => {
     beforeEach(() => {
-      mockedCheckInService.createCheckIn.mockResolvedValue(mockCheckIn);
+      mockedCheckInService.createCheckIn.mockResolvedValue(mockCheckIn as any);
       mockedUserService.getUserById.mockResolvedValue(mockUser);
     });
 
@@ -309,7 +317,7 @@ describe.skip('Check-ins Routes', () => {
 
     beforeEach(() => {
       mockedCheckInService.getCheckIns.mockResolvedValue({
-        checkIns: mockCheckIns,
+        checkIns: mockCheckIns as any[],
         total: mockCheckIns.length,
       });
       mockedUserService.getUserById.mockImplementation((userId: string) => {
@@ -373,7 +381,7 @@ describe.skip('Check-ins Routes', () => {
   });
 
   describe('GET /check-ins/history', () => {
-    const mockUserCheckIns: CheckIn[] = Array.from({ length: 75 }, (_, i) => ({
+    const mockUserCheckIns = Array.from({ length: 75 }, (_, i) => ({
       id: `checkin-${i}`,
       userId: 'user-123',
       teamId: 'team-123',
@@ -385,7 +393,7 @@ describe.skip('Check-ins Routes', () => {
 
     beforeEach(() => {
       mockedCheckInService.getCheckInsByUser.mockResolvedValue({
-        checkIns: mockUserCheckIns,
+        checkIns: mockUserCheckIns as any[],
         total: mockUserCheckIns.length,
       });
     });
@@ -452,7 +460,7 @@ describe.skip('Check-ins Routes', () => {
   });
 
   describe('GET /check-ins/incident/:incidentId', () => {
-    const mockIncidentCheckIns: CheckIn[] = [
+    const mockIncidentCheckIns = [
       {
         id: 'checkin-1',
         userId: 'user-1',
@@ -511,7 +519,10 @@ describe.skip('Check-ins Routes', () => {
     ];
 
     beforeEach(() => {
-      mockedCheckInService.getCheckInsByIncident.mockResolvedValue(mockIncidentCheckIns);
+      mockedCheckInService.getCheckInsByIncident.mockResolvedValue({
+        checkIns: mockIncidentCheckIns as any[],
+        total: mockIncidentCheckIns.length
+      });
       mockedUserService.getUserById.mockImplementation((userId: string) => {
         const user = mockUsers.find(u => u.id === userId);
         return Promise.resolve(user || null);
@@ -562,7 +573,7 @@ describe.skip('Check-ins Routes', () => {
     });
 
     it('should handle empty incident check-ins', async () => {
-      mockedCheckInService.getCheckInsByIncident.mockResolvedValue([]);
+      mockedCheckInService.getCheckInsByIncident.mockResolvedValue({ checkIns: [], total: 0 });
 
       const response = await request(app)
         .get('/check-ins/incident/incident-123')

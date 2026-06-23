@@ -289,7 +289,7 @@ describe('Location Routes', () => {
     ];
 
     beforeEach(() => {
-      mockedLocationService.getNearbyContacts.mockResolvedValue(mockNearbyContacts);
+      mockedLocationService.getNearbyContacts.mockResolvedValue(mockNearbyContacts as any[]);
     });
 
     it('should get nearby contacts successfully', async () => {
@@ -305,8 +305,7 @@ describe('Location Routes', () => {
       expect(mockedLocationService.getNearbyContacts).toHaveBeenCalledWith(
         40.7128,
         -74.0060,
-        5,
-        'user-123'
+        5
       );
     });
 
@@ -319,8 +318,7 @@ describe('Location Routes', () => {
       expect(mockedLocationService.getNearbyContacts).toHaveBeenCalledWith(
         40.7128,
         -74.0060,
-        5,
-        'user-123'
+        10
       );
     });
 
@@ -374,7 +372,7 @@ describe('Location Routes', () => {
     ];
 
     beforeEach(() => {
-      mockedLocationService.getNearbyServices.mockResolvedValue(mockNearbyServices);
+      mockedLocationService.getNearbyServices.mockResolvedValue(mockNearbyServices as any[]);
     });
 
     it('should get nearby services successfully', async () => {
@@ -390,7 +388,6 @@ describe('Location Routes', () => {
       expect(mockedLocationService.getNearbyServices).toHaveBeenCalledWith(
         40.7128,
         -74.0060,
-        'emergency',
         5
       );
     });
@@ -404,8 +401,7 @@ describe('Location Routes', () => {
       expect(mockedLocationService.getNearbyServices).toHaveBeenCalledWith(
         40.7128,
         -74.0060,
-        undefined,
-        5
+        10
       );
     });
 

@@ -3,6 +3,7 @@ import PushNotificationEntity, { PushNotification } from '../entities/PushNotifi
 import DeviceTokenEntity from '../entities/DeviceToken';
 import { guestNotificationService } from './guestNotificationService';
 import { logger } from './monitoringService';
+import { notificationQueueService } from './notificationQueueService';
 
 // Initialize Expo SDK
 const expoClient = new Expo.Expo();
@@ -165,8 +166,6 @@ class PushNotificationService {
    * Schedule push notification
    */
   async schedulePushNotification(payload: ScheduledPushPayload): Promise<PushNotification> {
-    // For now, create notification record with scheduled time
-    // In production, use a job queue like Bull or RabbitMQ
     const notification = await PushNotificationEntity.create({
       userId: payload.userId,
       title: payload.title,
@@ -179,6 +178,18 @@ class PushNotificationService {
       status: 'pending',
     });
 
+    const pushPayload: PushNotificationPayload = {
+      userId: payload.userId,
+      title: payload.title,
+      body: payload.body,
+      data: payload.data,
+      type: payload.type,
+      badge: payload.badge,
+      sound: payload.sound,
+    };
+
+    await notificationQueueService.scheduleNotification(notification.id, pushPayload, payload.scheduledTime);
+    logger.info(`Scheduled notification ${notification.id} for ${payload.scheduledTime}`);
     // Notification will be processed by the background job service when scheduledTime is reached
     console.log(`Scheduled notification ${notification.id} for ${payload.scheduledTime}`);
 

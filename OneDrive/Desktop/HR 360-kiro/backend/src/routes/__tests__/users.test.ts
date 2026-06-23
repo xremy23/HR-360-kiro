@@ -202,7 +202,7 @@ describe.skip('Users Routes', () => {
     });
 
     it('should handle user not found during update', async () => {
-      mockedUserService.updateUser.mockResolvedValue(null);
+      mockedUserService.updateUser.mockResolvedValue(null as any);
 
       const response = await request(app)
         .put('/users/profile')
@@ -254,7 +254,7 @@ describe.skip('Users Routes', () => {
       mockedUserService.updateUser.mockResolvedValue({
         ...mockUser,
         biometricEnabled: true,
-      });
+      } as any);
 
       const response = await request(app)
         .post('/users/biometric/enable')
@@ -270,7 +270,7 @@ describe.skip('Users Routes', () => {
       mockedUserService.updateUser.mockResolvedValue({
         ...mockUser,
         biometricEnabled: true,
-      });
+      } as any);
 
       const response = await request(app)
         .post('/users/biometric/enable')
@@ -285,7 +285,7 @@ describe.skip('Users Routes', () => {
       mockedUserService.updateUser.mockResolvedValue({
         ...mockUser,
         biometricEnabled: true,
-      });
+      } as any);
 
       const response = await request(app)
         .post('/users/biometric/enable')
@@ -308,7 +308,7 @@ describe.skip('Users Routes', () => {
     });
 
     it('should handle user not found during biometric enable', async () => {
-      mockedUserService.updateUser.mockResolvedValue(null);
+      mockedUserService.updateUser.mockResolvedValue(null as any);
 
       const response = await request(app)
         .post('/users/biometric/enable')
@@ -349,7 +349,7 @@ describe.skip('Users Routes', () => {
       mockedUserService.updateUser.mockResolvedValue({
         ...mockUser,
         biometricEnabled: false,
-      });
+      } as any);
 
       const response = await request(app)
         .post('/users/biometric/disable')
@@ -361,7 +361,7 @@ describe.skip('Users Routes', () => {
     });
 
     it('should handle user not found during biometric disable', async () => {
-      mockedUserService.updateUser.mockResolvedValue(null);
+      mockedUserService.updateUser.mockResolvedValue(null as any);
 
       const response = await request(app)
         .post('/users/biometric/disable')

@@ -210,7 +210,7 @@ describe.skip('Organization Routes', () => {
         firstName: 'Charlie',
         lastName: 'Brown',
         phone: '555-5555',
-        role: 'hr' as const,
+        role: 'hr_admin' as const,
         organizationId: 'org-123',
         departmentId: 'dept-3',
         teamId: undefined,

@@ -30,6 +30,7 @@ let centralizedLoggingService: any = { initialize: async () => { }, shutdown: as
 let sessionService: any = { initialize: async () => { }, shutdown: async () => { }, cleanupExpiredSessions: async () => { }, isRedisConnected: () => false };
 let storageService: any = { initialize: async () => { } };
 let backgroundJobService: any = { initialize: async () => { }, shutdown: async () => { } };
+let notificationQueueService: any = { shutdown: async () => { } };
 
 // Try to import services
 try {
@@ -66,6 +67,13 @@ try {
   if (backgroundJobs.backgroundJobService) backgroundJobService = backgroundJobs.backgroundJobService;
 } catch (e) {
   logger.error('Failed to import background job service:', e);
+}
+
+try {
+  const notificationQueue = require('./services/notificationQueueService');
+  if (notificationQueue.notificationQueueService) notificationQueueService = notificationQueue.notificationQueueService;
+} catch (e) {
+  logger.error('Failed to import notification queue service:', e);
 }
 
 // Import routes
@@ -213,6 +221,7 @@ async function start() {
     const shutdown = async (signal: string) => {
       logger.info(`${signal} received, shutting down gracefully...`);
       try {
+        await notificationQueueService.shutdown();
         await backgroundJobService.shutdown();
         await centralizedLoggingService.shutdown();
         await sessionService.shutdown();
