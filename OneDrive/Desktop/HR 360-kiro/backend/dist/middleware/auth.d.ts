@@ -15,4 +15,8 @@ export declare const authMiddleware: (req: AuthRequest, res: Response, next: Nex
 export declare const adminMiddleware: (req: AuthRequest, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined;
 export declare const superAdminMiddleware: (req: AuthRequest, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined;
 export declare const managerMiddleware: (req: AuthRequest, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined;
+/**
+ * Optional authentication middleware - doesn't fail if no token provided
+ */
+export declare const optionalAuthMiddleware: (req: AuthRequest, res: Response, next: NextFunction) => Promise<void>;
 //# sourceMappingURL=auth.d.ts.map

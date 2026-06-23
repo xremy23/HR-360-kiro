@@ -1,144 +1,270 @@
 "use strict";
+/**
+ * Incident Routes
+ * Handles incident management
+ */
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = require("express");
-const response_1 = require("../utils/response");
-const auth_1 = require("../middleware/auth");
-const validators_1 = require("../utils/validators");
-const entities_1 = require("../entities");
-const server_1 = require("../websocket/server");
-const pushNotificationService_1 = require("../services/pushNotificationService");
+const express_1 = __importDefault(require("express"));
+const authMiddleware_1 = require("../middleware/authMiddleware");
+const incidentService_1 = require("../services/incidentService");
+const checkInService_1 = require("../services/checkInService");
 const userService_1 = require("../services/userService");
-const organizationService_1 = require("../services/organizationService");
-const router = (0, express_1.Router)();
+const monitoringService_1 = require("../services/monitoringService");
+const router = express_1.default.Router();
 /**
- * GET /incidents
- * Get incidents
+ * GET /api/incidents
+ * Get incidents for organization
  */
-router.get('/', auth_1.authMiddleware, async (req, res) => {
+router.get('/', authMiddleware_1.authMiddleware.verifyToken.bind(authMiddleware_1.authMiddleware), async (req, res, next) => {
     try {
         if (!req.user) {
-            return (0, response_1.sendError)(res, 'USER_NOT_FOUND', 'User not found', 404);
-        }
-        const { orgId, isDrill } = req.query;
-        const limit = Math.min(parseInt(req.query.limit) || 50, 100);
-        const offset = parseInt(req.query.offset) || 0;
-        if (!orgId) {
-            return (0, response_1.sendError)(res, 'INVALID_ORG', 'Organization ID required', 400);
-        }
-        const incidents = await entities_1.IncidentEntity.findByOrgId(orgId, isDrill === 'true');
-        const total = incidents.length;
-        const paginated = incidents.slice(offset, offset + limit);
-        return (0, response_1.sendPaginated)(res, paginated, total, limit, offset, 200);
-    }
-    catch (error) {
-        console.error('Get incidents error:', error);
-        return (0, response_1.sendError)(res, 'SERVER_ERROR', 'Failed to retrieve incidents', 500);
-    }
-});
-/**
- * POST /incidents
- * Create incident (Admin)
- */
-router.post('/', auth_1.authMiddleware, auth_1.adminMiddleware, async (req, res) => {
-    try {
-        if (!req.user) {
-            return (0, response_1.sendError)(res, 'USER_NOT_FOUND', 'User not found', 404);
-        }
-        const { type, severity, isDrill } = req.body;
-        if (!type || !severity) {
-            return (0, response_1.sendError)(res, 'INVALID_INPUT', 'Type and severity required', 400);
-        }
-        if (!(0, validators_1.validateAlertSeverity)(severity)) {
-            return (0, response_1.sendError)(res, 'INVALID_SEVERITY', 'Invalid severity level', 400);
-        }
-        const incident = await entities_1.IncidentEntity.create({
-            orgId: req.user.orgId,
-            type,
-            severity,
-            startTime: new Date(),
-            isDrill: isDrill || false,
-            createdBy: req.user.id,
-        });
-        // Get organization members for notification
-        const org = await organizationService_1.organizationService.getOrganizationById(req.user.orgId);
-        const { users: members } = await userService_1.userService.getOrganizationUsers(req.user.orgId, { page: 1, pageSize: 1000 });
-        const memberIds = members.map((m) => m.id);
-        // Send push notifications
-        try {
-            await pushNotificationService_1.pushNotificationService.sendIncidentNotification(memberIds, type, `Incident: ${type} (Severity: ${severity})`);
-            console.log(`Incident push notifications sent to ${memberIds.length} members`);
-        }
-        catch (pushError) {
-            console.warn('Push notification failed:', pushError);
-            // Don't fail the request if push notifications fail
-        }
-        // Broadcast via WebSocket
-        try {
-            const wsServer = (0, server_1.getWebSocketServer)();
-            wsServer.broadcastIncidentCreated(incident);
-            wsServer.broadcastNotificationToOrganization(req.user.orgId, {
-                type: 'incident',
-                incidentId: incident.id,
-                incidentType: type,
-                severity,
+            return res.status(401).json({
+                success: false,
+                error: { code: 'NOT_AUTHENTICATED', message: 'User not authenticated' },
             });
         }
-        catch (wsError) {
-            console.warn('WebSocket broadcast failed:', wsError);
-            // Don't fail the request if WebSocket fails
+        const user = await userService_1.userService.getUserById(req.user.userId);
+        if (!user || !user.organizationId) {
+            return res.status(400).json({
+                success: false,
+                error: { code: 'NO_ORGANIZATION', message: 'User is not part of an organization' },
+            });
         }
-        return (0, response_1.sendSuccess)(res, incident, 'Incident created successfully', 201);
+        const page = parseInt(req.query.page) || 1;
+        const pageSize = parseInt(req.query.pageSize) || 20;
+        const status = req.query.status;
+        const severity = req.query.severity;
+        const { incidents, total } = await incidentService_1.incidentService.getIncidents(user.organizationId, {
+            page,
+            pageSize,
+            status,
+            severity,
+        });
+        res.json({
+            success: true,
+            data: incidents,
+            pagination: {
+                page,
+                pageSize,
+                total,
+                totalPages: Math.ceil(total / pageSize),
+            },
+        });
     }
     catch (error) {
-        console.error('Create incident error:', error);
-        return (0, response_1.sendError)(res, 'SERVER_ERROR', 'Failed to create incident', 500);
+        monitoringService_1.logger.error('Failed to get incidents', { error, userId: req.user?.userId });
+        next(error);
     }
 });
 /**
- * GET /incidents/:id
- * Get incident details
+ * GET /api/incidents/:id
+ * Get incident by ID
  */
-router.get('/:id', auth_1.authMiddleware, async (req, res) => {
+router.get('/:id', authMiddleware_1.authMiddleware.verifyToken.bind(authMiddleware_1.authMiddleware), async (req, res, next) => {
     try {
         const { id } = req.params;
-        const incident = await entities_1.IncidentEntity.findById(id);
+        const incident = await incidentService_1.incidentService.getIncidentById(id);
         if (!incident) {
-            return (0, response_1.sendError)(res, 'INCIDENT_NOT_FOUND', 'Incident not found', 404);
+            return res.status(404).json({
+                success: false,
+                error: { code: 'INCIDENT_NOT_FOUND', message: 'Incident not found' },
+            });
         }
-        return (0, response_1.sendSuccess)(res, incident, 'Incident retrieved successfully', 200);
+        res.json({ success: true, data: incident });
     }
     catch (error) {
-        console.error('Get incident error:', error);
-        return (0, response_1.sendError)(res, 'SERVER_ERROR', 'Failed to retrieve incident', 500);
+        monitoringService_1.logger.error('Failed to get incident', { error, incidentId: req.params.id });
+        next(error);
     }
 });
 /**
- * GET /incidents/:id/summary
- * Get incident check-in summary
+ * POST /api/incidents
+ * Create incident (admin/hr only)
  */
-router.get('/:id/summary', auth_1.authMiddleware, async (req, res) => {
+router.post('/', authMiddleware_1.authMiddleware.verifyToken.bind(authMiddleware_1.authMiddleware), authMiddleware_1.authMiddleware.requireRole('admin', 'hr'), async (req, res, next) => {
     try {
-        const { id } = req.params;
-        const incident = await entities_1.IncidentEntity.findById(id);
-        if (!incident) {
-            return (0, response_1.sendError)(res, 'INCIDENT_NOT_FOUND', 'Incident not found', 404);
+        if (!req.user) {
+            return res.status(401).json({
+                success: false,
+                error: { code: 'NOT_AUTHENTICATED', message: 'User not authenticated' },
+            });
         }
-        const checkIns = await entities_1.CheckInEntity.findByIncidentId(id);
-        // Calculate summary from check-ins
-        const summary = {
-            totalMembers: 100, // TODO: Get actual total from organization
-            checkedIn: checkIns.length,
-            notCheckedIn: 100 - checkIns.length,
-            safe: checkIns.filter((c) => c.status === 'safe').length,
-            needHelp: checkIns.filter((c) => c.status === 'need_help').length,
-            sos: checkIns.filter((c) => c.status === 'sos').length,
-            responseRate: Math.round((checkIns.length / 100) * 100),
-        };
-        return (0, response_1.sendSuccess)(res, summary, 'Incident summary retrieved successfully', 200);
+        const user = await userService_1.userService.getUserById(req.user.userId);
+        if (!user || !user.organizationId) {
+            return res.status(400).json({
+                success: false,
+                error: { code: 'NO_ORGANIZATION', message: 'User is not part of an organization' },
+            });
+        }
+        const { title, description, severity, latitude, longitude } = req.body;
+        if (!title || !description || !severity) {
+            return res.status(400).json({
+                success: false,
+                error: { code: 'INVALID_INPUT', message: 'Missing required fields' },
+            });
+        }
+        const validSeverities = ['low', 'medium', 'high', 'critical'];
+        if (!validSeverities.includes(severity)) {
+            return res.status(400).json({
+                success: false,
+                error: { code: 'INVALID_SEVERITY', message: 'Invalid severity level' },
+            });
+        }
+        const incident = await incidentService_1.incidentService.createIncident({
+            organizationId: user.organizationId,
+            title,
+            description,
+            severity,
+            latitude,
+            longitude,
+            createdBy: req.user.userId,
+        });
+        monitoringService_1.logger.info('Incident created', { incidentId: incident.id, createdBy: req.user.userId });
+        res.status(201).json({ success: true, data: incident });
     }
     catch (error) {
-        console.error('Get incident summary error:', error);
-        return (0, response_1.sendError)(res, 'SERVER_ERROR', 'Failed to retrieve incident summary', 500);
+        monitoringService_1.logger.error('Failed to create incident', { error, userId: req.user?.userId });
+        next(error);
+    }
+});
+/**
+ * PUT /api/incidents/:id
+ * Update incident (admin/hr only)
+ */
+router.put('/:id', authMiddleware_1.authMiddleware.verifyToken.bind(authMiddleware_1.authMiddleware), authMiddleware_1.authMiddleware.requireRole('admin', 'hr'), async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { title, description, status, severity, latitude, longitude } = req.body;
+        if (severity) {
+            const validSeverities = ['low', 'medium', 'high', 'critical'];
+            if (!validSeverities.includes(severity)) {
+                return res.status(400).json({
+                    success: false,
+                    error: { code: 'INVALID_SEVERITY', message: 'Invalid severity level' },
+                });
+            }
+        }
+        if (status) {
+            const validStatuses = ['open', 'in_progress', 'resolved', 'closed'];
+            if (!validStatuses.includes(status)) {
+                return res.status(400).json({
+                    success: false,
+                    error: { code: 'INVALID_STATUS', message: 'Invalid status' },
+                });
+            }
+        }
+        const incident = await incidentService_1.incidentService.updateIncident(id, {
+            title,
+            description,
+            status,
+            severity,
+            latitude,
+            longitude,
+        });
+        if (!incident) {
+            return res.status(404).json({
+                success: false,
+                error: { code: 'INCIDENT_NOT_FOUND', message: 'Incident not found' },
+            });
+        }
+        monitoringService_1.logger.info('Incident updated', { incidentId: id, updatedBy: req.user?.userId });
+        res.json({ success: true, data: incident });
+    }
+    catch (error) {
+        monitoringService_1.logger.error('Failed to update incident', { error, incidentId: req.params.id });
+        next(error);
+    }
+});
+/**
+ * DELETE /api/incidents/:id
+ * Delete incident (admin only)
+ */
+router.delete('/:id', authMiddleware_1.authMiddleware.verifyToken.bind(authMiddleware_1.authMiddleware), authMiddleware_1.authMiddleware.requireRole('admin'), async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        await incidentService_1.incidentService.deleteIncident(id);
+        monitoringService_1.logger.info('Incident deleted', { incidentId: id, deletedBy: req.user?.userId });
+        res.json({ success: true, message: 'Incident deleted successfully' });
+    }
+    catch (error) {
+        monitoringService_1.logger.error('Failed to delete incident', { error, incidentId: req.params.id });
+        next(error);
+    }
+});
+/**
+ * POST /api/incidents/:id/updates
+ * Add incident update
+ */
+router.post('/:id/updates', authMiddleware_1.authMiddleware.verifyToken.bind(authMiddleware_1.authMiddleware), authMiddleware_1.authMiddleware.requireRole('admin', 'hr'), async (req, res, next) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({
+                success: false,
+                error: { code: 'NOT_AUTHENTICATED', message: 'User not authenticated' },
+            });
+        }
+        const { id } = req.params;
+        const { message } = req.body;
+        if (!message) {
+            return res.status(400).json({
+                success: false,
+                error: { code: 'INVALID_INPUT', message: 'Message is required' },
+            });
+        }
+        const update = await incidentService_1.incidentService.addIncidentUpdate(id, message, req.user.userId);
+        monitoringService_1.logger.info('Incident update added', { incidentId: id, updateId: update.id });
+        res.status(201).json({ success: true, data: update });
+    }
+    catch (error) {
+        monitoringService_1.logger.error('Failed to add incident update', { error, incidentId: req.params.id });
+        next(error);
+    }
+});
+/**
+ * GET /api/incidents/:id/updates
+ * Get incident updates
+ */
+router.get('/:id/updates', authMiddleware_1.authMiddleware.verifyToken.bind(authMiddleware_1.authMiddleware), async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const page = parseInt(req.query.page) || 1;
+        const pageSize = parseInt(req.query.pageSize) || 20;
+        const { updates, total } = await incidentService_1.incidentService.getIncidentUpdates(id, {
+            page,
+            pageSize,
+        });
+        res.json({
+            success: true,
+            data: updates,
+            pagination: {
+                page,
+                pageSize,
+                total,
+                totalPages: Math.ceil(total / pageSize),
+            },
+        });
+    }
+    catch (error) {
+        monitoringService_1.logger.error('Failed to get incident updates', { error, incidentId: req.params.id });
+        next(error);
+    }
+});
+/**
+ * GET /api/incidents/:id/stats
+ * Get incident check-in statistics
+ */
+router.get('/:id/stats', authMiddleware_1.authMiddleware.verifyToken.bind(authMiddleware_1.authMiddleware), async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const stats = await checkInService_1.checkInService.getCheckInStats('', id);
+        res.json({ success: true, data: stats });
+    }
+    catch (error) {
+        monitoringService_1.logger.error('Failed to get incident stats', { error, incidentId: req.params.id });
+        next(error);
     }
 });
 exports.default = router;

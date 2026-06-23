@@ -4,8 +4,9 @@ import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '../store/store';
 import { setShowCenter } from '../store/slices/notificationSlice';
 import { logout } from '../store/slices/authSlice';
-import { Home, Book, AlertCircle, Phone, Settings, LogOut, Sun, Moon, Menu, X } from 'lucide-react';
+import { Home, Book, AlertCircle, Phone, Settings, LogOut, Sun, Moon, Menu, X, Download } from 'lucide-react';
 import NotificationCenter from './NotificationCenter';
+import { pwaService } from '../services/pwaService';
 
 interface DesktopLayoutProps {
   children: React.ReactNode;
@@ -166,6 +167,14 @@ const DesktopLayout: React.FC<DesktopLayoutProps> = ({ children }) => {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Install PWA Button */}
+            <button
+              onClick={() => pwaService.promptInstall()}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-white bg-[#038F8D] hover:bg-[#027574] rounded-lg transition"
+            >
+              <Download size={16} />
+              Install Safety F.I.R.S.T.
+            </button>
             {/* Notification Bell */}
             <button
               onClick={() => dispatch(setShowCenter(true))}

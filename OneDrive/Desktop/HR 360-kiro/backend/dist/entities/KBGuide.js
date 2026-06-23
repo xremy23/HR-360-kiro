@@ -17,9 +17,9 @@ class KBGuideEntity {
         return result.rows[0] || null;
     }
     static async findByOrgId(orgId, category, type, limit = 50, offset = 0) {
-        let sql = `SELECT id, org_id as "orgId", title, category, type, content, media_urls as "mediaUrls", is_required as "isRequired",
+        let sql = `SELECT id, org_id as "orgId", title, category, type, content, media_urls as "mediaUrls", is_required as "isRequired", is_archived as "isArchived",
                       version, created_by as "createdBy", created_at as "createdAt", updated_at as "updatedAt", updated_by as "updatedBy"
-               FROM kb_guides WHERE org_id = $1`;
+               FROM kb_guides WHERE org_id = $1 AND is_archived = false`;
         const params = [orgId];
         let paramCount = 2;
         if (category) {
@@ -66,6 +66,10 @@ class KBGuideEntity {
             updates.push(`is_required = $${paramCount++}`);
             values.push(data.isRequired);
         }
+        if (data.isArchived !== undefined) {
+            updates.push(`is_archived = $${paramCount++}`);
+            values.push(data.isArchived);
+        }
         if (updates.length === 0)
             return this.findById(id);
         updates.push(`version = version + 1`);
@@ -74,7 +78,7 @@ class KBGuideEntity {
         updates.push(`updated_at = CURRENT_TIMESTAMP`);
         values.push(id);
         const result = await (0, database_1.query)(`UPDATE kb_guides SET ${updates.join(', ')} WHERE id = $${paramCount}
-       RETURNING id, org_id as "orgId", title, category, type, content, media_urls as "mediaUrls", is_required as "isRequired",
+       RETURNING id, org_id as "orgId", title, category, type, content, media_urls as "mediaUrls", is_required as "isRequired", is_archived as "isArchived",
                  version, created_by as "createdBy", created_at as "createdAt", updated_at as "updatedAt", updated_by as "updatedBy"`, values);
         return result.rows[0] || null;
     }

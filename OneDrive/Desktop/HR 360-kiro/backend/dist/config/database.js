@@ -12,16 +12,26 @@ dotenv_1.default.config();
 let pool = null;
 let poolInitialized = false;
 function createPool() {
-    return new pg_1.Pool({
+    // Check if we're using Cloud SQL with Unix socket
+    const isCloudSQL = process.env.DB_HOST && process.env.DB_HOST.startsWith('/cloudsql/');
+    const poolConfig = {
         user: process.env.DB_USER || 'postgres',
         password: process.env.DB_PASSWORD || 'postgres',
-        host: process.env.DB_HOST || 'localhost',
-        port: parseInt(process.env.DB_PORT || '5432'),
         database: process.env.DB_NAME || 'emergency_app',
-        connectionTimeoutMillis: 5000, // 5 second timeout for connections
+        connectionTimeoutMillis: 5000,
         idleTimeoutMillis: 30000,
         max: 20,
-    });
+    };
+    if (isCloudSQL) {
+        // Cloud SQL with Unix socket
+        poolConfig.host = process.env.DB_HOST;
+    }
+    else {
+        // Local or TCP connection
+        poolConfig.host = process.env.DB_HOST || '127.0.0.1';
+        poolConfig.port = parseInt(process.env.DB_PORT || '5432');
+    }
+    return new pg_1.Pool(poolConfig);
 }
 function getPool() {
     if (!pool) {

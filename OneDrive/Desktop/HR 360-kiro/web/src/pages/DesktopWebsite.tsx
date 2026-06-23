@@ -58,7 +58,7 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'responder' | 'employee';
+  role: 'super_admin' | 'admin' | 'hr_admin' | 'safety_admin' | 'workplace_admin' | 'employee' | 'responder';
   team?: string;
   phone?: string;
   address?: string;
