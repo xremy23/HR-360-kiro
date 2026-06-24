@@ -21,6 +21,7 @@ import OrganizationSettings from './OrganizationSettings';
 import JoinOrganization from './JoinOrganization';
 import BiometricSettingsPage from './BiometricSettingsPage';
 import LocationSharingPage from './LocationSharingPage';
+import WorkplaceAdminConsole from './WorkplaceAdminConsole';
 import { chatbotService } from '../services/chatbotService';
 import { websocketService } from '../services/websocketService';
 
@@ -104,6 +105,7 @@ const DesktopApp: React.FC = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/admin-console/*" element={<AdminConsole />} />
         <Route path="/safety-admin/*" element={<SafetyAdminConsole />} />
+        <Route path="/workplace-admin/*" element={<WorkplaceAdminConsole />} />
         <Route path="/kb" element={<MobileKB />} />
         <Route path="/alerts" element={<MobileAlerts />} />
         <Route path="/contacts" element={<MobileContacts />} />

@@ -3,6 +3,7 @@ import PushNotificationEntity, { PushNotification } from '../entities/PushNotifi
 import DeviceTokenEntity from '../entities/DeviceToken';
 import { guestNotificationService } from './guestNotificationService';
 import { logger } from './monitoringService';
+import { notificationQueueService } from './notificationQueueService';
 
 // Initialize Expo SDK
 const expoClient = new Expo.Expo();
@@ -133,18 +134,24 @@ class PushNotificationService {
 
       const notifications: PushNotification[] = [];
 
-      for (const userId of filteredUserIds) {
-        try {
-          const notification = await this.sendPushNotification({
+      const results = await Promise.allSettled(
+        filteredUserIds.map(userId =>
+          this.sendPushNotification({
             userId,
             title: payload.title,
             body: payload.body,
             data: payload.data,
             type: payload.type,
-          });
-          notifications.push(notification);
-        } catch (error) {
-          logger.error(`Error sending notification to user ${userId}`, { error });
+          })
+        )
+      );
+
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        if (result.status === 'fulfilled') {
+          notifications.push(result.value);
+        } else {
+          logger.error(`Error sending notification to user ${filteredUserIds[i]}`, { error: result.reason });
         }
       }
 
@@ -159,8 +166,6 @@ class PushNotificationService {
    * Schedule push notification
    */
   async schedulePushNotification(payload: ScheduledPushPayload): Promise<PushNotification> {
-    // For now, create notification record with scheduled time
-    // In production, use a job queue like Bull or RabbitMQ
     const notification = await PushNotificationEntity.create({
       userId: payload.userId,
       title: payload.title,
@@ -173,10 +178,105 @@ class PushNotificationService {
       status: 'pending',
     });
 
-    // TODO: Schedule job to send at scheduledTime
+    const pushPayload: PushNotificationPayload = {
+      userId: payload.userId,
+      title: payload.title,
+      body: payload.body,
+      data: payload.data,
+      type: payload.type,
+      badge: payload.badge,
+      sound: payload.sound,
+    };
+
+    await notificationQueueService.scheduleNotification(notification.id, pushPayload, payload.scheduledTime);
+    logger.info(`Scheduled notification ${notification.id} for ${payload.scheduledTime}`);
+    // Notification will be processed by the background job service when scheduledTime is reached
     console.log(`Scheduled notification ${notification.id} for ${payload.scheduledTime}`);
 
     return notification;
+  }
+
+
+  /**
+   * Process scheduled push notifications
+   */
+  async processScheduledNotifications(): Promise<void> {
+    try {
+      const dueNotifications = await PushNotificationEntity.findDueScheduledNotifications();
+
+      if (dueNotifications.length === 0) return;
+
+      console.log(`Found ${dueNotifications.length} scheduled notifications to process`);
+
+      for (const notification of dueNotifications) {
+        try {
+          const deviceTokens = await DeviceTokenEntity.findByUserId(notification.userId, true);
+
+          if (deviceTokens.length === 0) {
+            console.warn(`No active device tokens for user ${notification.userId} for scheduled notification`);
+            await PushNotificationEntity.markAsFailed(notification.id);
+            continue;
+          }
+
+          const messages: Expo.ExpoPushMessage[] = [];
+          const validTokens = deviceTokens.filter(token => Expo.Expo.isExpoPushToken(token.token));
+
+          for (const token of validTokens) {
+            messages.push({
+              to: token.token,
+              sound: notification.data?.sound || 'default',
+              title: notification.title,
+              body: notification.body,
+              data: {
+                notificationId: notification.id,
+                type: notification.type,
+                tokenId: token.id,
+                ...notification.data,
+              },
+              badge: notification.data?.badge,
+            });
+          }
+
+          if (messages.length === 0) {
+            console.warn(`No valid device tokens for user ${notification.userId} for scheduled notification`);
+            await PushNotificationEntity.markAsFailed(notification.id);
+            continue;
+          }
+
+          const chunks = this.chunkMessages(messages, 100);
+          for (const chunk of chunks) {
+            try {
+              const tickets = await expoClient.sendPushNotificationsAsync(chunk);
+              console.log(`Sent ${tickets.length} scheduled push notifications for notification ${notification.id}`);
+
+              // Handle tickets
+              for (let i = 0; i < tickets.length; i++) {
+                const ticket = tickets[i];
+                if (ticket.status === 'error') {
+                  console.error(`Error sending scheduled notification: ${ticket.message}`);
+                  if (ticket.details?.error === 'DeviceNotRegistered' || ticket.details?.error === 'InvalidCredentials') {
+                    // Invalid token, deactivate it using the mapped token id
+                    const originalMessage = chunk[i];
+                    if (originalMessage && originalMessage.data && originalMessage.data.tokenId) {
+                      await DeviceTokenEntity.deactivate(originalMessage.data.tokenId as string);
+                    }
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('Error sending scheduled push notification chunk:', error);
+            }
+          }
+
+          await PushNotificationEntity.markAsDelivered(notification.id);
+        } catch (error) {
+          console.error(`Error processing scheduled notification ${notification.id}:`, error);
+          await PushNotificationEntity.markAsFailed(notification.id);
+        }
+      }
+    } catch (error) {
+      logger.error('Error in processScheduledNotifications:', { error });
+    }
   }
 
   /**

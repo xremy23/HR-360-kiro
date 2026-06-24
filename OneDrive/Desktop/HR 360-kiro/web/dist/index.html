@@ -5,22 +5,71 @@
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#1f2937" />
-    <meta name="description" content="Emergency Management App - Emergency preparedness and response" />
-    
+    <meta name="description" content="CICT Safety Portal - Disaster preparedness and emergency response system" />
+
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json" />
-    
+
     <!-- Apple Web App Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="true" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Emergency App" />
+    <meta name="apple-mobile-web-app-title" content="CICT Safety Portal" />
     <link rel="apple-touch-icon" href="/icon.svg" />
-    
-    <title>Emergency Management App</title>
-    <script type="module" crossorigin src="/assets/index-DByYx6wg.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-B5gCjEMz.css">
+
+    <title>CICT Safety Portal</title>
+
+    <!-- Initialize dark mode from localStorage before rendering -->
+    <script>
+      (function() {
+        const savedDarkMode = localStorage.getItem('darkMode');
+        const htmlElement = document.documentElement;
+
+        if (savedDarkMode === 'false') {
+          // Light mode explicitly requested
+          htmlElement.classList.remove('dark');
+        } else {
+          // Default to dark mode for all other cases
+          htmlElement.classList.add('dark');
+        }
+      })();
+
+      // Initialize runtime API URL configuration
+      // This MUST run BEFORE React loads to ensure all services use the correct URL
+      (async function initializeConfig() {
+        let apiUrl = 'http://localhost:3000/api'; // Default fallback
+
+        try {
+          // Try to load from runtime-injected config.json (created by Docker startup script)
+          const response = await fetch('/config.json?t=' + Date.now(), {
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache' }
+          });
+
+          if (response.ok) {
+            const config = await response.json();
+            if (config.apiUrl) {
+              apiUrl = config.apiUrl;
+              console.log('[CONFIG] ✅ Loaded API URL from runtime config:', apiUrl);
+            }
+          } else {
+            console.warn('[CONFIG] ⚠️ config.json not found, using fallback');
+          }
+        } catch (error) {
+          console.warn('[CONFIG] ⚠️ Failed to fetch config.json:', error);
+        }
+
+        // Make API URL globally available
+        window.__API_URL__ = apiUrl;
+        console.log('[CONFIG] 🚀 Runtime API URL initialized:', apiUrl);
+      })().catch(err => {
+        console.error('[CONFIG] Fatal initialization error:', err);
+        window.__API_URL__ = 'http://localhost:3000/api';
+      });
+    </script>
+    <script type="module" crossorigin src="/assets/index-BwnNSjVk.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CSXJTVHK.css">
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"></div>
   </body>
 </html>

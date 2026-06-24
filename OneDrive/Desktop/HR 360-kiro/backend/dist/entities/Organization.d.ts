@@ -54,5 +54,21 @@ export declare class OrganizationEntity implements Organization {
      * Convert to JSON
      */
     toJSON(): Organization;
+    /**
+     * Static database method: Find organization by ID
+     */
+    static findById(id: string): Promise<OrganizationEntity | null>;
+    /**
+     * Static database method: Find organization by invite code
+     */
+    static findByInviteCode(inviteCode: string): Promise<OrganizationEntity | null>;
+    /**
+     * Static database method: Create organization
+     */
+    static create(data: CreateOrganizationInput): Promise<OrganizationEntity>;
+    /**
+     * Static database method: Update organization
+     */
+    static update(id: string, data: UpdateOrganizationInput): Promise<OrganizationEntity | null>;
 }
 //# sourceMappingURL=Organization.d.ts.map

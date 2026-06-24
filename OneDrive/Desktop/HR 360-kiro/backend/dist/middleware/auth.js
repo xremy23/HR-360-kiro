@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.managerMiddleware = exports.superAdminMiddleware = exports.adminMiddleware = exports.authMiddleware = void 0;
+exports.optionalAuthMiddleware = exports.managerMiddleware = exports.superAdminMiddleware = exports.adminMiddleware = exports.authMiddleware = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const security_1 = require("../config/security");
 const sessionService_1 = require("../services/sessionService");
@@ -70,7 +70,7 @@ const authMiddleware = async (req, res, next) => {
 };
 exports.authMiddleware = authMiddleware;
 const adminMiddleware = (req, res, next) => {
-    if (!['super_admin', 'admin', 'hr'].includes(req.user?.role || '')) {
+    if (!['super_admin', 'admin', 'hr_admin', 'hr'].includes(req.user?.role || '')) {
         return res.status(403).json({
             success: false,
             error: {
@@ -98,7 +98,7 @@ const superAdminMiddleware = (req, res, next) => {
 };
 exports.superAdminMiddleware = superAdminMiddleware;
 const managerMiddleware = (req, res, next) => {
-    if (!['super_admin', 'admin', 'hr', 'manager'].includes(req.user?.role || '')) {
+    if (!['super_admin', 'admin', 'hr_admin', 'hr', 'manager'].includes(req.user?.role || '')) {
         return res.status(403).json({
             success: false,
             error: {
@@ -111,4 +111,48 @@ const managerMiddleware = (req, res, next) => {
     next();
 };
 exports.managerMiddleware = managerMiddleware;
+/**
+ * Optional authentication middleware - doesn't fail if no token provided
+ */
+const optionalAuthMiddleware = async (req, res, next) => {
+    try {
+        const token = req.headers.authorization?.split(' ')[1];
+        if (!token) {
+            // No token, just continue as guest
+            next();
+            return;
+        }
+        // Get security configuration
+        const securityConfig = (0, security_1.getSecurityConfig)();
+        // Decode token to get token ID for blacklist check
+        let decoded;
+        try {
+            decoded = jsonwebtoken_1.default.verify(token, securityConfig.jwtSecret);
+        }
+        catch (error) {
+            // Invalid token, just continue as guest
+            next();
+            return;
+        }
+        // Check if token is blacklisted
+        const tokenId = decoded.jti || `${decoded.id}_${decoded.iat}`;
+        const isBlacklisted = await sessionService_1.sessionService.isTokenBlacklisted(tokenId);
+        if (isBlacklisted) {
+            // Token revoked, continue as guest
+            next();
+            return;
+        }
+        // Update session activity if session exists
+        const sessionId = `session_${decoded.id}`;
+        await sessionService_1.sessionService.updateSessionActivity(sessionId);
+        req.user = decoded;
+        next();
+    }
+    catch (error) {
+        // Error processing token, continue as guest
+        console.debug('Optional auth error, continuing as guest:', error);
+        next();
+    }
+};
+exports.optionalAuthMiddleware = optionalAuthMiddleware;
 //# sourceMappingURL=auth.js.map

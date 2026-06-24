@@ -84,7 +84,7 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
 };
 
 export const adminMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
-  if (!['super_admin', 'admin', 'hr'].includes(req.user?.role || '')) {
+  if (!['super_admin', 'admin', 'hr_admin', 'hr'].includes(req.user?.role || '')) {
     return res.status(403).json({
       success: false,
       error: {
@@ -112,7 +112,7 @@ export const superAdminMiddleware = (req: AuthRequest, res: Response, next: Next
 };
 
 export const managerMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
-  if (!['super_admin', 'admin', 'hr', 'manager'].includes(req.user?.role || '')) {
+  if (!['super_admin', 'admin', 'hr_admin', 'hr', 'manager'].includes(req.user?.role || '')) {
     return res.status(403).json({
       success: false,
       error: {

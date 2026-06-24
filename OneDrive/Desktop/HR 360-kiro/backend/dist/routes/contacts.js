@@ -9,13 +9,19 @@ const router = (0, express_1.Router)();
 /**
  * GET /contacts
  * Get user contacts
+ * Allows guests to see default emergency contacts
  */
-router.get('/', auth_1.authMiddleware, async (req, res) => {
+router.get('/', auth_1.optionalAuthMiddleware, async (req, res) => {
     try {
-        if (!req.user) {
-            return (0, response_1.sendError)(res, 'USER_NOT_FOUND', 'User not found', 404);
+        let userContacts;
+        if (req.user) {
+            // Authenticated user - get their personal contacts
+            userContacts = await entities_1.ContactEntity.findByUserId(req.user.id);
         }
-        const userContacts = await entities_1.ContactEntity.findByUserId(req.user.id);
+        else {
+            // Guest user - return default emergency contacts
+            userContacts = await entities_1.ContactEntity.findByUserId('default') || [];
+        }
         return (0, response_1.sendSuccess)(res, userContacts, 'Contacts retrieved successfully', 200);
     }
     catch (error) {
@@ -25,7 +31,7 @@ router.get('/', auth_1.authMiddleware, async (req, res) => {
 });
 /**
  * POST /contacts
- * Create contact
+ * Create contact (requires authentication)
  */
 router.post('/', auth_1.authMiddleware, async (req, res) => {
     try {

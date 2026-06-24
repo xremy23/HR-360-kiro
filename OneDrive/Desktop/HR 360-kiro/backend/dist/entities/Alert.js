@@ -4,22 +4,22 @@ exports.AlertEntity = void 0;
 const database_1 = require("../config/database");
 class AlertEntity {
     static async create(data) {
-        const result = await (0, database_1.query)(`INSERT INTO alerts (org_id, team_ids, title, message, severity, type, created_by, expires_at, is_drill, incident_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        const result = await (0, database_1.query)(`INSERT INTO alerts (org_id, team_ids, title, message, severity, type, created_by, expires_at, is_drill, incident_id, source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id, org_id as "orgId", team_ids as "teamIds", title, message, severity, type, created_by as "createdBy",
-                 created_at as "createdAt", expires_at as "expiresAt", is_drill as "isDrill", incident_id as "incidentId"`, [data.orgId, data.teamIds, data.title, data.message, data.severity, data.type, data.createdBy,
-            data.expiresAt, data.isDrill, data.incidentId]);
+                 created_at as "createdAt", expires_at as "expiresAt", is_drill as "isDrill", incident_id as "incidentId", source`, [data.orgId, data.teamIds, data.title, data.message, data.severity, data.type, data.createdBy,
+            data.expiresAt, data.isDrill, data.incidentId, data.source || 'internal']);
         return result.rows[0];
     }
     static async findById(id) {
         const result = await (0, database_1.query)(`SELECT id, org_id as "orgId", team_ids as "teamIds", title, message, severity, type, created_by as "createdBy",
-              created_at as "createdAt", expires_at as "expiresAt", is_drill as "isDrill", incident_id as "incidentId"
+              created_at as "createdAt", expires_at as "expiresAt", is_drill as "isDrill", incident_id as "incidentId", source
        FROM alerts WHERE id = $1`, [id]);
         return result.rows[0] || null;
     }
     static async findByOrgId(orgId, isDrill, severity, limit = 50, offset = 0) {
         let sql = `SELECT id, org_id as "orgId", team_ids as "teamIds", title, message, severity, type, created_by as "createdBy",
-                      created_at as "createdAt", expires_at as "expiresAt", is_drill as "isDrill", incident_id as "incidentId"
+                      created_at as "createdAt", expires_at as "expiresAt", is_drill as "isDrill", incident_id as "incidentId", source
                FROM alerts WHERE org_id = $1`;
         const params = [orgId];
         let paramCount = 2;

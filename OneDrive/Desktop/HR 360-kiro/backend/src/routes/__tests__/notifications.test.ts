@@ -7,7 +7,7 @@ import request from 'supertest';
 import express from 'express';
 import { jest } from '@jest/globals';
 import notificationsRouter from '../notifications';
-import { authMiddleware } from '../../middleware/auth';
+import { authMiddleware, adminMiddleware } from '../../middleware/auth';
 import pushNotificationService from '../../services/pushNotificationService';
 
 // Mock dependencies
@@ -16,6 +16,7 @@ jest.mock('../../middleware/auth');
 
 const mockedPushNotificationService = pushNotificationService as jest.Mocked<typeof pushNotificationService>;
 const mockedAuthMiddleware = authMiddleware as jest.MockedFunction<typeof authMiddleware>;
+const mockedAdminMiddleware = adminMiddleware as jest.MockedFunction<typeof adminMiddleware>;
 
 // Test app setup
 const app = express();
@@ -35,6 +36,11 @@ describe('Notifications Routes', () => {
         orgId: 'org-123',
         teamId: 'team-123',
       };
+      next();
+    }) as any);
+
+    // Mock admin middleware by default it passes
+    mockedAdminMiddleware.mockImplementation(((req: any, res: any, next: any) => {
       next();
     }) as any);
   });
@@ -616,6 +622,70 @@ describe('Notifications Routes', () => {
       status: 'sent' as const,
       createdAt: new Date(),
     };
+
+    beforeEach(() => {
+      // Override auth middleware to simulate admin user for these tests
+      const { authMiddleware } = require('../../middleware/auth');
+      const mockedAuthMiddleware = authMiddleware as jest.MockedFunction<typeof authMiddleware>;
+      mockedAuthMiddleware.mockImplementation(((req: any, res: any, next: any) => {
+        req.user = {
+          id: 'user-123',
+          email: 'test@example.com',
+          role: 'admin',
+          orgId: 'org-123',
+          teamId: 'team-123',
+        };
+        next();
+      }) as any);
+    });
+
+    afterEach(() => {
+      // Revert back
+      const { authMiddleware } = require('../../middleware/auth');
+      const mockedAuthMiddleware = authMiddleware as jest.MockedFunction<typeof authMiddleware>;
+      mockedAuthMiddleware.mockImplementation(((req: any, res: any, next: any) => {
+        req.user = {
+          id: 'user-123',
+          email: 'test@example.com',
+          role: 'employee',
+          orgId: 'org-123',
+          teamId: 'team-123',
+        };
+        next();
+      }) as any);
+    });
+
+    it('should reject non-admin users', async () => {
+      // Revert to employee for this specific test
+      const { authMiddleware } = require('../../middleware/auth');
+      const mockedAuthMiddleware = authMiddleware as jest.MockedFunction<typeof authMiddleware>;
+      mockedAuthMiddleware.mockImplementation(((req: any, res: any, next: any) => {
+        req.user = {
+          id: 'user-123',
+          email: 'test@example.com',
+          role: 'employee',
+          orgId: 'org-123',
+          teamId: 'team-123',
+        };
+        next();
+      }) as any);
+
+      const testData = {
+        title: 'Test Notification',
+        body: 'This is a test notification',
+        data: { test: true },
+        type: 'custom',
+      };
+
+      const response = await request(app)
+        .post('/notifications/send-test')
+        .set('Authorization', 'Bearer valid-token')
+        .send(testData);
+
+      expect(response.status).toBe(403);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error.code).toBe('FORBIDDEN');
+    });
 
     it('should send test notification successfully', async () => {
       mockedPushNotificationService.sendPushNotification.mockResolvedValue(mockNotification);

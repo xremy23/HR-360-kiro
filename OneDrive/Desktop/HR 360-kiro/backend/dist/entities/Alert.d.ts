@@ -11,6 +11,7 @@ export interface Alert {
     expiresAt?: Date;
     isDrill: boolean;
     incidentId?: string;
+    source?: 'internal' | 'pagasa' | 'philvolcs' | 'ndrrmc';
 }
 export declare class AlertEntity {
     static create(data: Omit<Alert, 'id' | 'createdAt'>): Promise<Alert>;
