@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { RootState } from '../store/store';
+import { pwaService } from '../services/pwaService';
 
 interface TeamCheckIn {
   id: string;
@@ -110,6 +111,20 @@ const MobileHome: React.FC<MobileHomeProps> = ({ onMenuClick, showMenu }) => {
           <div className="p-2 bg-[#038F8D]/10 dark:bg-[#038F8D]/20 rounded-2xl border border-[#038F8D]/20">
             <span className="text-2xl">🛡️</span>
           </div>
+        </div>
+
+        {/* PROMOTIONAL CARD LAYOUT - PWA INSTALL */}
+        <div className="p-4 bg-gradient-to-r from-[#038F8D]/10 to-[#038F8D]/5 dark:from-[#038F8D]/20 dark:to-[#038F8D]/10 rounded-2xl border border-[#038F8D]/20 shadow-sm flex items-center justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-bold text-[#038F8D] dark:text-[#49D7D1]">Download Safety F.I.R.S.T.</h3>
+            <p className="text-xs text-stone-600 dark:text-stone-300 mt-0.5">Install the app to your device</p>
+          </div>
+          <button
+            onClick={() => pwaService.promptInstall()}
+            className="shrink-0 px-4 py-2 bg-[#038F8D] hover:bg-[#027574] text-white text-xs font-bold rounded-xl transition"
+          >
+            Install
+          </button>
         </div>
 
         {/* ACTIVE LOCALIZATION BANNER */}

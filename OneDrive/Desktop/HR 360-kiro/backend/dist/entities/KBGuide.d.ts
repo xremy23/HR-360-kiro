@@ -7,6 +7,7 @@ export interface KBGuide {
     content: string;
     mediaUrls?: string[];
     isRequired: boolean;
+    isArchived: boolean;
     version: number;
     createdBy: string;
     createdAt: Date;

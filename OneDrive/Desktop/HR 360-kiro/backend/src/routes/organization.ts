@@ -244,7 +244,23 @@ router.post('/join', authMiddleware.verifyToken.bind(authMiddleware), async (req
       return res.status(400).json({ success: false, error: { code: 'ALREADY_IN_ORG', message: 'You are already part of an organization' } });
     }
 
-    res.status(404).json({ success: false, error: { code: 'INVALID_CODE', message: 'Invalid or expired invite code' } });
+    const { OrganizationEntity } = await import('../entities/Organization');
+    const organization = await OrganizationEntity.findByInviteCode(inviteCode);
+
+    if (!organization) {
+      return res.status(404).json({ success: false, error: { code: 'INVALID_CODE', message: 'Invalid or expired invite code' } });
+    }
+
+    if (organization.emailDomain) {
+      const emailDomainSuffix = `@${organization.emailDomain}`;
+      if (!user?.email.endsWith(emailDomainSuffix)) {
+        return res.status(403).json({ success: false, error: { code: 'DOMAIN_RESTRICTION', message: 'Your email domain is not authorized for this organization' } });
+      }
+    }
+
+    await userService.updateUser(req.user.userId, { organizationId: organization.id });
+
+    res.json({ success: true, data: { organizationId: organization.id } });
   } catch (error) {
     logger.error('Join organization error', { error, userId: req.user?.userId });
     res.status(500).json({ success: false, error: { code: 'JOIN_ORG_FAILED', message: 'Failed to join organization' } });

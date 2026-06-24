@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ChatMessageEntity = exports.MagicLinkTokenEntity = exports.DeviceTokenEntity = exports.PushNotificationEntity = exports.GuideAcknowledgmentEntity = exports.NotificationEntity = exports.SOSEscalationEntity = exports.IncidentEntity = exports.ToBagItemEntity = exports.ContactEntity = exports.AlertEntity = exports.CheckInEntity = exports.KBGuideEntity = exports.OrganizationEntity = exports.UserEntity = void 0;
+exports.BulkImportJobEntity = exports.CommunityReportEntity = exports.ChatMessageEntity = exports.MagicLinkTokenEntity = exports.DeviceTokenEntity = exports.PushNotificationEntity = exports.GuideAcknowledgmentEntity = exports.NotificationEntity = exports.SOSEscalationEntity = exports.IncidentEntity = exports.ToBagItemEntity = exports.ContactEntity = exports.AlertEntity = exports.CheckInEntity = exports.KBGuideEntity = exports.OrganizationEntity = exports.UserEntity = void 0;
 // Central export file for all entities
 var User_1 = require("./User");
 Object.defineProperty(exports, "UserEntity", { enumerable: true, get: function () { return User_1.UserEntity; } });
@@ -32,4 +32,8 @@ var MagicLinkToken_1 = require("./MagicLinkToken");
 Object.defineProperty(exports, "MagicLinkTokenEntity", { enumerable: true, get: function () { return MagicLinkToken_1.MagicLinkTokenEntity; } });
 var ChatMessage_1 = require("./ChatMessage");
 Object.defineProperty(exports, "ChatMessageEntity", { enumerable: true, get: function () { return ChatMessage_1.ChatMessageEntity; } });
+var CommunityReport_1 = require("./CommunityReport");
+Object.defineProperty(exports, "CommunityReportEntity", { enumerable: true, get: function () { return CommunityReport_1.CommunityReportEntity; } });
+var BulkImportJob_1 = require("./BulkImportJob");
+Object.defineProperty(exports, "BulkImportJobEntity", { enumerable: true, get: function () { return BulkImportJob_1.BulkImportJobEntity; } });
 //# sourceMappingURL=index.js.map

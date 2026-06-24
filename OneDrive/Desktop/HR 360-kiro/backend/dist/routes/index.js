@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.chatbotRoutes = exports.superadminRoutes = exports.tobagRoutes = exports.organizationRoutes = exports.sosRoutes = exports.incidentsRoutes = exports.contactsRoutes = exports.alertsRoutes = exports.checkinsRoutes = exports.kbRoutes = exports.usersRoutes = exports.authRoutes = void 0;
+exports.communityReportsRoutes = exports.bulkImportRoutes = exports.chatbotRoutes = exports.superadminRoutes = exports.tobagRoutes = exports.organizationRoutes = exports.sosRoutes = exports.incidentsRoutes = exports.contactsRoutes = exports.alertsRoutes = exports.checkinsRoutes = exports.kbRoutes = exports.usersRoutes = exports.authRoutes = void 0;
 // Central export file for all routes
 var auth_1 = require("./auth");
 Object.defineProperty(exports, "authRoutes", { enumerable: true, get: function () { return __importDefault(auth_1).default; } });
@@ -29,4 +29,8 @@ var superadmin_1 = require("./superadmin");
 Object.defineProperty(exports, "superadminRoutes", { enumerable: true, get: function () { return __importDefault(superadmin_1).default; } });
 var chatbot_1 = require("./chatbot");
 Object.defineProperty(exports, "chatbotRoutes", { enumerable: true, get: function () { return __importDefault(chatbot_1).default; } });
+var bulkImport_1 = require("./bulkImport");
+Object.defineProperty(exports, "bulkImportRoutes", { enumerable: true, get: function () { return __importDefault(bulkImport_1).default; } });
+var communityReports_1 = require("./communityReports");
+Object.defineProperty(exports, "communityReportsRoutes", { enumerable: true, get: function () { return __importDefault(communityReports_1).default; } });
 //# sourceMappingURL=index.js.map

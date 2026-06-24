@@ -12,7 +12,7 @@ export interface User {
   lastName?: string;
   phone?: string;
   avatarUrl?: string;
-  role: 'admin' | 'hr_admin' | 'safety_admin' | 'employee' | 'guest';
+  role: 'super_admin' | 'admin' | 'hr_admin' | 'safety_admin' | 'workplace_admin' | 'employee' | 'guest';
   organizationId?: string;
   departmentId?: string;
   teamId?: string;
@@ -31,7 +31,7 @@ export interface CreateUserInput {
   firstName?: string;
   lastName?: string;
   phone?: string;
-  role?: 'admin' | 'hr_admin' | 'safety_admin' | 'employee' | 'guest';
+  role?: 'super_admin' | 'admin' | 'hr_admin' | 'safety_admin' | 'workplace_admin' | 'employee' | 'guest';
   organizationId?: string;
   departmentId?: string;
   teamId?: string;
@@ -68,7 +68,7 @@ export class UserEntity implements User {
   lastName?: string;
   phone?: string;
   avatarUrl?: string;
-  role: 'admin' | 'hr_admin' | 'safety_admin' | 'employee' | 'guest';
+  role: 'super_admin' | 'admin' | 'hr_admin' | 'safety_admin' | 'workplace_admin' | 'employee' | 'guest';
   organizationId?: string;
   departmentId?: string;
   teamId?: string;
@@ -109,6 +109,13 @@ export class UserEntity implements User {
   }
 
   /**
+   * Check if user is super admin
+   */
+  isSuperAdmin(): boolean {
+    return this.role === 'super_admin';
+  }
+
+  /**
    * Check if user is admin
    */
   isAdmin(): boolean {
@@ -127,6 +134,13 @@ export class UserEntity implements User {
    */
   isSafetyAdmin(): boolean {
     return this.role === 'safety_admin';
+  }
+
+  /**
+   * Check if user is Workplace admin
+   */
+  isWorkplaceAdmin(): boolean {
+    return this.role === 'workplace_admin';
   }
 
   /**

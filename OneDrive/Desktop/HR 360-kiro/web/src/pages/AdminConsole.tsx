@@ -37,7 +37,7 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'hr' | 'employee';
+  role: 'super_admin' | 'admin' | 'hr' | 'hr_admin' | 'workplace_admin' | 'safety_admin' | 'employee';
   team?: string;
   phone?: string;
   address?: string;
@@ -328,7 +328,7 @@ const AdminConsole: React.FC = () => {
   }
 
   // Check if user is authorized to access IT admin console
-  if (!user || !['admin', 'hr_admin'].includes(user.role)) {
+  if (!user || !['super_admin', 'admin', 'hr_admin'].includes(user.role)) {
     return <Navigate to="/" replace />;
   }
 

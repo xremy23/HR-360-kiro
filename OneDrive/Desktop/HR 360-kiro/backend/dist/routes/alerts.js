@@ -1,145 +1,145 @@
 "use strict";
+/**
+ * Alert Routes - PRODUCTION MODE
+ * Returns real aggregated alerts from external sources
+ */
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = require("express");
-const response_1 = require("../utils/response");
-const auth_1 = require("../middleware/auth");
-const validators_1 = require("../utils/validators");
-const entities_1 = require("../entities");
-const server_1 = require("../websocket/server");
-const pushNotificationService_1 = require("../services/pushNotificationService");
-const organizationService_1 = require("../services/organizationService");
-const userService_1 = require("../services/userService");
-const router = (0, express_1.Router)();
+const express_1 = __importDefault(require("express"));
+const externalAlertsService_1 = require("../services/externalAlertsService");
+const earthquakeService_1 = require("../services/earthquakeService");
+const alertAggregatorService_1 = require("../services/alertAggregatorService");
+const router = express_1.default.Router();
 /**
- * GET /alerts
- * Get alerts
+ * GET /api/alerts
+ * Get aggregated alerts from all sources
  */
-router.get('/', auth_1.authMiddleware, async (req, res) => {
+router.get('/', async (req, res) => {
     try {
-        if (!req.user) {
-            return (0, response_1.sendError)(res, 'USER_NOT_FOUND', 'User not found', 404);
+        const page = parseInt(req.query.page) || 1;
+        const pageSize = parseInt(req.query.pageSize) || 20;
+        const offset = (page - 1) * pageSize;
+        // Fetch external alerts in parallel
+        const [externalAlerts, earthquakeAlerts, aggregatedAlerts] = await Promise.allSettled([
+            externalAlertsService_1.externalAlertsService.fetchAllExternalAlerts(),
+            earthquakeService_1.earthquakeService.getRecentSignificantEarthquakes(24),
+            alertAggregatorService_1.alertAggregatorService.getAggregatedAlerts(),
+        ]);
+        // Combine all alerts
+        let allAlerts = [];
+        if (externalAlerts.status === 'fulfilled' && externalAlerts.value) {
+            allAlerts.push(...externalAlerts.value);
         }
-        const { orgId, isDrill, severity } = req.query;
-        const limit = Math.min(parseInt(req.query.limit) || 50, 100);
-        const offset = parseInt(req.query.offset) || 0;
-        if (!orgId) {
-            return (0, response_1.sendError)(res, 'INVALID_ORG', 'Organization ID required', 400);
+        if (earthquakeAlerts.status === 'fulfilled' && earthquakeAlerts.value) {
+            allAlerts.push(...earthquakeAlerts.value);
         }
-        const alerts = await entities_1.AlertEntity.findByOrgId(orgId, isDrill === 'true', severity);
-        const total = alerts.length;
-        const paginated = alerts.slice(offset, offset + limit);
-        return (0, response_1.sendPaginated)(res, paginated, total, limit, offset, 200);
-    }
-    catch (error) {
-        console.error('Get alerts error:', error);
-        return (0, response_1.sendError)(res, 'SERVER_ERROR', 'Failed to retrieve alerts', 500);
-    }
-});
-/**
- * POST /alerts/broadcast
- * Broadcast alert (Admin)
- */
-router.post('/broadcast', auth_1.authMiddleware, auth_1.adminMiddleware, async (req, res) => {
-    try {
-        if (!req.user) {
-            return (0, response_1.sendError)(res, 'USER_NOT_FOUND', 'User not found', 404);
+        if (aggregatedAlerts.status === 'fulfilled' && aggregatedAlerts.value?.alerts) {
+            allAlerts.push(...aggregatedAlerts.value.alerts);
         }
-        const { title, message, severity, type, teamIds, isDrill } = req.body;
-        if (!title || !message || !severity || !type) {
-            return (0, response_1.sendError)(res, 'INVALID_INPUT', 'Missing required fields', 400);
-        }
-        if (!(0, validators_1.validateAlertSeverity)(severity)) {
-            return (0, response_1.sendError)(res, 'INVALID_SEVERITY', 'Invalid severity level', 400);
-        }
-        const alert = await entities_1.AlertEntity.create({
-            orgId: req.user.orgId,
-            teamIds: teamIds || [],
-            title,
-            message,
-            severity,
-            type,
-            createdBy: req.user.id,
-            isDrill: isDrill || false,
+        // Deduplicate by ID
+        const uniqueAlerts = Array.from(new Map(allAlerts.map(alert => [alert.id, alert])).values());
+        // Sort by creation date descending
+        uniqueAlerts.sort((a, b) => {
+            const aTime = new Date(a.created_at ||
+                a.timestamp ||
+                a.lastUpdated ||
+                new Date()).getTime();
+            const bTime = new Date(b.created_at ||
+                b.timestamp ||
+                b.lastUpdated ||
+                new Date()).getTime();
+            return bTime - aTime;
         });
-        // Get organization members for notification
-        const org = await organizationService_1.organizationService.getOrganizationById(req.user.orgId);
-        const { users: members } = await userService_1.userService.getOrganizationUsers(req.user.orgId, { page: 1, pageSize: 1000 });
-        const memberIds = members.map((m) => m.id);
-        // Send push notifications
-        try {
-            await pushNotificationService_1.pushNotificationService.sendAlertNotification(memberIds, title, message, severity);
-            console.log(`Push notifications sent to ${memberIds.length} members for alert ${alert.id}`);
-        }
-        catch (pushError) {
-            console.warn('Push notification failed:', pushError);
-            // Don't fail the request if push notifications fail
-        }
-        // Broadcast via WebSocket
-        try {
-            const wsServer = (0, server_1.getWebSocketServer)();
-            wsServer.broadcastAlertCreated(alert);
-            wsServer.broadcastNotificationToOrganization(req.user.orgId, {
-                type: 'alert',
-                alertId: alert.id,
-                title,
-                message,
-                severity,
-            });
-        }
-        catch (wsError) {
-            console.warn('WebSocket broadcast failed:', wsError);
-            // Don't fail the request if WebSocket fails
-        }
-        return (0, response_1.sendSuccess)(res, alert, 'Alert broadcast successfully', 201);
+        // Paginate
+        const paginatedAlerts = uniqueAlerts.slice(offset, offset + pageSize);
+        const total = uniqueAlerts.length;
+        const totalPages = Math.ceil(total / pageSize);
+        res.json({
+            success: true,
+            data: paginatedAlerts,
+            pagination: { page, pageSize, total, totalPages },
+            statusCode: 200,
+            timestamp: new Date().toISOString(),
+        });
     }
     catch (error) {
-        console.error('Broadcast alert error:', error);
-        return (0, response_1.sendError)(res, 'SERVER_ERROR', 'Failed to broadcast alert', 500);
+        console.error('Error fetching alerts:', error);
+        res.status(500).json({
+            success: false,
+            error: {
+                code: 'FETCH_ERROR',
+                message: 'Failed to fetch alerts',
+            },
+            statusCode: 500,
+        });
     }
 });
 /**
- * GET /alerts/:id/notifications
- * Get alert notifications
+ * GET /api/alerts/weather
+ * Get weather alerts from PAGASA
  */
-router.get('/:id/notifications', auth_1.authMiddleware, async (req, res) => {
+router.get('/weather', async (req, res) => {
     try {
-        const { id } = req.params;
-        const notifications = await entities_1.NotificationEntity.findByAlertId(id);
-        const formattedNotifications = await Promise.all(notifications.map(async (n) => {
-            const user = await userService_1.userService.getUserById(n.userId);
-            return {
-                id: n.id,
-                userId: n.userId,
-                userName: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
-                isRead: n.isRead,
-                readAt: n.readAt,
-                createdAt: n.createdAt,
-            };
-        }));
-        return (0, response_1.sendSuccess)(res, formattedNotifications, 'Notifications retrieved successfully', 200);
+        const alerts = await externalAlertsService_1.externalAlertsService.fetchPagasaAlerts();
+        res.json({
+            success: true,
+            data: alerts,
+            statusCode: 200,
+        });
     }
     catch (error) {
-        console.error('Get notifications error:', error);
-        return (0, response_1.sendError)(res, 'SERVER_ERROR', 'Failed to retrieve notifications', 500);
+        console.error('Error fetching weather alerts:', error);
+        res.json({
+            success: true,
+            data: [],
+            statusCode: 200, // Return 200 even on error to prevent caching issues
+        });
     }
 });
 /**
- * PUT /alerts/:id/notifications/:nId
- * Mark notification as read
+ * GET /api/alerts/earthquakes
+ * Get earthquake alerts from PHIVOLCS/USGS
  */
-router.put('/:id/notifications/:nId', auth_1.authMiddleware, async (req, res) => {
+router.get('/earthquakes', async (req, res) => {
     try {
-        const { id, nId } = req.params;
-        const notification = await entities_1.NotificationEntity.findById(nId);
-        if (!notification) {
-            return (0, response_1.sendError)(res, 'NOTIFICATION_NOT_FOUND', 'Notification not found', 404);
-        }
-        const updated = await entities_1.NotificationEntity.markAsRead(nId);
-        return (0, response_1.sendSuccess)(res, updated, 'Notification marked as read', 200);
+        const alerts = await earthquakeService_1.earthquakeService.getRecentSignificantEarthquakes(24);
+        res.json({
+            success: true,
+            data: alerts,
+            statusCode: 200,
+        });
     }
     catch (error) {
-        console.error('Mark notification error:', error);
-        return (0, response_1.sendError)(res, 'SERVER_ERROR', 'Failed to mark notification', 500);
+        console.error('Error fetching earthquake alerts:', error);
+        res.json({
+            success: true,
+            data: [],
+            statusCode: 200,
+        });
+    }
+});
+/**
+ * GET /api/alerts/disasters
+ * Get aggregated disaster alerts
+ */
+router.get('/disasters', async (req, res) => {
+    try {
+        const aggregated = await alertAggregatorService_1.alertAggregatorService.getAggregatedAlerts();
+        res.json({
+            success: true,
+            data: aggregated,
+            statusCode: 200,
+        });
+    }
+    catch (error) {
+        console.error('Error fetching disaster alerts:', error);
+        res.json({
+            success: true,
+            data: { total: 0, critical: 0, high: 0, medium: 0, low: 0, alerts: [], lastRefreshed: new Date() },
+            statusCode: 200,
+        });
     }
 });
 exports.default = router;
