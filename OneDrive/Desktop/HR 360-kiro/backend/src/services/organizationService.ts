@@ -206,6 +206,36 @@ class OrganizationService {
   }
 
   /**
+   * Get member counts for multiple organizations
+   * Resolves N+1 query issue
+   */
+  async getOrganizationUserCounts(organizationIds: string[]): Promise<Record<string, number>> {
+    if (!organizationIds || organizationIds.length === 0) {
+      return {};
+    }
+
+    try {
+      const result = await query(
+        `SELECT organization_id, COUNT(*) as count
+         FROM users
+         WHERE organization_id = ANY($1) AND is_active = true
+         GROUP BY organization_id`,
+        [organizationIds]
+      );
+
+      const counts: Record<string, number> = {};
+      result.rows.forEach((row: any) => {
+        counts[row.organization_id] = parseInt(row.count, 10);
+      });
+
+      return counts;
+    } catch (error) {
+      logger.error('Failed to get organization user counts', { error });
+      throw error;
+    }
+  }
+
+  /**
    * Get organization user count
    */
   async getOrganizationUserCount(organizationId: string): Promise<number> {
