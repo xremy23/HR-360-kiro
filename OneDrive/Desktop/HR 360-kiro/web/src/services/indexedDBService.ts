@@ -309,9 +309,9 @@ class IndexedDBService {
       const store = transaction.objectStore('alerts');
 
       store.clear();
-      alerts.forEach(alert => {
-        store.add(alert);
-      });
+      for (let i = 0, len = alerts.length; i < len; i++) {
+        store.add(alerts[i]);
+      }
 
       transaction.onerror = () => reject(transaction.error);
       transaction.oncomplete = () => resolve();
