@@ -25,10 +25,15 @@ class GuestNotificationService {
     alertSource: string = 'internal'
   ): Promise<string[]> {
     try {
+      if (!userIds || userIds.length === 0) return [];
+
       const filteredUsers: string[] = [];
+      const users = await userService.getUsersByIds(userIds);
+
+      const userMap = new Map(users.map(u => [u.id, u]));
 
       for (const userId of userIds) {
-        const user = await userService.getUserById(userId);
+        const user = userMap.get(userId);
         
         if (!user) {
           logger.warn(`User not found for notification: ${userId}`);
