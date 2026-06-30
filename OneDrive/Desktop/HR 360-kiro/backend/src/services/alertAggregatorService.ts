@@ -124,14 +124,17 @@ class AlertAggregatorService {
 
       logger.info('Fetching NDRRMC alerts');
 
-      // TODO: Implement actual NDRRMC API call when endpoint is available
-      // const response = await axios.get(`${this.NDRRMC_API_URL}/alerts`, {
-      //   params: { country: 'PH', active: true }
-      // });
-      // return this.mapNDRRMCToAlerts(response.data);
+      const response = await axios.get(`${this.NDRRMC_API_URL}/alerts`, {
+        params: { country: 'PH', active: true }
+      });
+      const alerts = this.mapNDRRMCToAlerts(response.data);
 
-      logger.debug('NDRRMC API not yet configured - returning placeholder');
-      return [];
+      this.alertsCache.set('ndrrmc', {
+        data: alerts,
+        timestamp: Date.now()
+      });
+
+      return alerts;
     } catch (error) {
       logger.error('Failed to fetch NDRRMC alerts', { error });
       return [];
