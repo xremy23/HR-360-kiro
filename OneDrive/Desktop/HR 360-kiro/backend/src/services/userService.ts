@@ -73,6 +73,25 @@ class UserService {
   }
 
   /**
+   * Get users by IDs
+   */
+  async getUsersByIds(ids: string[]): Promise<User[]> {
+    try {
+      if (!ids || ids.length === 0) return [];
+
+      const result = await query(
+        'SELECT * FROM users WHERE id = ANY($1)',
+        [ids]
+      );
+
+      return result.rows.map(row => this.mapRowToUser(row));
+    } catch (error) {
+      logger.error('Failed to get users by IDs', { error });
+      throw error;
+    }
+  }
+
+  /**
    * Get user by email
    */
   async getUserByEmail(email: string): Promise<User | null> {

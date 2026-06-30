@@ -111,6 +111,14 @@ describe('Offline Sync + Push Notifications Integration', () => {
         });
       });
 
+      (userService.getUsersByIds as jest.Mock).mockImplementation((ids: string[]) => {
+        return Promise.resolve(ids.map(id => ({
+          id,
+          role: 'employee',
+          organizationId: 'org-1'
+        })));
+      });
+
       // Mock device tokens for each user
       (DeviceTokenEntity.findByUserId as jest.Mock).mockResolvedValue([
         { id: 'token-1', token: 'ExponentPushToken[test-token]', platform: 'ios' },
