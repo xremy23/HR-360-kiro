@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { bulkImportService, UserImportRow, ImportValidationError } from '../services/bulkImportService';
 import { logger } from '../services/monitoringService';
+import { emailService } from '../services/emailService';
 
 const router = express.Router();
 
@@ -192,8 +193,7 @@ router.post('/import', authMiddleware, async (req: AuthRequest, res: Response) =
 
         // Track if should send email
         if (sendWelcomeEmails) {
-          // TODO: Implement email sending
-          // await emailService.sendWelcomeEmail(user.email, magicLinkToken, user.fullName);
+          await emailService.sendWelcomeEmail(user.email, magicLinkToken, user.fullName);
         }
       } catch (err) {
         logger.error('Error importing user:', { error: err, email: user.email });

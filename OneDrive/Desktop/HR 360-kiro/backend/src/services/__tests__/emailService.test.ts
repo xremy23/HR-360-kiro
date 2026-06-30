@@ -35,6 +35,34 @@ describe('Email Service', () => {
     process.env.EMAIL_PASSWORD = 'test-password';
   });
 
+  describe('sendWelcomeEmail', () => {
+    it('should send welcome email successfully', async () => {
+      const email = 'newuser@example.com';
+      const magicLink = 'http://example.com/magic-link';
+      const fullName = 'New User';
+
+      const result = await emailService.sendWelcomeEmail(email, magicLink, fullName);
+
+      expect(result).toBe(true);
+    });
+
+    it('should handle missing transport gracefully', async () => {
+      // Temporarily clear environment variables to simulate missing config
+      const originalUser = process.env.EMAIL_USER;
+      const originalPass = process.env.EMAIL_PASSWORD;
+
+      delete process.env.EMAIL_USER;
+      delete process.env.EMAIL_PASSWORD;
+
+      const result = await emailService.sendWelcomeEmail('test@example.com', 'link', 'Test Name');
+      expect(result).toBe(true); // Should return true to fallback to demo mode
+
+      // Restore environment variables
+      process.env.EMAIL_USER = originalUser;
+      process.env.EMAIL_PASSWORD = originalPass;
+    });
+  });
+
   describe('sendVerificationCode', () => {
     it('should send verification code email successfully', async () => {
       const email = 'user@example.com';

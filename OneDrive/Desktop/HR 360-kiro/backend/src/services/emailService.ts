@@ -253,6 +253,62 @@ An SOS signal has been triggered. Please take immediate action:
     `,
   }),
 
+  welcomeEmail: (fullName: string, magicLink: string, email: string) => ({
+    subject: 'Welcome to HR 360 Emergency Management',
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 5px 5px 0 0; text-align: center; }
+            .content { background: #f9f9f9; padding: 20px; border: 1px solid #ddd; border-radius: 0 0 5px 5px; }
+            .button { display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+            .footer { margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666; text-align: center; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Welcome to HR 360!</h1>
+            </div>
+            <div class="content">
+              <p>Hello ${fullName},</p>
+              <p>Your account has been created on the HR 360 Emergency Management System.</p>
+              <p>Click the button below to log in for the first time. This link will expire in 15 minutes.</p>
+
+              <a href="${magicLink}" class="button">Log In to HR 360</a>
+
+              <p>Or copy and paste this link in your browser:</p>
+              <p style="word-break: break-all; background: #f0f0f0; padding: 10px; border-radius: 3px; font-size: 12px;">
+                ${magicLink}
+              </p>
+
+              <div class="footer">
+                <p>© 2026 HR 360 Emergency Management System. All rights reserved.</p>
+                <p>This is an automated message, please do not reply to this email.</p>
+              </div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `,
+    text: `
+Welcome to HR 360!
+
+Hello ${fullName},
+
+Your account has been created on the HR 360 Emergency Management System.
+Click the link below to log in for the first time. This link will expire in 15 minutes.
+
+${magicLink}
+
+© 2026 HR 360 Emergency Management System. All rights reserved.
+This is an automated message, please do not reply to this email.
+    `,
+  }),
+
   organizationInvitation: (orgName: string, inviteLink: string, invitedBy: string) => ({
     subject: `You've been invited to join ${orgName} on HR 360`,
     html: `
@@ -360,6 +416,47 @@ function initializeTransporter() {
 
 // Email service functions
 export const emailService = {
+  /**
+   * Send welcome email
+   */
+  async sendWelcomeEmail(email: string, magicLink: string, fullName: string): Promise<boolean> {
+    try {
+      const transport = initializeTransporter();
+
+      if (!transport) {
+        console.warn(`[EmailService] Transport not configured. Logging welcome email instead of sending.`);
+        console.log(`[EmailService] WELCOME EMAIL WOULD BE SENT TO: ${email} (${fullName})`);
+        console.log(`[EmailService] MAGIC LINK: ${magicLink}`);
+        return true;
+      }
+
+      const template = templates.welcomeEmail(fullName, magicLink, email);
+
+      console.log(`[EmailService] Sending welcome email to ${email}...`);
+
+      const result = await transport.sendMail({
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: template.subject,
+        html: template.html,
+        text: template.text,
+      });
+
+      console.log(`✅ [EmailService] Welcome email sent to ${email}. Result:`, result.messageId);
+      return true;
+    } catch (error) {
+      console.error('[EmailService] FAILED TO SEND WELCOME EMAIL (falling back to demo mode):', {
+        email,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      console.log(`[EmailService] WELCOME EMAIL WOULD BE SENT TO: ${email} (${fullName})`);
+      console.log(`[EmailService] MAGIC LINK: ${magicLink}`);
+
+      return true;
+    }
+  },
+
   /**
    * Send magic link email
    */
