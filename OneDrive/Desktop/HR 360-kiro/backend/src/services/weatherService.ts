@@ -40,25 +40,32 @@ class WeatherService {
     try {
       logger.info('Fetching weather data from PAGASA', { location });
 
-      // TODO: Implement actual PAGASA API call
-      // This is a placeholder that returns mock data
-      // When PAGASA API credentials are available, replace with:
-      // const response = await axios.get(`${this.PAGASA_API_BASE}/weather`, {
-      //   params: { location },
-      //   headers: { 'Authorization': `Bearer ${this.PAGASA_API_KEY}` }
-      // });
+      if (!this.isConfigured()) {
+        logger.debug('PAGASA weather API not yet configured - returning placeholder', { location });
+        return {
+          location,
+          temperature: 28,
+          condition: 'Partly Cloudy',
+          humidity: 75,
+          windSpeed: 15,
+          advisory: 'Monitor weather updates from PAGASA',
+          timestamp: new Date(),
+        };
+      }
 
-      logger.debug('PAGASA weather API not yet configured - returning placeholder', { location });
+      const response = await axios.get(`${this.PAGASA_API_BASE}/weather`, {
+        params: { location },
+        headers: { 'Authorization': `Bearer ${this.PAGASA_API_KEY}` }
+      });
 
-      // Return placeholder until API is configured
       return {
-        location,
-        temperature: 28,
-        condition: 'Partly Cloudy',
-        humidity: 75,
-        windSpeed: 15,
-        advisory: 'Monitor weather updates from PAGASA',
-        timestamp: new Date(),
+        location: response.data.location || location,
+        temperature: response.data.temperature,
+        condition: response.data.condition,
+        humidity: response.data.humidity,
+        windSpeed: response.data.windSpeed,
+        advisory: response.data.advisory,
+        timestamp: response.data.timestamp ? new Date(response.data.timestamp) : new Date(),
       };
     } catch (error) {
       logger.error('Failed to fetch weather data from PAGASA', { error, location });
@@ -73,14 +80,27 @@ class WeatherService {
     try {
       logger.info('Fetching weather alerts from PAGASA');
 
-      // TODO: Implement actual PAGASA alerts API call
-      // This is a placeholder
-      // When API is ready:
-      // const response = await axios.get(`${this.PAGASA_API_BASE}/alerts`, {
-      //   headers: { 'Authorization': `Bearer ${this.PAGASA_API_KEY}` }
-      // });
+      if (!this.isConfigured()) {
+        logger.debug('PAGASA alerts API not yet configured - returning empty array');
+        return [];
+      }
 
-      logger.debug('PAGASA alerts API not yet configured - returning empty array');
+      const response = await axios.get(`${this.PAGASA_API_BASE}/alerts`, {
+        headers: { 'Authorization': `Bearer ${this.PAGASA_API_KEY}` }
+      });
+
+      if (Array.isArray(response.data)) {
+        return response.data.map((alert: any) => ({
+          id: alert.id,
+          type: alert.type,
+          severity: alert.severity,
+          description: alert.description,
+          affectedAreas: alert.affectedAreas || [],
+          issuedAt: new Date(alert.issuedAt),
+          validUntil: new Date(alert.validUntil),
+        }));
+      }
+
       return [];
     } catch (error) {
       logger.error('Failed to fetch weather alerts from PAGASA', { error });
@@ -95,13 +115,16 @@ class WeatherService {
     try {
       logger.info('Fetching typhoon information from PAGASA');
 
-      // TODO: Implement typhoon tracking endpoint
-      // const response = await axios.get(`${this.PAGASA_API_BASE}/typhoons`, {
-      //   headers: { 'Authorization': `Bearer ${this.PAGASA_API_KEY}` }
-      // });
+      if (!this.isConfigured()) {
+        logger.debug('PAGASA typhoon API not yet configured');
+        return null;
+      }
 
-      logger.debug('PAGASA typhoon API not yet configured');
-      return null;
+      const response = await axios.get(`${this.PAGASA_API_BASE}/typhoons`, {
+        headers: { 'Authorization': `Bearer ${this.PAGASA_API_KEY}` }
+      });
+
+      return response.data;
     } catch (error) {
       logger.error('Failed to fetch typhoon information', { error });
       return null;
