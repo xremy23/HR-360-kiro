@@ -215,8 +215,67 @@ class AlertAggregatorService {
    * Map ReliefWeb data to alert format
    */
   private mapReliefWebToAlerts(data: any): DisasterAlert[] {
-    // TODO: Implement mapping based on ReliefWeb API response format
-    return [];
+    if (!data || !Array.isArray(data.data)) {
+      return [];
+    }
+
+    return data.data.map((item: any) => {
+      const fields = item.fields || {};
+
+      // Determine type
+      let disasterType: DisasterAlert['type'] = 'other';
+      const primaryType = fields.primary_type?.name?.toLowerCase() || '';
+      const allTypes = (fields.type || []).map((t: any) => t.name?.toLowerCase());
+      const typeStr = [primaryType, ...allTypes].join(' ');
+
+      if (typeStr.includes('typhoon') || typeStr.includes('cyclone') || typeStr.includes('hurricane')) {
+        disasterType = 'typhoon';
+      } else if (typeStr.includes('earthquake')) {
+        disasterType = 'earthquake';
+      } else if (typeStr.includes('flood')) {
+        disasterType = 'flood';
+      } else if (typeStr.includes('landslide') || typeStr.includes('mudslide')) {
+        disasterType = 'landslide';
+      } else if (typeStr.includes('volcano')) {
+        disasterType = 'volcano';
+      } else if (typeStr.includes('fire')) {
+        disasterType = 'fire';
+      }
+
+      // Determine severity
+      let severity: DisasterAlert['severity'] = 'medium';
+      if (fields.status === 'current' || fields.status === 'ongoing') {
+        severity = 'high';
+      } else if (fields.status === 'past') {
+        severity = 'low';
+      }
+
+      // Affected areas
+      const affectedAreas: string[] = [];
+      if (fields.primary_country?.name) {
+        affectedAreas.push(fields.primary_country.name);
+      }
+      if (fields.country) {
+        fields.country.forEach((c: any) => {
+          if (c.name && !affectedAreas.includes(c.name)) {
+            affectedAreas.push(c.name);
+          }
+        });
+      }
+
+      return {
+        id: item.id || `rw-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        source: 'reliefweb',
+        type: disasterType,
+        severity: severity,
+        title: fields.name || 'Unknown Disaster',
+        description: fields.description || fields.body || fields.name || 'No description available',
+        affectedAreas: affectedAreas,
+        timestamp: fields.date?.created ? new Date(fields.date.created) : new Date(),
+        lastUpdated: fields.date?.changed ? new Date(fields.date.changed) : new Date(),
+        externalUrl: fields.url || item.href,
+      };
+    });
   }
 
   /**
