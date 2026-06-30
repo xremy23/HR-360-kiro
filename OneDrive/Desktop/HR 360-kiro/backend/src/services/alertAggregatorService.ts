@@ -207,8 +207,99 @@ class AlertAggregatorService {
    * Map NDRRMC data to alert format
    */
   private mapNDRRMCToAlerts(data: any): DisasterAlert[] {
-    // TODO: Implement mapping based on actual NDRRMC API response format
-    return [];
+    if (!data) return [];
+
+    try {
+      // Handle different potential wrapper structures (data, items, alerts, or plain array)
+      let items: any[] = [];
+      if (Array.isArray(data)) {
+        items = data;
+      } else if (data.data && Array.isArray(data.data)) {
+        items = data.data;
+      } else if (data.items && Array.isArray(data.items)) {
+        items = data.items;
+      } else if (data.alerts && Array.isArray(data.alerts)) {
+        items = data.alerts;
+      } else {
+        // If it's a single object that looks like an alert, wrap it
+        items = [data];
+      }
+
+      return items.map((item: any) => {
+        // Fallback extractors for various common field names
+        const extractField = (fields: string[], fallback: string = '') => {
+          for (const field of fields) {
+            if (item[field] !== undefined && item[field] !== null) {
+              return String(item[field]);
+            }
+          }
+          return fallback;
+        };
+
+        const id = extractField(['id', 'guid', 'uuid', 'reference_id', 'alert_id'], `ndrrmc-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`);
+
+        const rawType = extractField(['type', 'category', 'event_type', 'hazard']).toLowerCase();
+        let mappedType: DisasterAlert['type'] = 'other';
+        if (rawType.includes('typhoon') || rawType.includes('cyclone') || rawType.includes('storm')) mappedType = 'typhoon';
+        else if (rawType.includes('earthquake') || rawType.includes('seismic')) mappedType = 'earthquake';
+        else if (rawType.includes('flood')) mappedType = 'flood';
+        else if (rawType.includes('landslide') || rawType.includes('mudslide')) mappedType = 'landslide';
+        else if (rawType.includes('volcano') || rawType.includes('eruption')) mappedType = 'volcano';
+        else if (rawType.includes('fire')) mappedType = 'fire';
+
+        const rawSeverity = extractField(['severity', 'level', 'urgency', 'priority']).toLowerCase();
+        let mappedSeverity: DisasterAlert['severity'] = 'low';
+        if (rawSeverity.includes('critical') || rawSeverity.includes('extreme') || rawSeverity === '4' || rawSeverity === '5') mappedSeverity = 'critical';
+        else if (rawSeverity.includes('high') || rawSeverity.includes('severe') || rawSeverity === '3') mappedSeverity = 'high';
+        else if (rawSeverity.includes('medium') || rawSeverity.includes('moderate') || rawSeverity === '2') mappedSeverity = 'medium';
+
+        const title = extractField(['title', 'headline', 'subject', 'name'], 'NDRRMC Alert');
+        const description = extractField(['description', 'details', 'summary', 'message'], 'No details provided.');
+
+        // Extract affected areas (might be an array or comma-separated string)
+        let affectedAreas: string[] = [];
+        if (Array.isArray(item.affected_areas)) affectedAreas = item.affected_areas;
+        else if (Array.isArray(item.areas)) affectedAreas = item.areas;
+        else if (Array.isArray(item.provinces)) affectedAreas = item.provinces;
+        else if (typeof item.affected_areas === 'string') affectedAreas = item.affected_areas.split(',').map((s: string) => s.trim());
+        else if (typeof item.location === 'string') affectedAreas = [item.location];
+        else affectedAreas = ['Philippines']; // Default fallback
+
+        // Extract coordinates if available
+        let coordinates: { latitude: number; longitude: number } | undefined;
+        if (item.coordinates && typeof item.coordinates.lat === 'number' && typeof item.coordinates.lon === 'number') {
+          coordinates = { latitude: item.coordinates.lat, longitude: item.coordinates.lon };
+        } else if (item.latitude && item.longitude) {
+          coordinates = { latitude: Number(item.latitude), longitude: Number(item.longitude) };
+        }
+
+        // Extract timestamps
+        const timestampStr = extractField(['timestamp', 'created_at', 'date', 'issued_at']);
+        const timestamp = timestampStr ? new Date(timestampStr) : new Date();
+
+        const lastUpdatedStr = extractField(['last_updated', 'updated_at', 'modified_at']);
+        const lastUpdated = lastUpdatedStr ? new Date(lastUpdatedStr) : timestamp;
+
+        const externalUrl = extractField(['url', 'link', 'source_url', 'reference_link']);
+
+        return {
+          id,
+          source: 'ndrrmc',
+          type: mappedType,
+          severity: mappedSeverity,
+          title,
+          description,
+          affectedAreas,
+          ...(coordinates && { coordinates }),
+          timestamp: isNaN(timestamp.getTime()) ? new Date() : timestamp,
+          lastUpdated: isNaN(lastUpdated.getTime()) ? new Date() : lastUpdated,
+          ...(externalUrl && { externalUrl })
+        };
+      });
+    } catch (error) {
+      logger.error('Error mapping NDRRMC data', { error });
+      return [];
+    }
   }
 
   /**
