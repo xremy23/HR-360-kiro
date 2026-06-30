@@ -95,13 +95,11 @@ class WeatherService {
     try {
       logger.info('Fetching typhoon information from PAGASA');
 
-      // TODO: Implement typhoon tracking endpoint
-      // const response = await axios.get(`${this.PAGASA_API_BASE}/typhoons`, {
-      //   headers: { 'Authorization': `Bearer ${this.PAGASA_API_KEY}` }
-      // });
+      const response = await axios.get(`${this.PAGASA_API_BASE}/typhoons`, {
+        headers: { 'Authorization': `Bearer ${this.PAGASA_API_KEY}` }
+      });
 
-      logger.debug('PAGASA typhoon API not yet configured');
-      return null;
+      return response.data;
     } catch (error) {
       logger.error('Failed to fetch typhoon information', { error });
       return null;
