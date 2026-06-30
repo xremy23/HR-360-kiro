@@ -73,15 +73,16 @@ class WeatherService {
     try {
       logger.info('Fetching weather alerts from PAGASA');
 
-      // TODO: Implement actual PAGASA alerts API call
-      // This is a placeholder
-      // When API is ready:
-      // const response = await axios.get(`${this.PAGASA_API_BASE}/alerts`, {
-      //   headers: { 'Authorization': `Bearer ${this.PAGASA_API_KEY}` }
-      // });
+      if (!this.isConfigured()) {
+        logger.debug('PAGASA alerts API not yet configured - returning empty array');
+        return [];
+      }
 
-      logger.debug('PAGASA alerts API not yet configured - returning empty array');
-      return [];
+      const response = await axios.get(`${this.PAGASA_API_BASE}/alerts`, {
+        headers: { 'Authorization': `Bearer ${this.PAGASA_API_KEY}` }
+      });
+
+      return response.data || [];
     } catch (error) {
       logger.error('Failed to fetch weather alerts from PAGASA', { error });
       return [];
