@@ -138,11 +138,10 @@ class AIService {
       response = '📚 **Based on our Knowledge Base:**\n\n';
     }
 
-    kbGuides.forEach((guide) => {
-      response += `**${guide.title}**\n`;
+    response += kbGuides.map((guide) => {
       const summary = guide.content.substring(0, 150).trim();
-      response += summary + (guide.content.length > 150 ? '...' : '') + '\n\n';
-    });
+      return `**${guide.title}**\n${summary}${guide.content.length > 150 ? '...' : ''}\n\n`;
+    }).join('');
 
     if (language === 'tl') {
       response += '💡 *Para sa mas detalyadong impormasyon, bisitahin ang Knowledge Base section.*';
